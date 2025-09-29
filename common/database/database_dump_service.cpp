@@ -93,7 +93,7 @@ std::string DatabaseDumpService::GetMySQLVersion()
 	return Strings::Trim(version_output);
 }
 
-const std::string CREDENTIALS_FILE = "login.my.cnf";
+const std::string CREDENTIALS_FILE = "/tmp/login.my.cnf";
 
 /**
  * @return
@@ -587,6 +587,11 @@ void DatabaseDumpService::BuildCredentialsFile()
 			out << "default-character-set=utf8" << std::endl;
 		}
 		out.close();
+		LogInfo("Credentials file contents:\n{}", File::GetContents(CREDENTIALS_FILE).contents);
+		LogInfo("Credentials file location: {}", std::filesystem::absolute(CREDENTIALS_FILE).string());
+		LogInfo("Credentials file permissions: {:o}", static_cast<unsigned>(std::filesystem::status(CREDENTIALS_FILE).permissions()));
+		std::filesystem::permissions(CREDENTIALS_FILE, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, std::filesystem::perm_options::replace);
+		LogInfo("Credentials file permissions: {:o}", static_cast<unsigned>(std::filesystem::status(CREDENTIALS_FILE).permissions()));
 	}
 	else {
 		LogError("Failed to open credentials file for writing");

@@ -32,6 +32,7 @@
 extern volatile bool RunLoops;
 
 #include "../common/eqemu_logsys.h"
+#include "../common/opcodemgr.h"
 #include "../common/features.h"
 #include "../common/spdat.h"
 #include "../common/guilds.h"
@@ -1190,6 +1191,20 @@ void Client::QueuePacket(const EQApplicationPacket* app, bool ack_req, CLIENT_CO
 		AddPacket(app, ack_req);
 	}
 	else if (eqs) {
+		// Log server-to-client packets with player identification
+		auto o = eqs->GetOpcodeManager();
+		LogPacketServerClient(
+			"[{}] [{:#06x}] Size [{}] Session [{}] Account [{}:{}] Player [{}] {}",
+			OpcodeManager::EmuToName(app->GetOpcode()),
+			o->EmuToEQ(app->GetOpcode()) == 0 ? app->GetProtocolOpcode() : o->EmuToEQ(app->GetOpcode()),
+			app->Size(),
+			GetWID(),
+			AccountID(),
+			AccountName(),
+			GetName(),
+			(EQEmuLogSys::Instance()->IsLogEnabled(Logs::Detail, Logs::PacketServerClient) ? DumpPacketToString(app) : "")
+		);
+
 		eqs->QueuePacket(app, ack_req);
 	}
 }
@@ -1202,8 +1217,24 @@ void Client::FastQueuePacket(EQApplicationPacket** app, bool ack_req, CLIENT_CON
 		return;
 	}
 	else {
-		if(eqs)
+		if(eqs) {
+			// Log server-to-client packets with player identification
+			if (app && *app) {
+				auto o = eqs->GetOpcodeManager();
+				LogPacketServerClient(
+					"[{}] [{:#06x}] Size [{}] Session [{}] Account [{}:{}] Player [{}] {}",
+					OpcodeManager::EmuToName((*app)->GetOpcode()),
+					o->EmuToEQ((*app)->GetOpcode()) == 0 ? (*app)->GetProtocolOpcode() : o->EmuToEQ((*app)->GetOpcode()),
+					(*app)->Size(),
+					GetWID(),
+					AccountID(),
+					AccountName(),
+					GetName(),
+					(EQEmuLogSys::Instance()->IsLogEnabled(Logs::Detail, Logs::PacketServerClient) ? DumpPacketToString(*app) : "")
+				);
+			}
 			eqs->FastQueuePacket((EQApplicationPacket **)app, ack_req);
+		}
 		else if (app && (*app))
 			delete *app;
 		*app = nullptr;

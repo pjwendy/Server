@@ -209,6 +209,7 @@ void Client::SendEnterWorld(std::string name)
 		LogInfo("Attempting to auto login with live_name [{}] account_id [{}]", live_name, GetAccountID());
 	}
 
+	LogInfo("Enter World with live_name [{}] account_id [{}]", live_name, GetAccountID());
 	auto outapp = new EQApplicationPacket(OP_EnterWorld, live_name.length() + 1);
 	memcpy(outapp->pBuffer, live_name.c_str(), live_name.length() + 1);
 	QueuePacket(outapp);
@@ -1094,10 +1095,14 @@ bool Client::HandlePacket(const EQApplicationPacket *app) {
 
 	auto o = eqs->GetOpcodeManager();
 	LogPacketClientServer(
-		"[{}] [{:#06x}] Size [{}] {}",
+		"[{}] [{:#06x}] Size [{}] Session [{}] Account [{}:{}] Character [{}] {}",
 		OpcodeManager::EmuToName(app->GetOpcode()),
 		o->EmuToEQ(app->GetOpcode()) == 0 ? app->GetProtocolOpcode() : o->EmuToEQ(app->GetOpcode()),
 		app->Size(),
+		GetWID(),
+		GetAccountID(),
+		GetAccountName(),
+		GetCharName(),
 		(EQEmuLogSys::Instance()->IsLogEnabled(Logs::Detail, Logs::PacketClientServer) ? DumpPacketToString(app) : "")
 	);
 
@@ -1602,6 +1607,20 @@ void Client::TellClientZoneUnavailable() {
 
 void Client::QueuePacket(const EQApplicationPacket* app, bool ack_req) {
 	LogNetcode("Sending EQApplicationPacket OpCode {:#04x}", app->GetOpcode());
+
+	// Log server-to-client packets with player identification
+	auto o = eqs->GetOpcodeManager();
+	LogPacketServerClient(
+		"[{}] [{:#06x}] Size [{}] Session [{}] Account [{}:{}] Character [{}] {}",
+		OpcodeManager::EmuToName(app->GetOpcode()),
+		o->EmuToEQ(app->GetOpcode()) == 0 ? app->GetProtocolOpcode() : o->EmuToEQ(app->GetOpcode()),
+		app->Size(),
+		GetWID(),
+		GetAccountID(),
+		GetAccountName(),
+		GetCharName(),
+		(EQEmuLogSys::Instance()->IsLogEnabled(Logs::Detail, Logs::PacketServerClient) ? DumpPacketToString(app) : "")
+	);
 
 	ack_req = true;	// It's broke right now, dont delete this line till fix it. =P
 	eqs->QueuePacket(app, ack_req);

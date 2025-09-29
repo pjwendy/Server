@@ -66,6 +66,8 @@ EQ::Net::EQStream::~EQStream()
 
 void EQ::Net::EQStream::QueuePacket(const EQApplicationPacket *p, bool ack_req) {
 
+	// Packet logging is now handled at the Client level with player identification
+	/*
 	LogPacketServerClient(
 		"[{}] [{:#06x}] Size [{}] {}",
 		OpcodeManager::EmuToName(p->GetOpcode()),
@@ -73,6 +75,7 @@ void EQ::Net::EQStream::QueuePacket(const EQApplicationPacket *p, bool ack_req) 
 		p->Size(),
 		(EQEmuLogSys::Instance()->IsLogEnabled(Logs::Detail, Logs::PacketServerClient) ? DumpPacketToString(p) : "")
 	);
+	*/
 
 	if (m_opcode_manager && *m_opcode_manager) {
 		uint16 opcode = 0;

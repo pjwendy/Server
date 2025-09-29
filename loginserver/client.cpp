@@ -21,10 +21,11 @@ bool Client::Process()
 	while (app) {
 		auto o = m_connection->GetOpcodeManager();
 		LogPacketClientServer(
-			"[{}] [{:#06x}] Size [{}] {}",
+			"[{}] [{:#06x}] Size [{}] {} {}",
 			OpcodeManager::EmuToName(app->GetOpcode()),
 			o->EmuToEQ(app->GetOpcode()) == 0 ? app->GetProtocolOpcode() : o->EmuToEQ(app->GetOpcode()),
 			app->Size(),
+			GetClientLoggingDescription(),
 			(EQEmuLogSys::Instance()->IsLogEnabled(Logs::Detail, Logs::PacketClientServer) ? DumpPacketToString(app) : "")
 		);
 
@@ -268,12 +269,35 @@ void Client::SendServerListPacket(uint32 seq)
 {
 	auto app = server.server_manager->CreateServerListPacket(this, seq);
 
+	// Log server-to-client packets with player identification
+	auto o = m_connection->GetOpcodeManager();
+	LogPacketServerClient(
+		"[{}] [{:#06x}] Size [{}] {} {}",
+		OpcodeManager::EmuToName(app->GetOpcode()),
+		o->EmuToEQ(app->GetOpcode()) == 0 ? app->GetProtocolOpcode() : o->EmuToEQ(app->GetOpcode()),
+		app->Size(),
+		GetClientLoggingDescription(),
+		(EQEmuLogSys::Instance()->IsLogEnabled(Logs::Detail, Logs::PacketServerClient) ? DumpPacketToString(app.get()) : "")
+	);
+
 	m_connection->QueuePacket(app.get());
 }
 
 void Client::SendPlayResponse(EQApplicationPacket *outapp)
 {
 	LogInfo("Sending play response for {}", GetClientLoggingDescription());
+
+	// Log server-to-client packets with player identification
+	auto o = m_connection->GetOpcodeManager();
+	LogPacketServerClient(
+		"[{}] [{:#06x}] Size [{}] {} {}",
+		OpcodeManager::EmuToName(outapp->GetOpcode()),
+		o->EmuToEQ(outapp->GetOpcode()) == 0 ? outapp->GetProtocolOpcode() : o->EmuToEQ(outapp->GetOpcode()),
+		outapp->Size(),
+		GetClientLoggingDescription(),
+		(EQEmuLogSys::Instance()->IsLogEnabled(Logs::Detail, Logs::PacketServerClient) ? DumpPacketToString(outapp) : "")
+	);
+
 	m_connection->QueuePacket(outapp);
 }
 
@@ -554,10 +578,14 @@ std::string Client::GetClientLoggingDescription()
 	in.s_addr = GetConnection()->GetRemoteIP();
 	std::string client_ip = inet_ntoa(in);
 
+	// Create session identifier from IP + Port (since WID not available in login server)
+	uint32 session_id = (GetConnection()->GetRemoteIP() & 0xFFFFFF) | (GetConnection()->GetRemotePort() << 24);
+
 	return fmt::format(
-		"account_name [{}] account_id ({}) ip_address [{}]",
-		GetAccountName(),
+		"Session [{}] Account [{}:{}] IP [{}]",
+		session_id,
 		GetAccountID(),
+		GetAccountName(),
 		client_ip
 	);
 }

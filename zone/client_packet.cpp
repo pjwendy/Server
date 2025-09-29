@@ -459,10 +459,14 @@ int Client::HandlePacket(const EQApplicationPacket *app)
 {
 	auto o = eqs->GetOpcodeManager();
 	LogPacketClientServer(
-		"[{}] [{:#06x}] Size [{}] {}",
+		"[{}] [{:#06x}] Size [{}] Session [{}] Account [{}:{}] Player [{}] {}",
 		OpcodeManager::EmuToName(app->GetOpcode()),
 		o->EmuToEQ(app->GetOpcode()) == 0 ? app->GetProtocolOpcode() : o->EmuToEQ(app->GetOpcode()),
 		app->Size(),
+		GetWID(),
+		AccountID(),
+		AccountName(),
+		GetName(),
 		(EQEmuLogSys::Instance()->IsLogEnabled(Logs::Detail, Logs::PacketClientServer) ? DumpPacketToString(app) : "")
 	);
 
@@ -1261,8 +1265,10 @@ void Client::Handle_Connect_OP_ZoneComplete(const EQApplicationPacket *app)
 
 void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 {
-	if (app->size != sizeof(ClientZoneEntry_Struct))
+	if (app->size != sizeof(ClientZoneEntry_Struct)) {
+		LogError("Mismatch with ClientZoneEntry size: Expected:[{}] Recieved:[{}]", sizeof(ClientZoneEntry_Struct), app->size);
 		return;
+	}
 	ClientZoneEntry_Struct *cze = (ClientZoneEntry_Struct *)app->pBuffer;
 
 	if (strlen(cze->char_name) > 63)
@@ -4859,6 +4865,16 @@ void Client::Handle_OP_ClientUpdate(const EQApplicationPacket *app) {
 	}
 
 	PlayerPositionUpdateClient_Struct *ppu = (PlayerPositionUpdateClient_Struct *) app->pBuffer;
+
+  	LogInfo("OP_ClientUpdate from client [{}] (ID: {})", GetCleanName(), GetID());
+  	LogInfo("  sequence: {}", ppu->sequence);
+  	LogInfo("  spawn_id: {}", ppu->spawn_id);
+  	LogInfo("  vehicle_id: {}", ppu->vehicle_id);
+  	LogInfo("  position: x={:.3f} y={:.3f} z={:.3f}", ppu->x_pos, ppu->y_pos, ppu->z_pos);
+  	LogInfo("  deltas: dx={:.3f} dy={:.3f} dz={:.3f}", ppu->delta_x, ppu->delta_y, ppu->delta_z);
+	LogInfo("  heading: {} (delta: {})", static_cast<uint32>(ppu->heading), static_cast<int32>(ppu->delta_heading));
+        LogInfo("  animation: {}", static_cast<uint32>(ppu->animation));
+  	LogInfo("  packet size: {}", app->size);
 
 	/* Non PC handling like boats and eye of zomm */
 	if (ppu->spawn_id && ppu->spawn_id != GetID()) {
@@ -16400,9 +16416,13 @@ void Client::Handle_OP_SharedTaskRemovePlayer(const EQApplicationPacket *app)
 {
 	if (app->size != sizeof(SharedTaskRemovePlayer_Struct)) {
 		LogPacketClientServer(
-			"Wrong size on Handle_OP_SharedTaskRemovePlayer | got [{}] expected [{}]",
+			"Wrong size on Handle_OP_SharedTaskRemovePlayer | got [{}] expected [{}] Session [{}] Account [{}:{}] Player [{}]",
 			app->size,
-			sizeof(SharedTaskRemovePlayer_Struct)
+			sizeof(SharedTaskRemovePlayer_Struct),
+			GetWID(),
+			AccountID(),
+			AccountName(),
+			GetName()
 		);
 		return;
 	}
@@ -16447,9 +16467,13 @@ void Client::Handle_OP_SharedTaskAddPlayer(const EQApplicationPacket *app)
 {
 	if (app->size != sizeof(SharedTaskAddPlayer_Struct)) {
 		LogPacketClientServer(
-			"Wrong size on Handle_OP_SharedTaskAddPlayer | got [{}] expected [{}]",
+			"Wrong size on Handle_OP_SharedTaskAddPlayer | got [{}] expected [{}] Session [{}] Account [{}:{}] Player [{}]",
 			app->size,
-			sizeof(SharedTaskAddPlayer_Struct)
+			sizeof(SharedTaskAddPlayer_Struct),
+			GetWID(),
+			AccountID(),
+			AccountName(),
+			GetName()
 		);
 		return;
 	}
@@ -16497,9 +16521,13 @@ void Client::Handle_OP_SharedTaskMakeLeader(const EQApplicationPacket *app)
 {
 	if (app->size != sizeof(SharedTaskMakeLeader_Struct)) {
 		LogPacketClientServer(
-			"Wrong size on Handle_OP_SharedTaskMakeLeader | got [{}] expected [{}]",
+			"Wrong size on Handle_OP_SharedTaskMakeLeader | got [{}] expected [{}] Session [{}] Account [{}:{}] Player [{}]",
 			app->size,
-			sizeof(SharedTaskMakeLeader_Struct)
+			sizeof(SharedTaskMakeLeader_Struct),
+			GetWID(),
+			AccountID(),
+			AccountName(),
+			GetName()
 		);
 		return;
 	}
@@ -16544,9 +16572,13 @@ void Client::Handle_OP_SharedTaskInviteResponse(const EQApplicationPacket *app)
 {
 	if (app->size != sizeof(SharedTaskInviteResponse_Struct)) {
 		LogPacketClientServer(
-			"Wrong size on SharedTaskInviteResponse | got [{}] expected [{}]",
+			"Wrong size on SharedTaskInviteResponse | got [{}] expected [{}] Session [{}] Account [{}:{}] Player [{}]",
 			app->size,
-			sizeof(SharedTaskInviteResponse_Struct)
+			sizeof(SharedTaskInviteResponse_Struct),
+			GetWID(),
+			AccountID(),
+			AccountName(),
+			GetName()
 		);
 		return;
 	}
