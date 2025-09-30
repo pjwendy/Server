@@ -582,8 +582,7 @@ std::string Client::GetClientLoggingDescription()
 	uint32 session_id = (GetConnection()->GetRemoteIP() & 0xFFFFFF) | (GetConnection()->GetRemotePort() << 24);
 
 	return fmt::format(
-		"Session [{}] Account [{}:{}] IP [{}]",
-		session_id,
+		"Account [{}:{}] IP [{}]",
 		GetAccountID(),
 		GetAccountName(),
 		client_ip

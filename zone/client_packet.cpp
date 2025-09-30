@@ -1779,6 +1779,14 @@ void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 	outapp->priority = 6;
 	FastQueuePacket(&outapp);
 
+	LogInfo("ServerZoneEntry_struct contents:");
+	LogInfo("  player.spawn.name: {}", sze->player.spawn.name);
+	LogInfo("  player.spawn.spawn_id: {}", sze->player.spawn.spawnId);
+	LogInfo("  player.spawn.x: {}", static_cast<double>(sze->player.spawn.x));
+	LogInfo("  player.spawn.y: {}", static_cast<double>(sze->player.spawn.y));
+	LogInfo("  player.spawn.z: {}", static_cast<double>(sze->player.spawn.z));
+	LogInfo("  player.spawn.heading: {}", static_cast<double>(sze->player.spawn.heading));
+
 	/* Zone Spawns Packet */
 	entity_list.SendZoneSpawnsBulk(this);
 	entity_list.SendZoneCorpsesBulk(this);
@@ -4873,7 +4881,7 @@ void Client::Handle_OP_ClientUpdate(const EQApplicationPacket *app) {
   	LogInfo("  position: x={:.3f} y={:.3f} z={:.3f}", ppu->x_pos, ppu->y_pos, ppu->z_pos);
   	LogInfo("  deltas: dx={:.3f} dy={:.3f} dz={:.3f}", ppu->delta_x, ppu->delta_y, ppu->delta_z);
 	LogInfo("  heading: {} (delta: {})", static_cast<uint32>(ppu->heading), static_cast<int32>(ppu->delta_heading));
-        LogInfo("  animation: {}", static_cast<uint32>(ppu->animation));
+    LogInfo("  animation: {}", static_cast<uint32>(ppu->animation));
   	LogInfo("  packet size: {}", app->size);
 
 	/* Non PC handling like boats and eye of zomm */
@@ -16702,6 +16710,13 @@ void Client::SendMobPositions()
 	for (auto &m: entity_list.GetMobList()) {
 		m.second->MakeSpawnUpdate(s);
 		QueuePacket(&p, false);
+		LogInfo("OP_ClientUpdate from server (SendMobPositions) [{}] (ID: {})", GetCleanName(), GetID());
+		LogInfo("  spawn_id: {}", s->spawn_id);
+		LogInfo("  position: x={:.3f} y={:.3f} z={:.3f}", static_cast<double>(s->x_pos), static_cast<double>(s->y_pos), static_cast<double>(s->z_pos));
+		LogInfo("  deltas: dx={:.3f} dy={:.3f} dz={:.3f}", static_cast<double>(s->delta_x), static_cast<double>(s->delta_y), static_cast<double>(s->delta_z));
+		LogInfo("  heading: {} (delta: {})", static_cast<uint32>(s->heading), static_cast<int32>(s->delta_heading));
+		LogInfo("  animation: {}", static_cast<uint32>(s->animation));
+		LogInfo("  packet size: {}", p.size);
 	}
 }
 
@@ -17394,6 +17409,13 @@ void Client::SyncWorldPositionsToClient(bool ignore_idle)
 		spu->delta_heading = FloatToEQ10(0);
 		spu->animation     = 0;
 		QueuePacket(&cu);
+		LogInfo("OP_ClientUpdate from server (SyncWorldPositionsToClient) [{}] (ID: {})", GetCleanName(), GetID());
+		LogInfo("  spawn_id: {}", spu->spawn_id);
+		LogInfo("  position: x={:.3f} y={:.3f} z={:.3f}", static_cast<double>(spu->x_pos), static_cast<double>(spu->y_pos), static_cast<double>(spu->z_pos));
+		LogInfo("  deltas: dx={:.3f} dy={:.3f} dz={:.3f}", static_cast<double>(spu->delta_x), static_cast<double>(spu->delta_y), static_cast<double>(spu->delta_z));
+		LogInfo("  heading: {} (delta: {})", static_cast<uint32>(spu->heading), static_cast<int32>(spu->delta_heading));
+		LogInfo("  animation: {}", static_cast<uint32>(spu->animation));
+		LogInfo("  packet size: {}", cu.size);
 	}
 
 	if (ignore_idle && reset_idle) {
