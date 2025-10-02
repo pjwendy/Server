@@ -294,7 +294,7 @@ struct Spawn_Struct
 /*0068*/ uint8  level;
 /*0069*/ float  bounding_radius; // used in melee, overrides calc
 /*0073*/ uint8  NPC;           // 0=player,1=npc,2=pc corpse,3=npc corpse
-	 Spawn_Struct_Bitfields	Bitfields;
+	 Spawn_Struct	Bitfields;
 /*0000*/ uint8  otherData; // & 4 - has title, & 8 - has suffix, & 1 - it's a chest or untargetable
 /*0000*/ float unknown3;	// seen -1
 /*0000*/ float unknown4;

@@ -3508,7 +3508,7 @@ namespace UF
 			VARSTRUCT_ENCODE_TYPE(uint8, Buffer, emu->IsMercenary); //IsMercenary
 			Buffer += 28; // Unknown;
 
-			LogInfo("ZoneSpawn: ID={} Name='{}' Pos=({:.1f},{:.1f},{:.1f}) NPC={}", emu->spawnId, emu->name, emu->x/8.0f, emu->y/8.0f, emu->z/8.0f, emu->NPC);
+			LogInfo("ZoneSpawn: ID={} Name='{}' Pos=({:.1f},{:.1f},{:.1f}) NPC={}", emu->spawnId, emu->name, emu->x, emu->y, emu->z, emu->NPC);
 
 			dest->FastQueuePacket(&outapp, ack_req);
 		}
