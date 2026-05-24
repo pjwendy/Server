@@ -1,35 +1,31 @@
-/**
- * EQEmulator: Everquest Server Emulator
- * Copyright (C) 2001-2020 EQEmulator Development Team (https://github.com/EQEmu/Server)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY except by those people which sell it, which
- * are required to give you total support for your newly bought product;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
- */
+/*	EQEmu: EQEmulator
 
-#ifndef SHAREDDB_H_
-#define SHAREDDB_H_
+	Copyright (C) 2001-2026 EQEmu Development Team
 
-#include "database.h"
-#include "skills.h"
-#include "spdat.h"
-#include "fixed_memory_hash_set.h"
-#include "fixed_memory_variable_hash_set.h"
-#include "say_link.h"
-#include "repositories/command_subsettings_repository.h"
-#include "repositories/items_evolving_details_repository.h"
-#include "../common/repositories/character_evolving_items_repository.h"
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
+#pragma once
+
+#include "common/database.h"
+#include "common/fixed_memory_hash_set.h"
+#include "common/fixed_memory_variable_hash_set.h"
+#include "common/repositories/character_evolving_items_repository.h"
+#include "common/repositories/command_subsettings_repository.h"
+#include "common/repositories/items_evolving_details_repository.h"
+#include "common/say_link.h"
+#include "common/skills.h"
+#include "common/spdat.h"
 
 #include <list>
 #include <map>
@@ -203,5 +199,3 @@ protected:
 	uint32 m_shared_items_count = 0;
 	uint32 m_shared_spells_count = 0;
 };
-
-#endif /*SHAREDDB_H_*/

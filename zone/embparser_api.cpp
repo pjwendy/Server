@@ -1,41 +1,37 @@
-/*  EQEMu:  Everquest Server Emulator
-	Copyright (C) 2001-2006  EQEMu Development Team (http://eqemulator.net)
+/*	EQEmu: EQEmulator
+
+	Copyright (C) 2001-2026 EQEmu Development Team
 
 	This program is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation; version 2 of the License.
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
 
 	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY except by those people which sell it, which
-	are required to give you total support for your newly bought product;
-	without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-	A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with this program; if not, write to the Free Software
-	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-
-#include "../common/features.h"
-#include "../common/content/world_content_service.h"
-#include "../common/zone_store.h"
-
 #ifdef EMBPERL
 #ifdef EMBPERL_XS
 
-#include "../common/global_define.h"
-#include "../common/misc_functions.h"
-
-#include "dialogue_window.h"
-#include "dynamic_zone.h"
-#include "embperl.h"
-#include "entity.h"
-#include "queryserv.h"
-#include "questmgr.h"
-#include "zone.h"
-#include "../common/data_bucket.h"
-#include "../common/events/player_event_logs.h"
-#include "worldserver.h"
+#include "common/content/world_content_service.h"
+#include "common/data_bucket.h"
+#include "common/events/player_event_logs.h"
+#include "common/features.h"
+#include "common/misc_functions.h"
+#include "common/zone_store.h"
+#include "zone/dialogue_window.h"
+#include "zone/dynamic_zone.h"
+#include "zone/embperl.h"
+#include "zone/entity.h"
+#include "zone/queryserv.h"
+#include "zone/questmgr.h"
+#include "zone/worldserver.h"
+#include "zone/zone.h"
 
 #include <cctype>
 
@@ -2485,27 +2481,27 @@ std::string Perl__get_rule(const char* rule_name)
 
 std::string Perl__get_data(std::string bucket_key)
 {
-	return DataBucket::GetData(bucket_key);
+	return DataBucket::GetData(&database, bucket_key);
 }
 
 std::string Perl__get_data_expires(std::string bucket_key)
 {
-	return DataBucket::GetDataExpires(bucket_key);
+	return DataBucket::GetDataExpires(&database, bucket_key);
 }
 
 void Perl__set_data(std::string key, std::string value)
 {
-	DataBucket::SetData(key, value);
+	DataBucket::SetData(&database, key, value);
 }
 
 void Perl__set_data(std::string key, std::string value, std::string expires_at)
 {
-	DataBucket::SetData(key, value, expires_at);
+	DataBucket::SetData(&database, key, value, expires_at);
 }
 
 bool Perl__delete_data(std::string bucket_key)
 {
-	return DataBucket::DeleteData(bucket_key);
+	return DataBucket::DeleteData(&database, bucket_key);
 }
 
 bool Perl__IsClassicEnabled()
@@ -3045,7 +3041,7 @@ void Perl__rename(std::string name)
 
 std::string Perl__get_data_remaining(std::string bucket_name)
 {
-	return DataBucket::GetDataRemaining(bucket_name);
+	return DataBucket::GetDataRemaining(&database, bucket_name);
 }
 
 const int Perl__getitemstat(uint32 item_id, std::string identifier)
@@ -7059,5 +7055,5 @@ void perl_register_quest()
 
 }
 
-#endif
-#endif
+#endif // EMBPERL_XS
+#endif // EMBPERL

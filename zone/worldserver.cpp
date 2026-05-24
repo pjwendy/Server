@@ -1,77 +1,68 @@
-/*	EQEMu: Everquest Server Emulator
-Copyright (C) 2001-2016 EQEMu Development Team (http://eqemu.org)
+/*	EQEmu: EQEmulator
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; version 2 of the License.
+	Copyright (C) 2001-2026 EQEmu Development Team
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY except by those people which sell it, which
-are required to give you total support for your newly bought product;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-
-#include "../common/global_define.h"
-#include <iostream>
-#include <string.h>
-#include <stdio.h>
-#include <stdarg.h>
-
-#ifdef _WINDOWS
-#include <process.h>
-
-#define snprintf	_snprintf
-#define strncasecmp	_strnicmp
-#define strcasecmp	_stricmp
-#endif
-
-#include "../common/eq_packet_structs.h"
-#include "../common/misc_functions.h"
-#include "../common/rulesys.h"
-#include "../common/say_link.h"
-#include "../common/servertalk.h"
-#include "../common/profanity_manager.h"
-
-#include "client.h"
-#include "command.h"
-#include "corpse.h"
-#include "dynamic_zone.h"
-#include "entity.h"
-#include "quest_parser_collection.h"
-#include "guild_mgr.h"
-#include "mob.h"
-#include "petitions.h"
-#include "raids.h"
-#include "string_ids.h"
-#include "titles.h"
 #include "worldserver.h"
-#include "zone.h"
-#include "zone_config.h"
-#include "../common/shared_tasks.h"
-#include "shared_task_zone_messaging.h"
-#include "dialogue_window.h"
-#include "bot_command.h"
-#include "../common/events/player_event_logs.h"
-#include "../common/repositories/guild_tributes_repository.h"
-#include "../common/patches/patches.h"
-#include "../common/skill_caps.h"
-#include "../common/server_reload_types.h"
-#include "queryserv.h"
+
+#include "common/eq_packet_structs.h"
+#include "common/events/player_event_logs.h"
+#include "common/misc_functions.h"
+#include "common/patches/patches.h"
+#include "common/profanity_manager.h"
+#include "common/repositories/guild_tributes_repository.h"
+#include "common/rulesys.h"
+#include "common/say_link.h"
+#include "common/server_reload_types.h"
+#include "common/servertalk.h"
+#include "common/shared_tasks.h"
+#include "common/skill_caps.h"
+#include "zone/bot_command.h"
+#include "zone/client.h"
+#include "zone/command.h"
+#include "zone/corpse.h"
+#include "zone/dialogue_window.h"
+#include "zone/dynamic_zone.h"
+#include "zone/entity.h"
+#include "zone/guild_mgr.h"
+#include "zone/mob.h"
+#include "zone/petitions.h"
+#include "zone/queryserv.h"
+#include "zone/quest_parser_collection.h"
+#include "zone/raids.h"
+#include "zone/shared_task_zone_messaging.h"
+#include "zone/string_ids.h"
+#include "zone/titles.h"
+#include "zone/zone_config.h"
+#include "zone/zone.h"
+
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
+#include <iostream>
 
 extern EntityList             entity_list;
 extern Zone                  *zone;
 extern volatile bool          is_zone_loaded;
-extern void                   Shutdown();
 extern WorldServer            worldserver;
 extern uint32                 numclients;
 extern volatile bool          RunLoops;
 extern QuestParserCollection *parse;
 extern QueryServ             *QServ;
+
+void Shutdown();
 
 // QuestParserCollection *parse = 0;
 
@@ -559,7 +550,7 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 		SerializeBuffer buf(100);
 		buf.WriteString(smotd->motd);
 
-		auto outapp = std::make_unique<EQApplicationPacket>(OP_MOTD, buf);
+		auto outapp = std::make_unique<EQApplicationPacket>(OP_MOTD, std::move(buf));
 
 		entity_list.QueueClients(0, outapp.get());
 		break;
@@ -2927,10 +2918,10 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 						c->AssignTask(u->task_identifier, u->task_subidentifier, u->enforce_level_requirement);
 						break;
 					case CZTaskUpdateSubtype_DisableTask:
-						c->DisableTask(1, reinterpret_cast<int *>(u->task_identifier));
+						c->DisableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 						break;
 					case CZTaskUpdateSubtype_EnableTask:
-						c->EnableTask(1, reinterpret_cast<int *>(u->task_identifier));
+						c->EnableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 						break;
 					case CZTaskUpdateSubtype_FailTask:
 						c->FailTask(u->task_identifier);
@@ -2957,10 +2948,10 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 								group_member->AssignTask(u->task_identifier, u->task_subidentifier, u->enforce_level_requirement);
 								break;
 							case CZTaskUpdateSubtype_DisableTask:
-								group_member->DisableTask(1, reinterpret_cast<int *>(u->task_identifier));
+								group_member->DisableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 								break;
 							case CZTaskUpdateSubtype_EnableTask:
-								group_member->EnableTask(1, reinterpret_cast<int *>(u->task_identifier));
+								group_member->EnableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 								break;
 							case CZTaskUpdateSubtype_FailTask:
 								group_member->FailTask(u->task_identifier);
@@ -2988,10 +2979,10 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 								m.member->CastToClient()->AssignTask(u->task_identifier, u->task_subidentifier, u->enforce_level_requirement);
 								break;
 							case CZTaskUpdateSubtype_DisableTask:
-								m.member->CastToClient()->DisableTask(1, reinterpret_cast<int *>(u->task_identifier));
+								m.member->CastToClient()->DisableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 								break;
 							case CZTaskUpdateSubtype_EnableTask:
-								m.member->CastToClient()->EnableTask(1, reinterpret_cast<int *>(u->task_identifier));
+								m.member->CastToClient()->EnableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 								break;
 							case CZTaskUpdateSubtype_FailTask:
 								m.member->CastToClient()->FailTask(u->task_identifier);
@@ -3017,10 +3008,10 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 							c.second->AssignTask(u->task_identifier, u->task_subidentifier, u->enforce_level_requirement);
 							break;
 						case CZTaskUpdateSubtype_DisableTask:
-							c.second->DisableTask(1, reinterpret_cast<int *>(u->task_identifier));
+							c.second->DisableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 							break;
 						case CZTaskUpdateSubtype_EnableTask:
-							c.second->EnableTask(1, reinterpret_cast<int *>(u->task_identifier));
+							c.second->EnableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 							break;
 						case CZTaskUpdateSubtype_FailTask:
 							c.second->FailTask(u->task_identifier);
@@ -3045,10 +3036,10 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 							c.second->AssignTask(u->task_identifier, u->task_subidentifier, u->enforce_level_requirement);
 							break;
 						case CZTaskUpdateSubtype_DisableTask:
-							c.second->DisableTask(1, reinterpret_cast<int *>(u->task_identifier));
+							c.second->DisableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 							break;
 						case CZTaskUpdateSubtype_EnableTask:
-							c.second->EnableTask(1, reinterpret_cast<int *>(u->task_identifier));
+							c.second->EnableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 							break;
 						case CZTaskUpdateSubtype_FailTask:
 							c.second->FailTask(u->task_identifier);
@@ -3073,10 +3064,10 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 						c->AssignTask(u->task_identifier, u->task_subidentifier, u->enforce_level_requirement);
 						break;
 					case CZTaskUpdateSubtype_DisableTask:
-						c->DisableTask(1, reinterpret_cast<int *>(u->task_identifier));
+						c->DisableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 						break;
 					case CZTaskUpdateSubtype_EnableTask:
-						c->EnableTask(1, reinterpret_cast<int *>(u->task_identifier));
+						c->EnableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 						break;
 					case CZTaskUpdateSubtype_FailTask:
 						c->FailTask(u->task_identifier);
@@ -3313,10 +3304,10 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 						c.second->AssignTask(u->task_identifier, u->task_subidentifier, u->enforce_level_requirement);
 						break;
 					case WWTaskUpdateType_DisableTask:
-						c.second->DisableTask(1, reinterpret_cast<int *>(u->task_identifier));
+						c.second->DisableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 						break;
 					case WWTaskUpdateType_EnableTask:
-						c.second->EnableTask(1, reinterpret_cast<int *>(u->task_identifier));
+						c.second->EnableTask(1, reinterpret_cast<int*>(&u->task_identifier));
 						break;
 					case WWTaskUpdateType_FailTask:
 						c.second->FailTask(u->task_identifier);

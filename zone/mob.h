@@ -1,43 +1,40 @@
+/*	EQEmu: EQEmulator
 
-/*	EQEMu: Everquest Server Emulator
-	Copyright (C) 2001-2016 EQEMu Development Team (http://eqemu.org)
+	Copyright (C) 2001-2026 EQEmu Development Team
 
 	This program is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation; version 2 of the License.
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
 
 	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY except by those people which sell it, which
-	are required to give you total support for your newly bought product;
-	without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-	A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with this program; if not, write to the Free Software
-	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef MOB_H
-#define MOB_H
+#pragma once
 
-#include "common.h"
-#include "../common/data_bucket.h"
-#include "entity.h"
-#include "hate_list.h"
-#include "pathfinder_interface.h"
-#include "position.h"
-#include "aa_ability.h"
-#include "aa.h"
-#include "../common/light_source.h"
-#include "../common/emu_constants.h"
-#include "combat_record.h"
-#include "event_codes.h"
+#include "common/data_bucket.h"
+#include "common/emu_constants.h"
+#include "common/light_source.h"
+#include "zone/aa_ability.h"
+#include "zone/aa.h"
+#include "zone/combat_record.h"
+#include "zone/common.h"
+#include "zone/entity.h"
+#include "zone/event_codes.h"
+#include "zone/hate_list.h"
+#include "zone/heal_rotation.h"
+#include "zone/pathfinder_interface.h"
+#include "zone/position.h"
 
 #include <any>
+#include <memory>
 #include <set>
 #include <vector>
-#include <memory>
-
-#include "heal_rotation.h"
 
 char* strn0cpy(char* dest, const char* source, uint32 size);
 
@@ -1953,6 +1950,3 @@ private:
 	void DoSpellInterrupt(uint16 spell_id, int32 mana_cost, int my_curmana);
 	void HandleDoorOpen();
 };
-
-#endif
-

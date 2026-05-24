@@ -1,29 +1,47 @@
-#include "../client.h"
-#include "find/aa.cpp"
-#include "find/account.cpp"
-#include "find/body_type.cpp"
-#include "find/bot.cpp"
-#include "find/bug_category.cpp"
-#include "find/character.cpp"
-#include "find/class.cpp"
-#include "find/comparison_type.cpp"
-#include "find/currency.cpp"
-#include "find/deity.cpp"
-#include "find/emote.cpp"
-#include "find/faction.cpp"
-#include "find/item.cpp"
-#include "find/language.cpp"
-#include "find/ldon_theme.cpp"
-#include "find/npctype.cpp"
-#include "find/object_type.cpp"
-#include "find/race.cpp"
-#include "find/recipe.cpp"
-#include "find/skill.cpp"
-#include "find/stance.cpp"
-#include "find/spell.cpp"
-#include "find/special_ability.cpp"
-#include "find/task.cpp"
-#include "find/zone.cpp"
+/*	EQEmu: EQEmulator
+
+	Copyright (C) 2001-2026 EQEmu Development Team
+
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
+#include "zone/client.h"
+
+void FindAA(Client* c, const Seperator* sep);
+void FindAccount(Client* c, const Seperator* sep);
+void FindBodyType(Client* c, const Seperator* sep);
+void FindBot(Client* c, const Seperator* sep);
+void FindBugCategory(Client* c, const Seperator* sep);
+void FindCharacter(Client* c, const Seperator* sep);
+void FindClass(Client* c, const Seperator* sep);
+void FindComparisonType(Client* c, const Seperator* sep);
+void FindCurrency(Client* c, const Seperator* sep);
+void FindDeity(Client* c, const Seperator* sep);
+void FindEmote(Client* c, const Seperator* sep);
+void FindFaction(Client* c, const Seperator* sep);
+void FindItem(Client* c, const Seperator* sep);
+void FindLanguage(Client* c, const Seperator* sep);
+void FindLDoNTheme(Client* c, const Seperator* sep);
+void FindNPCType(Client* c, const Seperator* sep);
+void FindObjectType(Client* c, const Seperator* sep);
+void FindRace(Client* c, const Seperator* sep);
+void FindRecipe(Client* c, const Seperator* sep);
+void FindSkill(Client* c, const Seperator* sep);
+void FindSpecialAbility(Client* c, const Seperator* sep);
+void FindStance(Client* c, const Seperator* sep);
+void FindSpell(Client* c, const Seperator* sep);
+void FindTask(Client* c, const Seperator* sep);
+void FindZone(Client* c, const Seperator* sep);
 
 void command_find(Client *c, const Seperator *sep)
 {

@@ -1,33 +1,33 @@
-/*	EQEMu: Everquest Server Emulator
-	Copyright (C) 2001-2016 EQEMu Development Team (http://eqemulator.org)
+/*	EQEmu: EQEmulator
+
+	Copyright (C) 2001-2026 EQEmu Development Team
 
 	This program is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation; version 2 of the License.
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
 
 	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY except by those people which sell it, which
-	are required to give you total support for your newly bought product;
-	without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-	A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with this program; if not, write to the Free Software
-	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-
 #include "bot.h"
-#include "object.h"
-#include "raids.h"
-#include "doors.h"
-#include "quest_parser_collection.h"
-#include "lua_parser.h"
-#include "../common/repositories/bot_inventories_repository.h"
-#include "../common/repositories/bot_spell_settings_repository.h"
-#include "../common/repositories/bot_starting_items_repository.h"
-#include "../common/data_verification.h"
-#include "../common/repositories/criteria/content_filter_criteria.h"
-#include "../common/skill_caps.h"
+
+#include "common/data_verification.h"
+#include "common/repositories/bot_inventories_repository.h"
+#include "common/repositories/bot_spell_settings_repository.h"
+#include "common/repositories/bot_starting_items_repository.h"
+#include "common/repositories/criteria/content_filter_criteria.h"
+#include "common/skill_caps.h"
+#include "zone/doors.h"
+#include "zone/lua_parser.h"
+#include "zone/object.h"
+#include "zone/quest_parser_collection.h"
+#include "zone/raids.h"
 
 /*
 TODO bot rewrite:
@@ -2601,6 +2601,8 @@ void Bot::DoOutOfCombatChecks(Client* bot_owner, Mob* follow_mob, float leash_di
 	if (GetClass() == Class::Bard && AI_HasSpells() && TryBardMovementCasts()) {
 		return;
 	}
+
+	TryMeditate();
 }
 
 // This is as close as I could get without modifying the aggro mechanics and making it an expensive process...
@@ -5173,7 +5175,7 @@ int Bot::GetBaseSkillDamage(EQ::skills::SkillType skill, Mob *target)
 				ac_bonus = inst->GetItemArmorClass(true) / 25.0f;
 			if (ac_bonus > skill_bonus)
 				ac_bonus = skill_bonus;
-			return static_cast<int>(ac_bonus + skill_bonus);
+			return base + static_cast<int>(ac_bonus + skill_bonus);
 		}
 		case EQ::skills::SkillKick: {
 			float skill_bonus = skill_level / 10.0f;
@@ -5183,7 +5185,7 @@ int Bot::GetBaseSkillDamage(EQ::skills::SkillType skill, Mob *target)
 				ac_bonus = inst->GetItemArmorClass(true) / 25.0f;
 			if (ac_bonus > skill_bonus)
 				ac_bonus = skill_bonus;
-			return static_cast<int>(ac_bonus + skill_bonus);
+			return base + static_cast<int>(ac_bonus + skill_bonus);
 		}
 		case EQ::skills::SkillBash: {
 			float skill_bonus = skill_level / 10.0f;
@@ -5197,7 +5199,7 @@ int Bot::GetBaseSkillDamage(EQ::skills::SkillType skill, Mob *target)
 				ac_bonus = inst->GetItemArmorClass(true) / 25.0f;
 			if (ac_bonus > skill_bonus)
 				ac_bonus = skill_bonus;
-			return static_cast<int>(ac_bonus + skill_bonus);
+			return base + static_cast<int>(ac_bonus + skill_bonus);
 		}
 		case EQ::skills::SkillBackstab: {
 			float skill_bonus = static_cast<float>(skill_level) * 0.02f;
@@ -8224,13 +8226,13 @@ bool Bot::CheckDataBucket(std::string bucket_name, const std::string& bucket_val
 		DataBucketKey k = GetScopedBucketKeys();
 		k.key = bucket_name;
 
-		auto b = DataBucket::GetData(k);
+		auto b = DataBucket::GetData(&database, k);
 		if (b.value.empty() && GetBotOwner()) {
 			// fetch from owner
 			k = GetBotOwner()->GetScopedBucketKeys();
 			k.key = bucket_name;
 
-			b = DataBucket::GetData(k);
+			b = DataBucket::GetData(&database, k);
 			if (b.value.empty()) {
 				return false;
 			}
@@ -10392,9 +10394,6 @@ void Bot::SetBotSetting(uint8 setting_type, uint16 bot_setting, int setting_valu
 
 void Bot::SetBotBaseSetting(uint16 bot_setting, int setting_value) {
 	switch (bot_setting) {
-		case BotBaseSettings::ExpansionBitmask:
-			SetExpansionBitmask(setting_value);
-			break;
 		case BotBaseSettings::ShowHelm:
 			SetShowHelm(setting_value);
 			break;
@@ -10441,8 +10440,6 @@ void Bot::SetBotBaseSetting(uint16 bot_setting, int setting_value) {
 
 int Bot::GetBotBaseSetting(uint16 bot_setting) {
 	switch (bot_setting) {
-		case BotBaseSettings::ExpansionBitmask:
-			return GetExpansionBitmask();
 		case BotBaseSettings::ShowHelm:
 			return GetShowHelm();
 		case BotBaseSettings::FollowDistance:
@@ -10478,8 +10475,6 @@ int Bot::GetBotBaseSetting(uint16 bot_setting) {
 
 int Bot::GetDefaultBotBaseSetting(uint16 bot_setting, uint8 stance) {
 	switch (bot_setting) {
-		case BotBaseSettings::ExpansionBitmask:
-			return RuleI(Bots, BotExpansionSettings);
 		case BotBaseSettings::ShowHelm:
 			return true;
 		case BotBaseSettings::FollowDistance:
@@ -10538,7 +10533,7 @@ void Bot::LoadDefaultBotSettings() {
 
 	uint8 bot_stance = GetBotStance();
 
-	for (uint16 i = BotBaseSettings::START_ALL; i <= BotBaseSettings::END; ++i) {
+	for (uint16 i = BotBaseSettings::START; i <= BotBaseSettings::END; ++i) {
 		SetBotBaseSetting(i, GetDefaultSetting(BotSettingCategories::BaseSetting, i, bot_stance));
 		LogBotSettingsDetail("{} says, 'Setting default {} [{}] to [{}]'", GetCleanName(), GetBotSettingCategoryName(i), i, GetDefaultBotBaseSetting(i, bot_stance));
 	}
@@ -10585,12 +10580,12 @@ void Bot::LoadDefaultBotSettings() {
 		m_bot_spell_settings.push_back(t);
 
 		LogBotSettingsDetail("{} says, 'Setting defaults for {} ({}) [#{}] - [{} [#{}] stance]'", GetCleanName(), t.name, t.short_name, t.spell_type, Stance::GetName(bot_stance), bot_stance);
-		LogBotSettingsDetail("{} says, 'Hold = [{}] | Delay = [{}ms] | MinThreshold = [{}\%] | MaxThreshold = [{}\%]'", GetCleanName(),
+		LogBotSettingsDetail("{} says, 'Hold = [{}] | Delay = [{}ms] | MinThreshold = [{}%] | MaxThreshold = [{}%]'", GetCleanName(),
 							 GetDefaultSpellTypeHold(i, bot_stance),
 							 GetDefaultSpellTypeDelay(i, bot_stance),
 							 GetDefaultSpellTypeMinThreshold(i, bot_stance),
 							 GetDefaultSpellTypeMaxThreshold(i, bot_stance));
-		LogBotSettingsDetail("{} says, 'AggroCheck = [{}] | MinManaPCT = [{}\%] | MaxManaPCT = [{}\%] | MinHPPCT = [{}\% | MaxHPPCT = [{}\%]'", GetCleanName(), GetDefaultSpellTypeAggroCheck(i, bot_stance), GetDefaultSpellTypeMinManaLimit(i, bot_stance), GetDefaultSpellTypeMaxManaLimit(i, bot_stance), GetDefaultSpellTypeMinHPLimit(i, bot_stance), GetDefaultSpellTypeMaxHPLimit(i, bot_stance));
+		LogBotSettingsDetail("{} says, 'AggroCheck = [{}] | MinManaPCT = [{}%] | MaxManaPCT = [{}%] | MinHPPCT = [{}% | MaxHPPCT = [{}%]'", GetCleanName(), GetDefaultSpellTypeAggroCheck(i, bot_stance), GetDefaultSpellTypeMinManaLimit(i, bot_stance), GetDefaultSpellTypeMaxManaLimit(i, bot_stance), GetDefaultSpellTypeMinHPLimit(i, bot_stance), GetDefaultSpellTypeMaxHPLimit(i, bot_stance));
 		LogBotSettingsDetail("{} says, 'IdlePriority = [{}] | EngagedPriority = [{}] | PursuePriority = [{}]'", GetCleanName(), GetDefaultSpellTypeIdlePriority(i, GetClass(), bot_stance), GetDefaultSpellTypeEngagedPriority(i, GetClass(), bot_stance), GetDefaultSpellTypePursuePriority(i, GetClass(), bot_stance));
 		LogBotSettingsDetail("{} says, 'TargetCount = [{}] | AnnounceCast = [{}]'", GetCleanName(), GetDefaultSpellTypeAEOrGroupTargetCount(i, bot_stance), GetDefaultSpellTypeAnnounceCast(i, bot_stance));
 	}
@@ -10641,7 +10636,7 @@ void Bot::SetBotSpellRecastTimer(uint16 spell_type, Mob* tar, bool precast) {
 
 BotSpell Bot::GetSpellByHealType(uint16 spell_type, Mob* tar) {
 	if (!TargetValidation(tar)) {
-		BotSpell result;
+		BotSpell result{};
 
 		return result;
 	}
@@ -12922,7 +12917,7 @@ uint16 Bot::GetBotSpellCategoryIDByShortName(std::string setting_string) {
 }
 
 bool Bot::IsValidBotBaseSetting(uint16 setting_type) {
-	return EQ::ValueWithin(setting_type, BotBaseSettings::START_ALL, BotBaseSettings::END);
+	return EQ::ValueWithin(setting_type, BotBaseSettings::START, BotBaseSettings::END);
 }
 
 std::string Bot::GetBotSettingCategoryName(uint16 setting_type) {

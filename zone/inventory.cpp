@@ -1,33 +1,32 @@
-/*	EQEMu: Everquest Server Emulator
-	Copyright (C) 2001-2016 EQEMu Development Team (http://eqemulator.net)
+/*	EQEmu: EQEmulator
+
+	Copyright (C) 2001-2026 EQEmu Development Team
 
 	This program is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation; version 2 of the License.
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
 
 	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY except by those people which sell it, which
-	are required to give you total support for your newly bought product;
-	without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-	A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with this program; if not, write to the Free Software
-	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
+#include "client.h"
 
-#include "../common/global_define.h"
-#include "../common/eqemu_logsys.h"
-
-#include "../common/strings.h"
-#include "quest_parser_collection.h"
-#include "worldserver.h"
-#include "zonedb.h"
-#include "../common/events/player_event_logs.h"
-#include "bot.h"
-#include "../common/evolving_items.h"
-#include "../common/repositories/character_corpse_items_repository.h"
-#include "queryserv.h"
+#include "common/eqemu_logsys.h"
+#include "common/events/player_event_logs.h"
+#include "common/evolving_items.h"
+#include "common/repositories/character_corpse_items_repository.h"
+#include "common/strings.h"
+#include "zone/bot.h"
+#include "zone/queryserv.h"
+#include "zone/quest_parser_collection.h"
+#include "zone/worldserver.h"
+#include "zone/zonedb.h"
 
 extern WorldServer worldserver;
 extern QueryServ  *QServ;
@@ -4607,26 +4606,32 @@ void Client::SummonItemIntoInventory(
 		return;
 	}
 
-	const bool  is_arrow = inst->GetItem()->ItemType == EQ::item::ItemTypeArrow;
-	const int16 slot_id  = m_inv.FindFreeSlot(
-		inst->IsClassBag(),
-		true,
-		inst->GetItem()->Size,
-		is_arrow
-	);
+	// Try stacking first if the item is stackable, then fall back to finding a free slot
+	if (!PutItemInInventoryWithStacking(inst)) {
+		// PutItemInInventoryWithStacking failed, fall back to original behavior
+		const bool  is_arrow = inst->GetItem()->ItemType == EQ::item::ItemTypeArrow;
+		const int16 slot_id  = m_inv.FindFreeSlot(
+			inst->IsClassBag(),
+			true,
+			inst->GetItem()->Size,
+			is_arrow
+		);
 
-	SummonItem(
-		item_id,
-		charges,
-		aug1,
-		aug2,
-		aug3,
-		aug4,
-		aug5,
-		aug6,
-		is_attuned,
-		slot_id
-	);
+		SummonItem(
+			item_id,
+			charges,
+			aug1,
+			aug2,
+			aug3,
+			aug4,
+			aug5,
+			aug6,
+			is_attuned,
+			slot_id
+		);
+	}
+
+	safe_delete(inst);
 }
 
 bool Client::HasItemOnCorpse(uint32 item_id)
@@ -4673,7 +4678,8 @@ bool Client::PutItemInInventoryWithStacking(EQ::ItemInstance *inst)
 			return true;
 		}
 	}
-	if (free_id != INVALID_INDEX) {
+	// Protect equipment slots (0-22) from being overwritten
+	if (free_id != INVALID_INDEX && !EQ::ValueWithin(free_id, EQ::invslot::EQUIPMENT_BEGIN, EQ::invslot::EQUIPMENT_END)) {
 		if (PutItemInInventory(free_id, *inst, true)) {
 			return true;
 		}

@@ -1,36 +1,48 @@
-#include <string.h>
-#include <algorithm>
-#include <thread>
-#include <fmt/format.h>
-#include "../common/repositories/command_subsettings_repository.h"
+/*	EQEmu: EQEmulator
 
-#ifdef _WINDOWS
-#define strcasecmp _stricmp
-#endif
+	Copyright (C) 2001-2026 EQEmu Development Team
 
-#include "../common/global_define.h"
-#include "../common/eq_packet.h"
-#include "../common/features.h"
-#include "../common/ptimer.h"
-#include "../common/rulesys.h"
-#include "../common/strings.h"
-#include "../common/say_link.h"
-#include "../common/net/eqstream.h"
-#include "../common/file.h"
-#include "../common/repositories/dynamic_zones_repository.h"
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
 
-#include "../common/data_bucket.h"
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
 #include "command.h"
-#include "dynamic_zone.h"
-#include "queryserv.h"
-#include "quest_parser_collection.h"
-#include "titles.h"
-#include "water_map.h"
-#include "worldserver.h"
-#include "fastmath.h"
-#include "mob_movement_manager.h"
-#include "npc_scale_manager.h"
-#include "../common/events/player_event_logs.h"
+
+#include "common/data_bucket.h"
+#include "common/eq_packet.h"
+#include "common/events/player_event_logs.h"
+#include "common/features.h"
+#include "common/file.h"
+#include "common/net/eqstream.h"
+#include "common/ptimer.h"
+#include "common/repositories/command_subsettings_repository.h"
+#include "common/repositories/dynamic_zones_repository.h"
+#include "common/rulesys.h"
+#include "common/say_link.h"
+#include "common/strings.h"
+#include "zone/dynamic_zone.h"
+#include "zone/fastmath.h"
+#include "zone/mob_movement_manager.h"
+#include "zone/npc_scale_manager.h"
+#include "zone/queryserv.h"
+#include "zone/quest_parser_collection.h"
+#include "zone/titles.h"
+#include "zone/water_map.h"
+#include "zone/worldserver.h"
+
+#include "fmt/format.h"
+#include <algorithm>
+#include <cstring>
+#include <thread>
 
 extern QueryServ* QServ;
 extern WorldServer worldserver;

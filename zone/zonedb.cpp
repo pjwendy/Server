@@ -1,62 +1,77 @@
+/*	EQEmu: EQEmulator
 
-#include "../common/eqemu_logsys.h"
-#include "../common/extprofile.h"
-#include "../common/rulesys.h"
-#include "../common/strings.h"
+	Copyright (C) 2001-2026 EQEmu Development Team
 
-#include "client.h"
-#include "corpse.h"
-#include "groups.h"
-#include "merc.h"
-#include "zone.h"
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
 #include "zonedb.h"
-#include "aura.h"
-#include "../common/repositories/blocked_spells_repository.h"
-#include "../common/repositories/character_tribute_repository.h"
-#include "../common/repositories/character_data_repository.h"
-#include "../common/repositories/character_disciplines_repository.h"
-#include "../common/repositories/npc_types_repository.h"
-#include "../common/repositories/character_bind_repository.h"
-#include "../common/repositories/character_pet_buffs_repository.h"
-#include "../common/repositories/character_pet_inventory_repository.h"
-#include "../common/repositories/character_pet_info_repository.h"
-#include "../common/repositories/character_buffs_repository.h"
-#include "../common/repositories/character_languages_repository.h"
-#include "../common/repositories/criteria/content_filter_criteria.h"
-#include "../common/repositories/spawn2_disabled_repository.h"
-#include "../common/repositories/character_leadership_abilities_repository.h"
-#include "../common/repositories/character_material_repository.h"
-#include "../common/repositories/character_memmed_spells_repository.h"
-#include "../common/repositories/character_spells_repository.h"
-#include "../common/repositories/character_skills_repository.h"
-#include "../common/repositories/character_potionbelt_repository.h"
-#include "../common/repositories/character_bandolier_repository.h"
-#include "../common/repositories/character_currency_repository.h"
-#include "../common/repositories/character_alternate_abilities_repository.h"
-#include "../common/repositories/character_auras_repository.h"
-#include "../common/repositories/character_alt_currency_repository.h"
-#include "../common/repositories/character_item_recast_repository.h"
-#include "../common/repositories/account_repository.h"
-#include "../common/repositories/respawn_times_repository.h"
-#include "../common/repositories/object_contents_repository.h"
-#include "../common/repositories/mercs_repository.h"
-#include "../common/repositories/merc_buffs_repository.h"
-#include "../common/repositories/merc_inventory_repository.h"
-#include "../common/repositories/merc_subtypes_repository.h"
-#include "../common/repositories/npc_types_tint_repository.h"
-#include "../common/repositories/merchantlist_temp_repository.h"
-#include "../common/repositories/character_exp_modifiers_repository.h"
-#include "../common/repositories/character_data_repository.h"
-#include "../common/repositories/character_corpses_repository.h"
-#include "../common/repositories/character_corpse_items_repository.h"
-#include "../common/repositories/zone_repository.h"
 
-#include "../common/repositories/trader_repository.h"
-#include "../common/repositories/character_evolving_items_repository.h"
+#include "common/eqemu_logsys.h"
+#include "common/extprofile.h"
+#include "common/repositories/account_repository.h"
+#include "common/repositories/blocked_spells_repository.h"
+#include "common/repositories/character_alt_currency_repository.h"
+#include "common/repositories/character_alternate_abilities_repository.h"
+#include "common/repositories/character_auras_repository.h"
+#include "common/repositories/character_bandolier_repository.h"
+#include "common/repositories/character_bind_repository.h"
+#include "common/repositories/character_buffs_repository.h"
+#include "common/repositories/character_corpse_items_repository.h"
+#include "common/repositories/character_corpses_repository.h"
+#include "common/repositories/character_currency_repository.h"
+#include "common/repositories/character_data_repository.h"
+#include "common/repositories/character_data_repository.h"
+#include "common/repositories/character_disciplines_repository.h"
+#include "common/repositories/character_evolving_items_repository.h"
+#include "common/repositories/character_exp_modifiers_repository.h"
+#include "common/repositories/character_item_recast_repository.h"
+#include "common/repositories/character_languages_repository.h"
+#include "common/repositories/character_leadership_abilities_repository.h"
+#include "common/repositories/character_material_repository.h"
+#include "common/repositories/character_memmed_spells_repository.h"
+#include "common/repositories/character_pet_buffs_repository.h"
+#include "common/repositories/character_pet_info_repository.h"
+#include "common/repositories/character_pet_inventory_repository.h"
+#include "common/repositories/character_potionbelt_repository.h"
+#include "common/repositories/character_skills_repository.h"
+#include "common/repositories/character_spells_repository.h"
+#include "common/repositories/character_tribute_repository.h"
+#include "common/repositories/criteria/content_filter_criteria.h"
+#include "common/repositories/merc_buffs_repository.h"
+#include "common/repositories/merc_inventory_repository.h"
+#include "common/repositories/merc_subtypes_repository.h"
+#include "common/repositories/merchantlist_temp_repository.h"
+#include "common/repositories/mercs_repository.h"
+#include "common/repositories/npc_types_repository.h"
+#include "common/repositories/npc_types_tint_repository.h"
+#include "common/repositories/object_contents_repository.h"
+#include "common/repositories/respawn_times_repository.h"
+#include "common/repositories/spawn2_disabled_repository.h"
+#include "common/repositories/trader_repository.h"
+#include "common/repositories/zone_repository.h"
+#include "common/rulesys.h"
+#include "common/strings.h"
+#include "zone/aura.h"
+#include "zone/client.h"
+#include "zone/corpse.h"
+#include "zone/groups.h"
+#include "zone/merc.h"
+#include "zone/zone.h"
 
+#include "fmt/format.h"
 #include <ctime>
 #include <iostream>
-#include <fmt/format.h>
 
 extern Zone* zone;
 
@@ -2210,7 +2225,7 @@ bool ZoneDatabase::LoadCurrentMercenary(Client* c)
 {
 	const uint8 mercenary_slot = c->GetMercSlot();
 
-	if (mercenary_slot > MAXMERCS) {
+	if (mercenary_slot >= MAXMERCS) {
 		return false;
 	}
 
@@ -2262,7 +2277,7 @@ bool ZoneDatabase::SaveMercenary(Merc* m)
 		auto e = MercsRepository::NewEntity();
 
 		e.OwnerCharacterID = m->GetMercenaryCharacterID();
-		e.Slot             = (c->GetNumberOfMercenaries() - 1);
+		e.Slot             = c->GetMercSlot();
 		e.Name             = m->GetCleanName();
 		e.TemplateID       = m->GetMercenaryTemplateID();
 		e.SuspendedTime    = c->GetMercInfo().SuspendedTime;
@@ -2303,7 +2318,7 @@ bool ZoneDatabase::SaveMercenary(Merc* m)
 	auto e = MercsRepository::FindOne(*this, m->GetMercenaryID());
 
 	e.OwnerCharacterID = m->GetMercenaryCharacterID();
-	e.Slot             = (c->GetNumberOfMercenaries() - 1);
+	e.Slot             = c->GetMercSlot();
 	e.Name             = m->GetCleanName();
 	e.TemplateID       = m->GetMercenaryTemplateID();
 	e.SuspendedTime    = c->GetMercInfo().SuspendedTime;

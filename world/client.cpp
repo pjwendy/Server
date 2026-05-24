@@ -1,74 +1,68 @@
-/*	EQEMu: Everquest Server Emulator
-	Copyright (C) 2001-2016 EQEMu Development Team (http://eqemulator.org)
+/*	EQEmu: EQEmulator
+
+	Copyright (C) 2001-2026 EQEmu Development Team
 
 	This program is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation; version 2 of the License.
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
 
 	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY except by those people which sell it, which
-	are required to give you total support for your newly bought product;
-	without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-	A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with this program; if not, write to the Free Software
-	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-
-#include "../common/global_define.h"
-#include "../common/eq_packet.h"
-#include "../common/eq_stream_intf.h"
-#include "../common/misc.h"
-#include "../common/rulesys.h"
-#include "../common/emu_opcodes.h"
-#include "../common/eq_packet_structs.h"
-#include "../common/packet_dump.h"
-#include "../common/eq_stream_intf.h"
-#include "../common/inventory_profile.h"
-#include "../common/races.h"
-#include "../common/classes.h"
-#include "../common/skills.h"
-#include "../common/extprofile.h"
-#include "../common/strings.h"
-#include "../common/emu_versions.h"
-#include "../common/random.h"
-#include "../common/shareddb.h"
-#include "../common/opcodemgr.h"
-#include "../common/data_verification.h"
-#include "../common/data_bucket.h"
-
 #include "client.h"
-#include "worlddb.h"
-#include "world_config.h"
-#include "login_server.h"
-#include "login_server_list.h"
-#include "zoneserver.h"
-#include "zonelist.h"
-#include "clientlist.h"
-#include "wguild_mgr.h"
-#include "sof_char_create_data.h"
-#include "../common/zone_store.h"
-#include "../common/repositories/account_repository.h"
-#include "../common/repositories/player_event_logs_repository.h"
-#include "../common/repositories/inventory_repository.h"
-#include "../common/events/player_event_logs.h"
-#include "../common/content/world_content_service.h"
-#include "../common/repositories/group_id_repository.h"
-#include "../common/repositories/character_data_repository.h"
-#include "../common/skill_caps.h"
 
-#include <iostream>
+#include "common/classes.h"
+#include "common/content/world_content_service.h"
+#include "common/data_bucket.h"
+#include "common/data_verification.h"
+#include "common/emu_opcodes.h"
+#include "common/emu_versions.h"
+#include "common/eq_packet_structs.h"
+#include "common/eq_packet.h"
+#include "common/eq_stream_intf.h"
+#include "common/eq_stream_intf.h"
+#include "common/events/player_event_logs.h"
+#include "common/extprofile.h"
+#include "common/inventory_profile.h"
+#include "common/misc.h"
+#include "common/opcodemgr.h"
+#include "common/packet_dump.h"
+#include "common/races.h"
+#include "common/random.h"
+#include "common/repositories/account_repository.h"
+#include "common/repositories/character_data_repository.h"
+#include "common/repositories/group_id_repository.h"
+#include "common/repositories/inventory_repository.h"
+#include "common/repositories/player_event_logs_repository.h"
+#include "common/rulesys.h"
+#include "common/shareddb.h"
+#include "common/skill_caps.h"
+#include "common/skills.h"
+#include "common/strings.h"
+#include "common/zone_store.h"
+#include "world/clientlist.h"
+#include "world/login_server_list.h"
+#include "world/login_server.h"
+#include "world/sof_char_create_data.h"
+#include "world/wguild_mgr.h"
+#include "world/world_config.h"
+#include "world/worlddb.h"
+#include "world/zonelist.h"
+#include "world/zoneserver.h"
+
+#include "zlib.h"
+#include <climits>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <iomanip>
-
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <zlib.h>
-#include <limits.h>
-
-//FatherNitwit: uncomment to enable my IP based authentication hack
-//#define IPBASED_AUTH_HACK
+#include <iostream>
 
 // Disgrace: for windows compile
 #ifdef _WINDOWS
@@ -1020,8 +1014,16 @@ bool Client::HandleEnterWorldPacket(const EQApplicationPacket *app) {
 				break;
 		}
 
+		std::string ucs_addr = config->GetUCSHost();
+		if (cle && cle->IsLocalClient()) {
+			const char* local_addr = config->LocalAddress.c_str();
+			if (local_addr[0]) {
+				ucs_addr = local_addr;
+			}
+		}
+
 		buffer = fmt::format("{},{},{}.{},{}{:08X}",
-			config->GetUCSHost(),
+			ucs_addr,
 			config->GetUCSPort(),
 			config->ShortName,
 			GetCharName(),
@@ -1047,7 +1049,7 @@ bool Client::HandleEnterWorldPacket(const EQApplicationPacket *app) {
 		}
 
 		buffer = fmt::format("{},{},{}.{},{}{:08X}",
-			config->GetUCSHost(),
+			ucs_addr,
 			config->GetUCSPort(),
 			config->ShortName,
 			GetCharName(),
@@ -2541,9 +2543,9 @@ void Client::SendUnsupportedClientPacket(const std::string& message)
 
 void Client::LoadDataBucketsCache()
 {
-	DataBucket::BulkLoadEntitiesToCache(DataBucketLoadType::Account, {GetAccountID()});
+	DataBucket::BulkLoadEntitiesToCache(&database, DataBucketLoadType::Account, {GetAccountID()});
 	const auto ids = CharacterDataRepository::GetCharacterIDsByAccountID(database, GetAccountID());
-	DataBucket::BulkLoadEntitiesToCache(DataBucketLoadType::Client, ids);
+	DataBucket::BulkLoadEntitiesToCache(&database, DataBucketLoadType::Client, ids);
 }
 
 void Client::ClearDataBucketsCache()

@@ -1,11 +1,28 @@
-#ifndef __EQEMU_ZONE_COMMON_H
-#define __EQEMU_ZONE_COMMON_H
+/*	EQEmu: EQEmulator
 
-#include "../common/types.h"
-#include "../common/spdat.h"
-#include "../common/emu_constants.h"
+	Copyright (C) 2001-2026 EQEmu Development Team
 
-#include <cereal/cereal.hpp>
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#pragma once
+
+#include "common/types.h"
+#include "common/spdat.h"
+#include "common/emu_constants.h"
+
+#include "cereal/cereal.hpp"
 
 #define	HIGHEST_RESIST 9 //Max resist type value
 #define MAX_SPELL_PROJECTILE 10 //Max amount of spell projectiles that can be active by a single mob.
@@ -905,7 +922,7 @@ struct DataBucketCache
 
 enum eStandingPetOrder { SPO_Follow, SPO_Sit, SPO_Guard, SPO_FeignDeath };
 
-typedef enum {
+enum PetTypeOld {
 	petFamiliar,		//only listens to /pet get lost
 	petAnimation,		//does not listen to any commands
 	petOther,
@@ -913,7 +930,4 @@ typedef enum {
 	petNPCFollow,
 	petTargetLock,			//remain active as long something is on the hatelist. Don't listen to any commands
 	petNone = 0xFF // not a pet
-} PetTypeOld;
-
-#endif
-
+};

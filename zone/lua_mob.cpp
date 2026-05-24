@@ -1,21 +1,39 @@
+/*	EQEmu: EQEmulator
+
+	Copyright (C) 2001-2026 EQEmu Development Team
+
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
 #ifdef LUA_EQEMU
 
-#include "lua.hpp"
-#include <luabind/luabind.hpp>
-
-#include "bot.h"
-#include "client.h"
-#include "dialogue_window.h"
-#include "lua_bot.h"
-#include "lua_buff.h"
-#include "lua_client.h"
-#include "lua_hate_list.h"
-#include "lua_item.h"
-#include "lua_iteminst.h"
 #include "lua_mob.h"
-#include "lua_npc.h"
-#include "lua_stat_bonuses.h"
-#include "npc.h"
+
+#include "zone/bot.h"
+#include "zone/client.h"
+#include "zone/dialogue_window.h"
+#include "zone/lua_bot.h"
+#include "zone/lua_buff.h"
+#include "zone/lua_client.h"
+#include "zone/lua_hate_list.h"
+#include "zone/lua_item.h"
+#include "zone/lua_iteminst.h"
+#include "zone/lua_npc.h"
+#include "zone/lua_stat_bonuses.h"
+#include "zone/npc.h"
+
+#include "lua.hpp"
+#include "luabind/luabind.hpp"
 
 struct SpecialAbilities { };
 
@@ -3714,6 +3732,7 @@ luabind::scope lua_register_mob() {
 	.def("GMMove", (void(Lua_Mob::*)(double,double,double))&Lua_Mob::GMMove)
 	.def("GMMove", (void(Lua_Mob::*)(double,double,double,double))&Lua_Mob::GMMove)
 	.def("GMMove", (void(Lua_Mob::*)(double,double,double,double,bool))&Lua_Mob::GMMove)
+	.def("Gate", &Lua_Mob::Gate)
 	.def("GetAA", (int(Lua_Mob::*)(int))&Lua_Mob::GetAA)
 	.def("GetAABonuses", &Lua_Mob::GetAABonuses)
 	.def("GetAAByAAID", (int(Lua_Mob::*)(int))&Lua_Mob::GetAAByAAID)

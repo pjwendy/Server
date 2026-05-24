@@ -1,40 +1,35 @@
-/*  EQEMu:  Everquest Server Emulator
-	Copyright (C) 2001-2006  EQEMu Development Team (http://eqemulator.net)
+/*	EQEmu: EQEmulator
+
+	Copyright (C) 2001-2026 EQEmu Development Team
 
 	This program is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation; version 2 of the License.
+	the Free Software Foundation; either version 3 of the License, or
+	(at your option) any later version.
 
 	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY except by those people which sell it, which
-	are required to give you total support for your newly bought product;
-	without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-	A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with this program; if not, write to the Free Software
-	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
+#pragma once
 
-#ifndef _EQE_QUESTPARSERCOLLECTION_H
-#define _EQE_QUESTPARSERCOLLECTION_H
-
-#include "../common/types.h"
-
-#include "encounter.h"
-#include "beacon.h"
-#include "client.h"
-#include "corpse.h"
-#include "doors.h"
-#include "groups.h"
-#include "mob.h"
-#include "object.h"
-#include "raids.h"
-#include "trap.h"
-
-#include "quest_interface.h"
-
-#include "zone_config.h"
+#include "common/types.h"
+#include "zone/beacon.h"
+#include "zone/client.h"
+#include "zone/corpse.h"
+#include "zone/doors.h"
+#include "zone/encounter.h"
+#include "zone/groups.h"
+#include "zone/mob.h"
+#include "zone/object.h"
+#include "zone/quest_interface.h"
+#include "zone/raids.h"
+#include "zone/trap.h"
+#include "zone/zone_config.h"
 
 #include <list>
 #include <map>
@@ -404,6 +399,3 @@ private:
 };
 
 extern QuestParserCollection *parse;
-
-#endif
-
