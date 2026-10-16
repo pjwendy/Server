@@ -35,8 +35,8 @@
     },
   {
       "name": "win-msvc",
-      "displayName": "Windows MSVC (VS 2022)",
-      "generator": "Visual Studio 17 2022",
+      "displayName": "Windows MSVC (VS 2026)",
+      "generator": "Visual Studio 18 2026",
       "binaryDir": "${sourceDir}/build/${presetName}",
       "architecture": { "value": "x64" },
       "cacheVariables": {
