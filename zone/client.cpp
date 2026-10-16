@@ -39,6 +39,7 @@
 #include "common/repositories/inventory_repository.h"
 #include "common/repositories/keyring_repository.h"
 #include "common/repositories/tradeskill_recipe_repository.h"
+#include "common/opcodemgr.h"
 #include "common/rulesys.h"
 #include "common/skill_caps.h"
 #include "common/spdat.h"
