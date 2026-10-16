@@ -446,10 +446,14 @@ int Client::HandlePacket(const EQApplicationPacket *app)
 {
 	auto o = eqs->GetOpcodeManager();
 	LogPacketClientServer(
-		"[{}] [{:#06x}] Size [{}] {}",
+		"[{}] [{:#06x}] Size [{}] Session [{}] Account [{}:{}] Player [{}] {}",
 		OpcodeManager::EmuToName(app->GetOpcode()),
 		o->EmuToEQ(app->GetOpcode()) == 0 ? app->GetProtocolOpcode() : o->EmuToEQ(app->GetOpcode()),
 		app->Size(),
+		GetWID(),
+		AccountID(),
+		AccountName(),
+		GetName(),
 		(EQEmuLogSys::Instance()->IsLogEnabled(Logs::Detail, Logs::PacketClientServer) ? DumpPacketToString(app) : "")
 	);
 
@@ -1248,8 +1252,10 @@ void Client::Handle_Connect_OP_ZoneComplete(const EQApplicationPacket *app)
 
 void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 {
-	if (app->size != sizeof(ClientZoneEntry_Struct))
+	if (app->size != sizeof(ClientZoneEntry_Struct)) {
+		LogError("Mismatch with ClientZoneEntry size: Expected:[{}] Recieved:[{}]", sizeof(ClientZoneEntry_Struct), app->size);
 		return;
+	}
 	ClientZoneEntry_Struct *cze = (ClientZoneEntry_Struct *)app->pBuffer;
 
 	if (strlen(cze->char_name) > 63)
@@ -1759,6 +1765,14 @@ void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 	sze->player.spawn.z += 6;	//arbitrary lift, seems to help spawning under zone.
 	outapp->priority = 6;
 	FastQueuePacket(&outapp);
+
+	LogInfo("ServerZoneEntry_struct contents:");
+	LogInfo("  player.spawn.name: {}", sze->player.spawn.name);
+	LogInfo("  player.spawn.spawn_id: {}", sze->player.spawn.spawnId);
+	LogInfo("  player.spawn.x: {}", static_cast<double>(sze->player.spawn.x));
+	LogInfo("  player.spawn.y: {}", static_cast<double>(sze->player.spawn.y));
+	LogInfo("  player.spawn.z: {}", static_cast<double>(sze->player.spawn.z));
+	LogInfo("  player.spawn.heading: {}", static_cast<double>(sze->player.spawn.heading));
 
 	/* Zone Spawns Packet */
 	entity_list.SendZoneSpawnsBulk(this);
@@ -4846,6 +4860,16 @@ void Client::Handle_OP_ClientUpdate(const EQApplicationPacket *app) {
 	}
 
 	PlayerPositionUpdateClient_Struct *ppu = (PlayerPositionUpdateClient_Struct *) app->pBuffer;
+
+  	LogInfo("OP_ClientUpdate from client [{}] (ID: {})", GetCleanName(), GetID());
+  	LogInfo("  sequence: {}", ppu->sequence);
+  	LogInfo("  spawn_id: {}", ppu->spawn_id);
+  	LogInfo("  vehicle_id: {}", ppu->vehicle_id);
+  	LogInfo("  position: x={:.3f} y={:.3f} z={:.3f}", ppu->x_pos, ppu->y_pos, ppu->z_pos);
+  	LogInfo("  deltas: dx={:.3f} dy={:.3f} dz={:.3f}", ppu->delta_x, ppu->delta_y, ppu->delta_z);
+	LogInfo("  heading: {} (delta: {})", static_cast<uint32>(ppu->heading), static_cast<int32>(ppu->delta_heading));
+    LogInfo("  animation: {}", static_cast<uint32>(ppu->animation));
+  	LogInfo("  packet size: {}", app->size);
 
 	/* Non PC handling like boats and eye of zomm */
 	if (ppu->spawn_id && ppu->spawn_id != GetID()) {
@@ -16509,9 +16533,13 @@ void Client::Handle_OP_SharedTaskRemovePlayer(const EQApplicationPacket *app)
 {
 	if (app->size != sizeof(SharedTaskRemovePlayer_Struct)) {
 		LogPacketClientServer(
-			"Wrong size on Handle_OP_SharedTaskRemovePlayer | got [{}] expected [{}]",
+			"Wrong size on Handle_OP_SharedTaskRemovePlayer | got [{}] expected [{}] Session [{}] Account [{}:{}] Player [{}]",
 			app->size,
-			sizeof(SharedTaskRemovePlayer_Struct)
+			sizeof(SharedTaskRemovePlayer_Struct),
+			GetWID(),
+			AccountID(),
+			AccountName(),
+			GetName()
 		);
 		return;
 	}
@@ -16556,9 +16584,13 @@ void Client::Handle_OP_SharedTaskAddPlayer(const EQApplicationPacket *app)
 {
 	if (app->size != sizeof(SharedTaskAddPlayer_Struct)) {
 		LogPacketClientServer(
-			"Wrong size on Handle_OP_SharedTaskAddPlayer | got [{}] expected [{}]",
+			"Wrong size on Handle_OP_SharedTaskAddPlayer | got [{}] expected [{}] Session [{}] Account [{}:{}] Player [{}]",
 			app->size,
-			sizeof(SharedTaskAddPlayer_Struct)
+			sizeof(SharedTaskAddPlayer_Struct),
+			GetWID(),
+			AccountID(),
+			AccountName(),
+			GetName()
 		);
 		return;
 	}
@@ -16606,9 +16638,13 @@ void Client::Handle_OP_SharedTaskMakeLeader(const EQApplicationPacket *app)
 {
 	if (app->size != sizeof(SharedTaskMakeLeader_Struct)) {
 		LogPacketClientServer(
-			"Wrong size on Handle_OP_SharedTaskMakeLeader | got [{}] expected [{}]",
+			"Wrong size on Handle_OP_SharedTaskMakeLeader | got [{}] expected [{}] Session [{}] Account [{}:{}] Player [{}]",
 			app->size,
-			sizeof(SharedTaskMakeLeader_Struct)
+			sizeof(SharedTaskMakeLeader_Struct),
+			GetWID(),
+			AccountID(),
+			AccountName(),
+			GetName()
 		);
 		return;
 	}
@@ -16653,9 +16689,13 @@ void Client::Handle_OP_SharedTaskInviteResponse(const EQApplicationPacket *app)
 {
 	if (app->size != sizeof(SharedTaskInviteResponse_Struct)) {
 		LogPacketClientServer(
-			"Wrong size on SharedTaskInviteResponse | got [{}] expected [{}]",
+			"Wrong size on SharedTaskInviteResponse | got [{}] expected [{}] Session [{}] Account [{}:{}] Player [{}]",
 			app->size,
-			sizeof(SharedTaskInviteResponse_Struct)
+			sizeof(SharedTaskInviteResponse_Struct),
+			GetWID(),
+			AccountID(),
+			AccountName(),
+			GetName()
 		);
 		return;
 	}
@@ -16779,6 +16819,13 @@ void Client::SendMobPositions()
 	for (auto &m: entity_list.GetMobList()) {
 		m.second->MakeSpawnUpdate(s);
 		QueuePacket(&p, false);
+		LogInfo("OP_ClientUpdate from server (SendMobPositions) [{}] (ID: {})", GetCleanName(), GetID());
+		LogInfo("  spawn_id: {}", s->spawn_id);
+		LogInfo("  position: x={:.3f} y={:.3f} z={:.3f}", static_cast<double>(s->x_pos), static_cast<double>(s->y_pos), static_cast<double>(s->z_pos));
+		LogInfo("  deltas: dx={:.3f} dy={:.3f} dz={:.3f}", static_cast<double>(s->delta_x), static_cast<double>(s->delta_y), static_cast<double>(s->delta_z));
+		LogInfo("  heading: {} (delta: {})", static_cast<uint32>(s->heading), static_cast<int32>(s->delta_heading));
+		LogInfo("  animation: {}", static_cast<uint32>(s->animation));
+		LogInfo("  packet size: {}", p.size);
 	}
 }
 
@@ -17471,6 +17518,13 @@ void Client::SyncWorldPositionsToClient(bool ignore_idle)
 		spu->delta_heading = FloatToEQ10(0);
 		spu->animation     = 0;
 		QueuePacket(&cu);
+		LogInfo("OP_ClientUpdate from server (SyncWorldPositionsToClient) [{}] (ID: {})", GetCleanName(), GetID());
+		LogInfo("  spawn_id: {}", spu->spawn_id);
+		LogInfo("  position: x={:.3f} y={:.3f} z={:.3f}", static_cast<double>(spu->x_pos), static_cast<double>(spu->y_pos), static_cast<double>(spu->z_pos));
+		LogInfo("  deltas: dx={:.3f} dy={:.3f} dz={:.3f}", static_cast<double>(spu->delta_x), static_cast<double>(spu->delta_y), static_cast<double>(spu->delta_z));
+		LogInfo("  heading: {} (delta: {})", static_cast<uint32>(spu->heading), static_cast<int32>(spu->delta_heading));
+		LogInfo("  animation: {}", static_cast<uint32>(spu->animation));
+		LogInfo("  packet size: {}", cu.size);
 	}
 
 	if (ignore_idle && reset_idle) {

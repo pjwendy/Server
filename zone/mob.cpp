@@ -1727,6 +1727,14 @@ void Mob::SentPositionPacket(float dx, float dy, float dz, float dh, int anim, b
 	spu->animation = anim;
 
 	entity_list.QueueClients(this, &outapp, send_to_self == false, false);
+
+	LogInfo("OP_ClientUpdate from server (SentPositionPacket) [{}] (ID: {})", GetCleanName(), GetID());
+	LogInfo("  spawn_id: {}", spu->spawn_id);
+	LogInfo("  position: x={:.3f} y={:.3f} z={:.3f}", static_cast<double>(spu->x_pos), static_cast<double>(spu->y_pos), static_cast<double>(spu->z_pos));
+	LogInfo("  deltas: dx={:.3f} dy={:.3f} dz={:.3f}", static_cast<double>(spu->delta_x), static_cast<double>(spu->delta_y), static_cast<double>(spu->delta_z));
+	LogInfo("  heading: {} (delta: {})", static_cast<uint32>(spu->heading), static_cast<int32>(spu->delta_heading));
+	LogInfo("  animation: {}", static_cast<uint32>(spu->animation));
+	LogInfo("  packet size: {}", sizeof(PlayerPositionUpdateServer_Struct));
 }
 
 // this is for SendPosUpdate()
@@ -6551,6 +6559,13 @@ void Mob::DoKnockback(Mob *caster, uint32 push_back, uint32 push_up)
 		outapp_push->priority = 6;
 		entity_list.QueueClients(this, outapp_push, true);
 		CastToClient()->FastQueuePacket(&outapp_push);
+		LogInfo("OP_ClientUpdate from server (DoKnockback) [{}] (ID: {})", GetCleanName(), GetID());
+		LogInfo("  spawn_id: {}", spu->spawn_id);
+		LogInfo("  position: x={:.3f} y={:.3f} z={:.3f}", static_cast<double>(spu->x_pos), static_cast<double>(spu->y_pos), static_cast<double>(spu->z_pos));
+		LogInfo("  deltas: dx={:.3f} dy={:.3f} dz={:.3f}", static_cast<double>(spu->delta_x), static_cast<double>(spu->delta_y), static_cast<double>(spu->delta_z));
+		LogInfo("  heading: {} (delta: {})", static_cast<uint32>(spu->heading), static_cast<int32>(spu->delta_heading));
+		LogInfo("  animation: {}", static_cast<uint32>(spu->animation));
+		LogInfo("  packet size: {}", sizeof(PlayerPositionUpdateServer_Struct));
 	}
 }
 
