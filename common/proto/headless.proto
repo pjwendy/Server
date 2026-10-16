@@ -1,0 +1,68 @@
+// EQEmu headless client protocol.
+//
+// Transport: TCP to world (eqemu_config.json server.world.headless), one connection per
+// headless character. Every message is framed as
+//     [uint32 big-endian length][serialized message]
+// The client sends ClientFrame messages; the server sends ServerFrame messages.
+//
+// Handshake: the client's first frame must be a Hello. The server answers with a Welcome or
+// a Refused, and closes the connection after a Refused.
+
+syntax = "proto3";
+
+package eqheadless;
+
+// Bumped on incompatible changes. The server refuses other versions.
+enum ProtocolVersion {
+  PROTOCOL_VERSION_UNSPECIFIED = 0;
+  PROTOCOL_VERSION_CURRENT     = 1;
+}
+
+message Hello {
+  string token            = 1; // issued by the operator: `world headless:token-create`
+  string character        = 2; // character to control; must belong to the token's account
+  string sdk_version      = 3; // free text, logged
+  uint32 protocol_version = 4; // PROTOCOL_VERSION_CURRENT
+}
+
+message Welcome {
+  string session_id       = 1;
+  uint32 spawn_id         = 2;
+  uint32 protocol_version = 3;
+}
+
+enum RefusedReason {
+  REFUSED_UNSPECIFIED       = 0;
+  REFUSED_DISABLED          = 1;  // HeadlessClients:AllowHeadlessClients is false
+  REFUSED_BAD_REQUEST       = 2;  // malformed or oversized frame, or first frame wasn't Hello
+  REFUSED_PROTOCOL_VERSION  = 3;
+  REFUSED_BAD_TOKEN         = 4;  // unknown or revoked token
+  REFUSED_UNKNOWN_CHARACTER = 5;  // no such character on the token's account
+  REFUSED_LIMIT             = 6;  // MaxTotal / MaxPerAccount reached
+  REFUSED_ALREADY_ONLINE    = 7;
+  REFUSED_ZONE_BLOCKED      = 8;
+  REFUSED_TIMEOUT           = 9;  // no Hello within the handshake timeout
+  REFUSED_NOT_IMPLEMENTED   = 10; // authenticated, but spawning isn't implemented yet (M0)
+}
+
+message Refused {
+  RefusedReason reason = 1;
+  string        detail = 2; // human-readable
+}
+
+// client -> server
+message ClientFrame {
+  oneof payload {
+    Hello hello = 1;
+    // Command command = 2;   (M2)
+  }
+}
+
+// server -> client
+message ServerFrame {
+  oneof payload {
+    Welcome welcome = 1;
+    Refused refused = 2;
+    // Snapshot snapshot = 3; StateDelta delta = 4; GameEvent event = 5; CommandResult result = 6;  (M2+)
+  }
+}

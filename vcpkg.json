@@ -15,6 +15,7 @@
 		"glm",
 		"libuv",
 		"recastnavigation",
-		"libsodium"
+		"libsodium",
+		"protobuf"
 	]
 }

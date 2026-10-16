@@ -158,6 +158,14 @@ message(STATUS "**************************************************")
 
 option(EQEMU_BUILD_LUA "Build Lua parser." ON)
 
+# Headless clients: server-side, rule-gated (HeadlessClients:AllowHeadlessClients, default off) MQ2-style
+# automation API. Building it only compiles the code in; operators must still enable it.
+option(EQEMU_BUILD_HEADLESS "Build the headless client gateway." ON)
+if(EQEMU_BUILD_HEADLESS)
+	find_package(Protobuf CONFIG REQUIRED)
+	message(STATUS "* Headless:                             Enabled *")
+endif()
+
 if(EQEMU_BUILD_SERVER OR EQEMU_BUILD_LOGIN OR EQEMU_BUILD_TESTS OR EQEMU_BUILD_CLIENT_FILES)
 	add_subdirectory(common)
 	add_subdirectory(libs)
@@ -166,6 +174,9 @@ else()
 endif()
 
 if(EQEMU_BUILD_SERVER)
+	if(EQEMU_BUILD_HEADLESS)
+		add_subdirectory(common/proto)
+	endif()
 	add_subdirectory(shared_memory)
 	add_subdirectory(world)
 	add_subdirectory(zone)
