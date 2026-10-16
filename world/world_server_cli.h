@@ -42,4 +42,9 @@ public:
 	static void TestDatabaseConcurrency(int argc, char **argv, argh::parser &cmd, std::string &description);
 	static void TestStringBenchmarkCommand(int argc, char **argv, argh::parser &cmd, std::string &description);
 	static void EtlGetSettings(int argc, char **argv, argh::parser &cmd, std::string &description);
+#ifdef EQEMU_HEADLESS
+	static void HeadlessTokenCreate(int argc, char **argv, argh::parser &cmd, std::string &description);
+	static void HeadlessTokenList(int argc, char **argv, argh::parser &cmd, std::string &description);
+	static void HeadlessTokenRevoke(int argc, char **argv, argh::parser &cmd, std::string &description);
+#endif
 };

@@ -91,11 +91,28 @@ set(world_headers
 
 source_group("cli" REGULAR_EXPRESSION "cli/.*")
 
+if(EQEMU_BUILD_HEADLESS)
+    list(APPEND world_sources
+        cli/cli_headless_tokens.cpp
+        headless/headless_gateway.cpp
+        headless/headless_tokens.cpp
+    )
+    list(APPEND world_headers
+        headless/headless_gateway.h
+        headless/headless_tokens.h
+    )
+endif()
+
 add_executable(world ${world_sources} ${world_headers})
 
 target_compile_definitions(world PRIVATE WORLD)
 
 target_link_libraries(world common)
+
+if(EQEMU_BUILD_HEADLESS)
+    target_compile_definitions(world PRIVATE EQEMU_HEADLESS)
+    target_link_libraries(world headless_proto)
+endif()
 target_include_directories(world PRIVATE ..)
 
 if(WIN32 AND EQEMU_BUILD_PCH)

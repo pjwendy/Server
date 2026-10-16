@@ -40,6 +40,10 @@
 #include "world/client.h"
 #include "world/clientlist.h"
 #include "world/console.h"
+#ifdef EQEMU_HEADLESS
+#include "world/headless/headless_gateway.h"
+#include "world/headless/headless_tokens.h"
+#endif
 #include "world/dynamic_zone_manager.h"
 #include "world/launcher_list.h"
 #include "world/lfplist.h"
@@ -157,6 +161,28 @@ int main(int argc, char **argv)
 		console = std::make_unique<EQ::Net::ConsoleServer>(Config->TelnetIP, Config->TelnetTCPPort);
 		RegisterConsoleFunctions(console);
 	}
+
+#ifdef EQEMU_HEADLESS
+	// listener only; HeadlessClients:AllowHeadlessClients decides whether anything is accepted
+	std::unique_ptr<HeadlessGateway> headless_gateway;
+	if (Config->HeadlessEnabled) {
+		if (!HeadlessTokens::EnsureSchema(database)) {
+			LogError("Headless gateway not started: token table unavailable");
+		}
+		else if (IpUtil::IsPortInUse(Config->HeadlessIP, Config->HeadlessTCPPort)) {
+			LogError("Headless gateway not started: port [{}] already in use", Config->HeadlessTCPPort);
+		}
+		else {
+			headless_gateway = std::make_unique<HeadlessGateway>(Config->HeadlessIP, Config->HeadlessTCPPort);
+			LogInfo(
+				"Headless gateway (TCP) listener started on [{}:{}] HeadlessClients:AllowHeadlessClients [{}]",
+				Config->HeadlessIP,
+				Config->HeadlessTCPPort,
+				RuleB(HeadlessClients, AllowHeadlessClients) ? "true" : "false"
+			);
+		}
+	}
+#endif
 
 	WorldContentService::Instance()->SetDatabase(&database)
 		->SetContentDatabase(&content_db)

@@ -48,6 +48,11 @@ void WorldserverCLI::CommandHandler(int argc, char **argv)
 	function_map["test:db-concurrency"]         = &WorldserverCLI::TestDatabaseConcurrency;
 	function_map["test:string-benchmark"]       = &WorldserverCLI::TestStringBenchmarkCommand;
 	function_map["etl:settings"]                = &WorldserverCLI::EtlGetSettings;
+#ifdef EQEMU_HEADLESS
+	function_map["headless:token-create"]       = &WorldserverCLI::HeadlessTokenCreate;
+	function_map["headless:token-list"]         = &WorldserverCLI::HeadlessTokenList;
+	function_map["headless:token-revoke"]       = &WorldserverCLI::HeadlessTokenRevoke;
+#endif
 
 	EQEmuCommand::HandleMenu(function_map, cmd, argc, argv);
 }
