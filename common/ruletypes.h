@@ -1179,6 +1179,21 @@ RULE_INT(EvolvingItems, DelayUponEquipping, 30000, "Delay in ms before an evolvi
 RULE_BOOL(EvolvingItems, DestroyAugmentsOnEvolve, false, "If this is enabled, any augments in an item will be destroyed when the item evolves. Otherwise, send augments to the player via the parcel system (requires that the Parcel System be enabled).")
 RULE_CATEGORY_END()
 
+RULE_CATEGORY(HeadlessClients)
+RULE_BOOL(HeadlessClients, AllowHeadlessClients, false, "Master switch for headless (externally scripted / AI-controlled) characters. When false the gateway refuses every connection. Also requires server.world.headless.enabled in eqemu_config.json")
+RULE_INT(HeadlessClients, MaxTotal, 0, "Maximum concurrent headless characters server-wide. 0 allows none, so it must be raised deliberately")
+RULE_INT(HeadlessClients, MaxPerAccount, 1, "Maximum concurrent headless characters per account")
+RULE_STRING(HeadlessClients, AllowedZones, "", "Comma-delimited zone short names headless characters may enter. Empty allows all zones")
+RULE_STRING(HeadlessClients, BlockedZones, "", "Comma-delimited zone short names headless characters may never enter")
+RULE_BOOL(HeadlessClients, AllowBots, true, "Headless characters may spawn and command bots (also requires Bots:Enabled)")
+RULE_BOOL(HeadlessClients, AllowMercenaries, true, "Headless characters may hire mercenaries (also requires Mercs:AllowMercs)")
+RULE_BOOL(HeadlessClients, AllowGroupWithPlayers, true, "Headless characters may group and raid with real players")
+RULE_BOOL(HeadlessClients, AllowTradeWithPlayers, false, "Headless characters may trade, use the bazaar, parcels and mail with real players")
+RULE_BOOL(HeadlessClients, AllowTellsFromPlayers, true, "Real players may send tells to headless characters")
+RULE_STRING(HeadlessClients, DisplayTag, "AI", "Tag shown on headless characters (title/suffix and /who) so players know they are AI-controlled. An empty value falls back to AI")
+RULE_INT(HeadlessClients, CommandRateLimit, 20, "Maximum commands per second accepted from each headless character")
+RULE_CATEGORY_END()
+
 #undef RULE_CATEGORY
 #undef RULE_INT
 #undef RULE_REAL

@@ -370,6 +370,16 @@
         OutF(logsys, Logs::Detail, Logs::ClientLogin, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
 } while (0)
 
+#define LogHeadlessClient(message, ...) do {\
+    if (auto logsys = EQEmuLogSys::Instance(); logsys && logsys->IsLogEnabled(Logs::General, Logs::HeadlessClient))\
+        OutF(logsys, Logs::General, Logs::HeadlessClient, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogHeadlessClientDetail(message, ...) do {\
+    if (auto logsys = EQEmuLogSys::Instance(); logsys && logsys->IsLogEnabled(Logs::Detail, Logs::HeadlessClient))\
+        OutF(logsys, Logs::Detail, Logs::HeadlessClient, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
 #define LogHPUpdate(message, ...) do {\
     if (auto logsys = EQEmuLogSys::Instance(); logsys && logsys->IsLogEnabled(Logs::General, Logs::HPUpdate))\
         OutF(logsys, Logs::General, Logs::HPUpdate, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\

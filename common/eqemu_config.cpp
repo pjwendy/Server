@@ -101,6 +101,12 @@ void EQEmuConfig::parse_config()
 	TelnetEnabled = false;
 	if (_root["server"]["world"]["telnet"].get("enabled", "false").asString() == "true") { TelnetEnabled = true; }
 
+	// headless client gateway listener; whether connections are accepted is the HeadlessClients:AllowHeadlessClients rule
+	HeadlessIP      = _root["server"]["world"]["headless"].get("ip", "127.0.0.1").asString();
+	HeadlessTCPPort = Strings::ToUnsignedInt(_root["server"]["world"]["headless"].get("port", "9100").asString());
+	HeadlessEnabled = false;
+	if (_root["server"]["world"]["headless"].get("enabled", "false").asString() == "true") { HeadlessEnabled = true; }
+
 	WorldHTTPMimeFile = _root["server"]["world"]["http"].get("mimefile", "mime.types").asString();
 	WorldHTTPPort     = Strings::ToUnsignedInt(_root["server"]["world"]["http"].get("port", "9080").asString());
 	WorldHTTPEnabled  = false;
@@ -255,6 +261,15 @@ std::string EQEmuConfig::GetByName(const std::string &var_name) const
 	if (var_name == "TelnetEnabled") {
 		return (TelnetEnabled ? "true" : "false");
 	}
+	if (var_name == "HeadlessTCPPort") {
+		return (itoa(HeadlessTCPPort));
+	}
+	if (var_name == "HeadlessIP") {
+		return (HeadlessIP);
+	}
+	if (var_name == "HeadlessEnabled") {
+		return (HeadlessEnabled ? "true" : "false");
+	}
 	if (var_name == "WorldHTTPPort") {
 		return (itoa(WorldHTTPPort));
 	}
@@ -378,6 +393,9 @@ void EQEmuConfig::Dump() const
 	std::cout << "TelnetTCPPort = " << TelnetTCPPort << std::endl;
 	std::cout << "TelnetIP = " << TelnetIP << std::endl;
 	std::cout << "TelnetEnabled = " << TelnetEnabled << std::endl;
+	std::cout << "HeadlessTCPPort = " << HeadlessTCPPort << std::endl;
+	std::cout << "HeadlessIP = " << HeadlessIP << std::endl;
+	std::cout << "HeadlessEnabled = " << HeadlessEnabled << std::endl;
 	std::cout << "WorldHTTPPort = " << WorldHTTPPort << std::endl;
 	std::cout << "WorldHTTPMimeFile = " << WorldHTTPMimeFile << std::endl;
 	std::cout << "WorldHTTPEnabled = " << WorldHTTPEnabled << std::endl;
