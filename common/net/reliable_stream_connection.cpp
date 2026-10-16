@@ -1255,6 +1255,7 @@ void EQ::Net::ReliableStreamConnection::Ack(int stream, uint16_t seq)
 {
 	auto now = Clock::now();
 	auto s = &m_streams[stream];
+	size_t before_count = s->sent_packets.size();
 	auto iter = s->sent_packets.begin();
 	while (iter != s->sent_packets.end()) {
 		auto order = CompareSequence(seq, iter->first);
@@ -1274,6 +1275,8 @@ void EQ::Net::ReliableStreamConnection::Ack(int stream, uint16_t seq)
 		}
 	}
 
+	size_t after_count = s->sent_packets.size();
+	LogInfo("Ack stream={} seq={} cleared={} remaining={}", stream, seq, before_count - after_count, after_count);
 	m_acked_since_last_resend = true;
 	m_last_ack = now;
 }
