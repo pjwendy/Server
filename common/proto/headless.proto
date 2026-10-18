@@ -87,6 +87,11 @@ message SitCommand    { bool sit = 1; }                // false stands up
 // same position updates a real client sends. Progress shows in Self; a MoveEvent reports the end.
 message MoveToCommand { float x = 1; float y = 2; float z = 3; }
 message StopCommand   {}
+// group invite, as /invite: a player, or an EQEmu bot you own (HeadlessClients:AllowBots /
+// AllowGroupWithPlayers). Empty name invites the current target.
+message InviteCommand { string name = 1; }
+message FaceCommand   { uint32 spawn_id = 1; }         // turn to face a spawn (0: the target), as /face
+message DisbandCommand {}                              // leave the group, as /disband
 
 message Command {
   uint32 id = 1; // echoed in CommandResult
@@ -97,6 +102,9 @@ message Command {
     SitCommand    sit     = 5;
     MoveToCommand move_to = 6;
     StopCommand   stop    = 7;
+    InviteCommand invite  = 8;
+    DisbandCommand disband = 9;
+    FaceCommand   face    = 10;
   }
 }
 
@@ -185,7 +193,7 @@ message Spawn {
   float     z          = 9;
   float     heading    = 10;
   uint32    hp_pct     = 11; // 0-100
-  uint32    owner_id   = 12; // pet / bot owner spawn id, 0 if none
+  uint32    owner_id   = 12; // pet / bot owner spawn id, 0 if none (bots: their owning character)
   bool      headless   = 13; // a headless (AI-controlled) character
 }
 
@@ -209,6 +217,14 @@ message Self {
   bool   sitting          = 17;
   bool   auto_attack      = 18;
   uint32 casting_spell_id = 19; // 0 if not casting
+  repeated GroupMember group = 20; // empty when not grouped; includes ourselves
+}
+
+message GroupMember {
+  string name     = 1;
+  uint32 spawn_id = 2; // 0 if not in this zone
+  bool   leader   = 3;
+  bool   bot      = 4; // an EQEmu bot
 }
 
 message ZoneInfo {

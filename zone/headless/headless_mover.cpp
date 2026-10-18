@@ -156,6 +156,21 @@ void HeadlessMover::Stop(Result why)
 	m_on_done(why, m_pos);
 }
 
+std::string HeadlessMover::Face(const glm::vec3 &point)
+{
+	Client *me = m_stream->GetClient();
+	if (!me) {
+		return "character is not in the zone";
+	}
+	if (m_moving) {
+		return "can't turn while walking";
+	}
+
+	const glm::vec3 pos(me->GetX(), me->GetY(), me->GetZ());
+	SendUpdate(pos, me->CalculateHeadingToTarget(point.x, point.y), 0);
+	return "";
+}
+
 void HeadlessMover::Tick()
 {
 	Client *me = m_stream->GetClient();

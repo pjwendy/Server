@@ -20,12 +20,15 @@
 #include "common/eq_constants.h"
 #include "common/eq_packet_structs.h"
 #include "common/eqemu_logsys.h"
+#include "common/rulesys.h"
 #include "common/servertalk.h"
 #include "common/strings.h"
 #include "common/timer.h"
+#include "zone/bot.h"
 #include "zone/client.h"
 #include "zone/corpse.h"
 #include "zone/entity.h"
+#include "zone/groups.h"
 #include "zone/headless/null_stream.h"
 #include "zone/worldserver.h"
 #include "zone/zone.h"
@@ -65,6 +68,20 @@ namespace {
 	std::string SessionID(const char *buf, size_t size)
 	{
 		return std::string(buf, strnlen(buf, size));
+	}
+
+	// by entity name ("a_rat00") or, failing that, clean name ("a rat"), ignoring case
+	Mob *FindMobByName(const std::string &name)
+	{
+		if (Mob *mob = entity_list.GetMob(name.c_str())) {
+			return mob;
+		}
+		for (auto &[id, mob] : entity_list.GetMobList()) {
+			if (mob && Strings::EqualFold(mob->GetCleanName(), name)) {
+				return mob;
+			}
+		}
+		return nullptr;
 	}
 }
 
@@ -207,6 +224,9 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			if (chat.channel() == eqheadless::CHAT_TELL && chat.to().empty()) {
 				return "a tell needs a recipient";
 			}
+			if (chat.channel() == eqheadless::CHAT_SAY && chat.text()[0] == '^' && !RuleB(HeadlessClients, AllowBots)) {
+				return "bot commands are turned off for headless characters (HeadlessClients:AllowBots)";
+			}
 
 			auto app = new EQApplicationPacket(OP_ChannelMessage, sizeof(ChannelMessage_Struct) + chat.text().size() + 1);
 			auto *cm = reinterpret_cast<ChannelMessage_Struct *>(app->pBuffer);
@@ -228,6 +248,62 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			sa->spawn_id  = me->GetID();
 			sa->type      = AppearanceType::Animation;
 			sa->parameter = cmd.sit().sit() ? Animation::Sitting : Animation::Standing;
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kInvite: {
+			const std::string &name = cmd.invite().name();
+			Mob *invitee = name.empty() ? me->GetTarget() : FindMobByName(name);
+			if (!invitee || invitee == me) {
+				return name.empty() ? "no target to invite" : fmt::format("no one named {} here", name);
+			}
+			if (invitee->IsBot()) {
+				if (!RuleB(HeadlessClients, AllowBots)) {
+					return "bots are turned off for headless characters (HeadlessClients:AllowBots)";
+				}
+				if (invitee->CastToBot()->GetBotOwner() != me) {
+					return fmt::format("{} is not your bot", invitee->GetCleanName());
+				}
+			}
+			else if (invitee->IsClient()) {
+				if (!IsHeadless(invitee) && !RuleB(HeadlessClients, AllowGroupWithPlayers)) {
+					return "grouping with players is turned off for headless characters (HeadlessClients:AllowGroupWithPlayers)";
+				}
+			}
+			else {
+				return fmt::format("{} can't join a group", invitee->GetCleanName());
+			}
+			if (RuleB(Character, GroupInvitesRequireTarget) && me->GetTarget() != invitee) {
+				return "target them first (Character:GroupInvitesRequireTarget)";
+			}
+
+			auto app = new EQApplicationPacket(OP_GroupInvite, sizeof(GroupInvite_Struct));
+			auto *gi = reinterpret_cast<GroupInvite_Struct *>(app->pBuffer);
+			strn0cpy(gi->invitee_name, invitee->GetName(), sizeof(gi->invitee_name));
+			strn0cpy(gi->inviter_name, me->GetName(), sizeof(gi->inviter_name));
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kFace: {
+			if (!session.mover) {
+				return "character is not ready to move";
+			}
+			const uint32 id = cmd.face().spawn_id();
+			Mob *mob = id ? entity_list.GetMob(id) : me->GetTarget();
+			if (!mob) {
+				return id ? fmt::format("no spawn with id {}", id) : "no target to face";
+			}
+			return session.mover->Face(glm::vec3(mob->GetX(), mob->GetY(), mob->GetZ()));
+		}
+		case eqheadless::Command::kDisband: {
+			if (!me->GetGroup() && !me->GetRaid()) {
+				return "not in a group";
+			}
+			// as the client's /disband: name1 is who to remove (the target, else ourselves)
+			auto app = new EQApplicationPacket(OP_GroupDisband, sizeof(GroupGeneric_Struct));
+			auto *gd = reinterpret_cast<GroupGeneric_Struct *>(app->pBuffer);
+			strn0cpy(gd->name1, me->GetTarget() ? me->GetTarget()->GetName() : me->GetName(), sizeof(gd->name1));
+			strn0cpy(gd->name2, me->GetName(), sizeof(gd->name2));
 			stream->Inject(app);
 			return "";
 		}
@@ -427,7 +503,12 @@ void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob)
 	out->set_z(mob->GetZ());
 	out->set_heading(mob->GetHeading());
 	out->set_hp_pct(static_cast<uint32>(std::lround(std::max(0.0f, mob->GetHPRatio()))));
-	out->set_owner_id(mob->GetOwnerID());
+	if (mob->IsBot() && mob->CastToBot()->GetBotOwner()) {
+		out->set_owner_id(mob->CastToBot()->GetBotOwner()->GetID());
+	}
+	else {
+		out->set_owner_id(mob->GetOwnerID());
+	}
 	out->set_headless(IsHeadless(mob));
 }
 
@@ -466,6 +547,20 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 	self->set_sitting(me->IsSitting());
 	self->set_auto_attack(me->AutoAttackEnabled());
 	self->set_casting_spell_id(me->IsCasting() ? me->CastingSpellID() : 0);
+	if (Group *group = me->GetGroup()) {
+		for (int i = 0; i < MAX_GROUP_MEMBERS; ++i) {
+			if (!group->membername[i][0]) {
+				continue;
+			}
+			auto *gm   = self->add_group();
+			Mob  *mob  = group->members[i];
+			gm->set_name(group->membername[i]);
+			gm->set_spawn_id(mob ? mob->GetID() : 0);
+			// Group::IsLeader(const char *) matches any member, so compare names
+			gm->set_leader(Strings::EqualFold(group->GetLeaderName(), group->membername[i]));
+			gm->set_bot(mob && mob->IsBot());
+		}
+	}
 
 	if (snapshot) {
 		auto *z = frame.mutable_snapshot()->mutable_zone();

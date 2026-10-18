@@ -46,6 +46,8 @@ public:
 	// plans a route and starts walking; returns "" or why it can't
 	std::string Start(const glm::vec3 &destination);
 	void Stop(Result why);
+	// turn on the spot to face a point, as the client's /face; returns "" or why it can't
+	std::string Face(const glm::vec3 &point);
 	bool Moving() const { return m_moving; }
 
 private:
