@@ -299,6 +299,7 @@
 #define ServerOP_HeadlessSpawned 0x6401 // zone -> world: spawn finished or failed
 #define ServerOP_HeadlessDespawn 0x6402 // world -> zone: the controlling session ended
 #define ServerOP_HeadlessGone    0x6403 // zone -> world: the headless character left the zone
+#define ServerOP_HeadlessFrame   0x6404 // zone -> world: a serialized eqheadless.ServerFrame for the session's SDK
 
 enum {
 	CZUpdateType_Character,
@@ -508,6 +509,12 @@ struct ServerHeadlessSpawned_Struct {
 
 struct ServerHeadlessSession_Struct { // ServerOP_HeadlessDespawn / ServerOP_HeadlessGone
 	char session_id[40];
+};
+
+struct ServerHeadlessFrame_Struct { // ServerOP_HeadlessFrame: header, followed by `length` bytes
+	char   session_id[40];
+	uint32 length;
+	uint8  data[0];
 };
 
 struct ServerChangeWID_Struct {

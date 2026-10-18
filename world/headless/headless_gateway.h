@@ -47,6 +47,7 @@ public:
 	// from zones (world/zoneserver.cpp)
 	void HandleSpawned(ServerPacket *pack); // ServerOP_HeadlessSpawned
 	void HandleGone(ServerPacket *pack);    // ServerOP_HeadlessGone
+	void HandleZoneFrame(ServerPacket *pack); // ServerOP_HeadlessFrame: relay to the SDK as-is
 
 private:
 	enum class Phase {
@@ -96,6 +97,7 @@ private:
 	int CountActive(uint32 account_id = 0) const;
 
 	void Send(Session *s, const eqheadless::ServerFrame &frame);
+	void SendBody(Session *s, const char *body, size_t length); // length-prefix a serialized frame
 	void Refuse(Session *s, eqheadless::RefusedReason reason, const std::string &detail);
 	void CloseSoon(Session *s);
 

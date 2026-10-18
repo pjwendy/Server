@@ -686,6 +686,7 @@ add_executable(zone ${zone_sources} ${zone_headers})
 
 if(EQEMU_BUILD_HEADLESS)
     target_compile_definitions(zone PRIVATE EQEMU_HEADLESS)
+    target_link_libraries(zone PRIVATE headless_proto)
 endif()
 
 install(TARGETS zone RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)

@@ -498,6 +498,27 @@ int HeadlessGateway::CountActive(uint32 account_id) const
 	return n;
 }
 
+void HeadlessGateway::HandleZoneFrame(ServerPacket *pack)
+{
+	if (pack->size < sizeof(ServerHeadlessFrame_Struct)) {
+		LogError("Short ServerOP_HeadlessFrame: [{}] bytes", pack->size);
+		return;
+	}
+
+	auto *f = reinterpret_cast<ServerHeadlessFrame_Struct *>(pack->pBuffer);
+	if (sizeof(ServerHeadlessFrame_Struct) + f->length > pack->size) {
+		LogError("ServerOP_HeadlessFrame length [{}] exceeds packet size [{}]", f->length, pack->size);
+		return;
+	}
+
+	Session *s = FindByPacketSession(f->session_id, sizeof(f->session_id));
+	if (!s || s->closing || s->phase != Phase::InGame) {
+		return;
+	}
+
+	SendBody(s, reinterpret_cast<const char *>(f->data), f->length);
+}
+
 void HeadlessGateway::Send(Session *s, const eqheadless::ServerFrame &frame)
 {
 	std::string body;
@@ -506,14 +527,19 @@ void HeadlessGateway::Send(Session *s, const eqheadless::ServerFrame &frame)
 		return;
 	}
 
-	const uint32 n = static_cast<uint32>(body.size());
+	SendBody(s, body.data(), body.size());
+}
+
+void HeadlessGateway::SendBody(Session *s, const char *body, size_t length)
+{
+	const uint32 n = static_cast<uint32>(length);
 	std::string  out;
-	out.reserve(4 + body.size());
+	out.reserve(4 + length);
 	out.push_back(static_cast<char>((n >> 24) & 0xFF));
 	out.push_back(static_cast<char>((n >> 16) & 0xFF));
 	out.push_back(static_cast<char>((n >> 8) & 0xFF));
 	out.push_back(static_cast<char>(n & 0xFF));
-	out += body;
+	out.append(body, length);
 
 	s->connection->Write(out.data(), out.size());
 }

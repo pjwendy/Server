@@ -60,11 +60,85 @@ message ClientFrame {
   }
 }
 
+// ---- state (M2) ----
+//
+// After Welcome the server sends one Snapshot, then StateDelta messages (a few per second)
+// whenever something changed. Positions are in-game coordinates (the same as /loc, which
+// prints y before x). Headings use EQ's 0-512 range.
+
+enum SpawnType {
+  SPAWN_TYPE_UNKNOWN     = 0;
+  SPAWN_TYPE_PLAYER      = 1; // real or headless player character
+  SPAWN_TYPE_NPC         = 2; // includes pets and mercenaries
+  SPAWN_TYPE_BOT         = 3; // EQEmu bot
+  SPAWN_TYPE_PLAYER_CORPSE = 4;
+  SPAWN_TYPE_NPC_CORPSE  = 5;
+}
+
+message Spawn {
+  uint32    id         = 1;
+  string    name       = 2;  // clean name, e.g. "a_rat" -> "a rat"
+  SpawnType type       = 3;
+  uint32    level      = 4;
+  uint32    class_id   = 5;
+  uint32    race_id    = 6;
+  float     x          = 7;
+  float     y          = 8;
+  float     z          = 9;
+  float     heading    = 10;
+  uint32    hp_pct     = 11; // 0-100
+  uint32    owner_id   = 12; // pet / bot owner spawn id, 0 if none
+  bool      headless   = 13; // a headless (AI-controlled) character
+}
+
+message Self {
+  uint32 spawn_id         = 1;
+  string name             = 2;
+  uint32 level            = 3;
+  uint32 class_id         = 4;
+  uint32 race_id          = 5;
+  int64  hp               = 6;
+  int64  max_hp           = 7;
+  int64  mana             = 8;
+  int64  max_mana         = 9;
+  int64  endurance        = 10;
+  int64  max_endurance    = 11;
+  float  x                = 12;
+  float  y                = 13;
+  float  z                = 14;
+  float  heading          = 15;
+  uint32 target_id        = 16; // 0 if none
+  bool   sitting          = 17;
+  bool   auto_attack      = 18;
+  uint32 casting_spell_id = 19; // 0 if not casting
+}
+
+message ZoneInfo {
+  uint32 id          = 1;
+  uint32 instance_id = 2;
+  string short_name  = 3;
+  string long_name   = 4;
+}
+
+message Snapshot {
+  Self           me     = 1;
+  ZoneInfo       zone   = 2;
+  repeated Spawn spawns = 3; // everyone else in the zone
+}
+
+message StateDelta {
+  Self            me             = 1; // always the full Self (small)
+  repeated Spawn  spawns_changed = 2; // added or changed spawns, full records
+  repeated uint32 spawns_removed = 3;
+}
+
 // server -> client
 message ServerFrame {
   oneof payload {
-    Welcome welcome = 1;
-    Refused refused = 2;
-    // Snapshot snapshot = 3; StateDelta delta = 4; GameEvent event = 5; CommandResult result = 6;  (M2+)
+    Welcome    welcome  = 1;
+    Refused    refused  = 2;
+    Snapshot   snapshot = 3;
+    StateDelta delta    = 4;
+    // GameEvent event = 5; CommandResult result = 6;  (M2.2)
   }
 }

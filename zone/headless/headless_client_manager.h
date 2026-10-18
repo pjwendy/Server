@@ -17,17 +17,28 @@
 */
 #pragma once
 
+#include "common/event/timer.h"
 #include "common/types.h"
 
 #include <map>
+#include <memory>
 #include <string>
+#include <unordered_map>
 
+class Client;
+class Mob;
 class NullStream;
 class ServerPacket;
 
+namespace eqheadless {
+	class ServerFrame;
+	class Spawn;
+}
+
 // Zone-side lifecycle of headless characters. World authorises the character with the normal
 // ServerOP_ZoneIncClient, then asks for it with ServerOP_HeadlessSpawn; the character is an
-// ordinary Client whose stream is a NullStream.
+// ordinary Client whose stream is a NullStream. Once it's in the zone, its state is published
+// back through world to the SDK (a Snapshot, then StateDelta messages).
 class HeadlessClientManager {
 public:
 	static HeadlessClientManager *Instance()
@@ -45,8 +56,28 @@ public:
 	void ReportSpawned(const std::string &session_id, uint32 spawn_id);
 	void OnStreamDestroyed(const std::string &session_id, bool was_spawned);
 
+	static bool IsHeadless(Mob *mob);
+
 private:
+	// what the SDK last saw of a spawn, to send only changes
+	struct SeenSpawn {
+		float  x, y, z, heading;
+		uint32 hp_pct;
+		uint32 level;
+		std::string name;
+	};
+
+	struct Session {
+		NullStream                              *stream = nullptr; // owned by its Client
+		std::unique_ptr<EQ::Timer>               publish_timer;
+		std::unordered_map<uint32, SeenSpawn>    seen;
+		std::string                              last_self; // serialized Self last sent
+	};
+
+	void Publish(const std::string &session_id, bool snapshot);
+	void FillSpawn(eqheadless::Spawn *out, Mob *mob);
+	void SendFrame(const std::string &session_id, const eqheadless::ServerFrame &frame);
 	void SendSpawned(const std::string &session_id, uint32 spawn_id, const std::string &error);
 
-	std::map<std::string, NullStream *> m_streams; // session id -> stream (owned by its Client)
+	std::map<std::string, Session> m_sessions; // session id -> session
 };

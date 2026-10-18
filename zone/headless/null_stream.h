@@ -34,6 +34,7 @@ public:
 
 	// set right after `new Client(stream)`; needed for the floor-Z fix before the spawn broadcast
 	void SetClient(Client *c) { m_client = c; }
+	Client *GetClient() const { return m_client; }
 	const std::string &SessionID() const { return m_session_id; }
 	bool SpawnReported() const { return m_step == Step::Done; }
 
