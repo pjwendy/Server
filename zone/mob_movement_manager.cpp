@@ -886,13 +886,7 @@ void MobMovementManager::SendCommandToClients(
 
 			c->QueuePacket(&p, false);
 			c->m_last_seen_mob_position[mob->GetID()] = mob->GetPosition();
-			LogInfo("OP_ClientUpdate from server (SendCommandToClients) [{}] (ID: {})", mob->GetCleanName(), mob->GetID());
-			LogInfo("  spawn_id: {}", spu->spawn_id);
-			LogInfo("  position: x={:.3f} y={:.3f} z={:.3f}", static_cast<double>(spu->x_pos), static_cast<double>(spu->y_pos), static_cast<double>(spu->z_pos));
-			LogInfo("  deltas: dx={:.3f} dy={:.3f} dz={:.3f}", static_cast<double>(spu->delta_x), static_cast<double>(spu->delta_y), static_cast<double>(spu->delta_z));
-			LogInfo("  heading: {} (delta: {})", static_cast<uint32>(spu->heading), static_cast<int32>(spu->delta_heading));
-			LogInfo("  animation: {}", static_cast<uint32>(spu->animation));
-			LogInfo("  packet size: {}", sizeof(PlayerPositionUpdateServer_Struct));
+			LogPositionUpdateDetail("OP_ClientUpdate from server (SendCommandToClients) [{}] (ID: {}) spawn_id: {} position: x={:.3f} y={:.3f} z={:.3f} deltas: dx={:.3f} dy={:.3f} dz={:.3f} heading: {} (delta: {}) animation: {} packet size: {}", mob->GetCleanName(), mob->GetID(), spu->spawn_id, static_cast<double>(spu->x_pos), static_cast<double>(spu->y_pos), static_cast<double>(spu->z_pos), static_cast<double>(spu->delta_x), static_cast<double>(spu->delta_y), static_cast<double>(spu->delta_z), static_cast<uint32>(spu->heading), static_cast<int32>(spu->delta_heading), static_cast<uint32>(spu->animation), sizeof(PlayerPositionUpdateServer_Struct));
 		}
 	}
 	else {
