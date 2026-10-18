@@ -79,6 +79,9 @@ private:
 		std::unique_ptr<HeadlessMover>           mover;
 		std::unordered_map<uint32, SeenSpawn>    seen;
 		std::string                              last_self; // serialized Self last sent
+		bool                                     zoning      = false; // the server let us go to zone_to
+		uint32                                   zone_to     = 0;
+		uint32                                   instance_to = 0;
 	};
 
 	// returns "" when accepted, otherwise why not
@@ -90,6 +93,7 @@ private:
 	void FillSpawn(eqheadless::Spawn *out, Mob *mob);
 	void SendFrame(const std::string &session_id, const eqheadless::ServerFrame &frame);
 	void SendSpawned(const std::string &session_id, uint32 spawn_id, const std::string &error);
+	void SendZoneEvent(const std::string &session_id, int status, uint32 zone_id, const std::string &detail);
 
 	std::map<std::string, Session> m_sessions; // session id -> session
 };

@@ -926,6 +926,12 @@ void ZoneServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p) {
 			}
 			break;
 		}
+		case ServerOP_HeadlessZoning: {
+			if (auto *gateway = HeadlessGateway::Instance()) {
+				gateway->HandleZoning(pack);
+			}
+			break;
+		}
 		case ServerOP_HeadlessFrame: {
 			if (auto *gateway = HeadlessGateway::Instance()) {
 				gateway->HandleZoneFrame(pack);

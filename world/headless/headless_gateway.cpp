@@ -412,16 +412,20 @@ void HeadlessGateway::TrySpawn(Session *s)
 	}
 
 	// the world-side "online" record, created the way login does for real clients;
-	// its id is the character's world id (wid), which the zone reports back in UpdateWho
-	auto *cle = ClientList::Instance()->CLEAdd(
-		s->lsaccount_id,
-		s->ls_id.c_str(),
-		s->account_name.c_str(),
-		"",
-		s->admin,
-		LOOPBACK_IP,
-		1
-	);
+	// its id is the character's world id (wid), which the zone reports back in UpdateWho.
+	// A zoning character keeps the one it has, as a real client does.
+	ClientListEntry *cle = s->zoning ? ClientList::Instance()->FindCLEByCharacterID(s->character_id) : nullptr;
+	if (!cle) {
+		cle = ClientList::Instance()->CLEAdd(
+			s->lsaccount_id,
+			s->ls_id.c_str(),
+			s->account_name.c_str(),
+			"",
+			s->admin,
+			LOOPBACK_IP,
+			1
+		);
+	}
 	cle->SetOnline(CLE_Status::Zoning);
 	s->wid            = cle->GetID();
 	s->zone_server_id = zs->GetID();
@@ -503,6 +507,7 @@ void HeadlessGateway::HandleSpawned(ServerPacket *pack)
 
 	s->phase    = Phase::InGame;
 	s->spawn_id = r->spawn_id;
+	s->zoning   = false;
 
 	eqheadless::ServerFrame frame;
 	auto *welcome = frame.mutable_welcome();
@@ -530,6 +535,44 @@ void HeadlessGateway::HandleGone(ServerPacket *pack)
 	LogInfo("Headless character [{}] left the zone; closing session [{}]", s->character, s->id);
 	s->phase = Phase::Handshake; // nothing to despawn any more
 	CloseSoon(s);
+}
+
+void HeadlessGateway::HandleZoning(ServerPacket *pack)
+{
+	if (pack->size != sizeof(ServerHeadlessZoning_Struct)) {
+		LogError("Wrong size on ServerOP_HeadlessZoning: got [{}] expected [{}]", pack->size, sizeof(ServerHeadlessZoning_Struct));
+		return;
+	}
+
+	auto *z = reinterpret_cast<ServerHeadlessZoning_Struct *>(pack->pBuffer);
+	Session *s = FindByPacketSession(z->session_id, sizeof(z->session_id));
+	if (!s || s->closing || s->phase != Phase::InGame) {
+		return;
+	}
+
+	// the old zone has already let the character go: nothing to despawn from here on
+	s->phase = Phase::Handshake;
+	if (z->instance_id > 0) {
+		Refuse(s, eqheadless::REFUSED_NOT_IMPLEMENTED, "zoning into instances is not supported yet");
+		return;
+	}
+
+	s->zone_id = z->zone_id;
+	s->zoning  = true;
+	if (!CheckZoneAllowed(s)) {
+		return;
+	}
+
+	LogInfo("Headless character [{}] is zoning to [{}] on session [{}]", s->character, ZoneName(s->zone_id, true), s->id);
+	s->phase       = Phase::WaitingForZone;
+	s->deadline_ms = NowMs() + ZONE_BOOT_TIMEOUT_MS;
+
+	if (ZSList::Instance()->FindByZoneID(s->zone_id)) {
+		TrySpawn(s);
+	}
+	else if (ZSList::Instance()->TriggerBootup(s->zone_id, 0) == 0) {
+		Refuse(s, eqheadless::REFUSED_ZONE_UNAVAILABLE, "no zone server available for the new zone");
+	}
 }
 
 HeadlessGateway::Session *HeadlessGateway::FindByPacketSession(const char *session_id, size_t length)

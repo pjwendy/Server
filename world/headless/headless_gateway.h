@@ -47,6 +47,7 @@ public:
 	// from zones (world/zoneserver.cpp)
 	void HandleSpawned(ServerPacket *pack); // ServerOP_HeadlessSpawned
 	void HandleGone(ServerPacket *pack);    // ServerOP_HeadlessGone
+	void HandleZoning(ServerPacket *pack);  // ServerOP_HeadlessZoning: keep the session, spawn in the new zone
 	void HandleZoneFrame(ServerPacket *pack); // ServerOP_HeadlessFrame: relay to the SDK as-is
 
 private:
@@ -79,6 +80,7 @@ private:
 		uint32      zone_server_id = 0; // ZSList id once known
 		uint32      wid            = 0; // ClientListEntry id
 		uint32      spawn_id       = 0;
+		bool        zoning         = false; // moving to zone_id; keep the online record
 		uint64      deadline_ms    = 0; // for WaitingForZone / Spawning
 
 		// HeadlessClients:CommandRateLimit token bucket

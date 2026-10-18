@@ -24,6 +24,7 @@
 #include "common/servertalk.h"
 #include "common/strings.h"
 #include "common/timer.h"
+#include "common/zone_store.h"
 #include "zone/bot.h"
 #include "zone/client.h"
 #include "zone/corpse.h"
@@ -68,6 +69,35 @@ namespace {
 	std::string SessionID(const char *buf, size_t size)
 	{
 		return std::string(buf, strnlen(buf, size));
+	}
+
+	bool ZoneInList(const std::string &list, const std::string &short_name)
+	{
+		for (auto &z : Strings::Split(list, ',')) {
+			if (Strings::EqualFold(Strings::Trim(z), short_name)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// HeadlessClients:BlockedZones / AllowedZones, as world checks at login
+	std::string ZoneRefusal(const std::string &short_name)
+	{
+		if (ZoneInList(RuleS(HeadlessClients, BlockedZones), short_name)) {
+			return fmt::format("zone [{}] is blocked for headless characters", short_name);
+		}
+		std::string allowed = RuleS(HeadlessClients, AllowedZones);
+		if (!Strings::Trim(allowed).empty() && !ZoneInList(allowed, short_name)) {
+			return fmt::format("zone [{}] is not in HeadlessClients:AllowedZones", short_name);
+		}
+		return "";
+	}
+
+	std::string ShortName(uint32 zone_id)
+	{
+		const char *name = ZoneName(zone_id, true);
+		return name ? name : "";
 	}
 
 	// by entity name ("a_rat00") or, failing that, clean name ("a rat"), ignoring case
@@ -331,6 +361,65 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			}
 			return;
 		}
+		case OP_RequestClientZoneChange: {
+			// the server wants us elsewhere (#zone, #goto, summon, port): the client's half is to
+			// ask to zone with OP_ZoneChange or, within the zone, simply to be there
+			if (app->size < sizeof(RequestClientZoneChange_Struct)) {
+				return;
+			}
+			auto   *rq = reinterpret_cast<const RequestClientZoneChange_Struct *>(app->pBuffer);
+			Client *me = it->second.stream->GetClient();
+			if (!me) {
+				return;
+			}
+			if (rq->zone_id == zone->GetZoneID() && rq->instance_id == zone->GetInstanceID()) {
+				if (it->second.mover) {
+					it->second.mover->Place(glm::vec3(rq->x, rq->y, rq->z), rq->heading);
+				}
+				return;
+			}
+
+			const std::string refusal = ZoneRefusal(ShortName(rq->zone_id));
+			if (!refusal.empty()) {
+				SendZoneEvent(session_id, eqheadless::ZONE_REFUSED, rq->zone_id, refusal);
+				return;
+			}
+			if (it->second.mover) {
+				it->second.mover->Stop(HeadlessMover::Result::Stopped);
+			}
+
+			auto zc_app = new EQApplicationPacket(OP_ZoneChange, sizeof(ZoneChange_Struct));
+			auto *zc    = reinterpret_cast<ZoneChange_Struct *>(zc_app->pBuffer);
+			strn0cpy(zc->char_name, me->GetName(), sizeof(zc->char_name));
+			zc->zoneID      = rq->zone_id;
+			zc->instanceID  = rq->instance_id;
+			zc->x           = rq->x;
+			zc->y           = rq->y;
+			zc->z           = rq->z;
+			zc->zone_reason = rq->type; // the client echoes `type` back
+			zc->success     = 0;
+			it->second.stream->Inject(zc_app);
+			return;
+		}
+		case OP_ZoneChange: {
+			// the server's answer to our OP_ZoneChange. On success a real client disconnects and
+			// re-enters through world; we close, and world spawns us in the new zone.
+			if (app->size < sizeof(ZoneChange_Struct)) {
+				return;
+			}
+			auto *zc = reinterpret_cast<const ZoneChange_Struct *>(app->pBuffer);
+			if (zc->success != 1) {
+				SendZoneEvent(session_id, eqheadless::ZONE_REFUSED, zc->zoneID, fmt::format("the server refused the zone change ({})", zc->success));
+				return;
+			}
+			it->second.zoning      = true;
+			it->second.zone_to     = zc->zoneID;
+			it->second.instance_to = zc->instanceID;
+			it->second.publish_timer.reset();
+			SendZoneEvent(session_id, eqheadless::ZONE_LEAVING, zc->zoneID, "");
+			it->second.stream->Close(); // Client::Process sees it with bZoning set: "left the zone", not linkdead
+			return;
+		}
 		case OP_ChannelMessage: {
 			if (app->size < sizeof(ChannelMessage_Struct)) {
 				return;
@@ -476,7 +565,22 @@ void HeadlessClientManager::SendMovementHistory(Session &session)
 
 void HeadlessClientManager::OnStreamDestroyed(const std::string &session_id, bool was_spawned)
 {
+	auto it = m_sessions.find(session_id);
+	const bool   zoning      = it != m_sessions.end() && it->second.zoning;
+	const uint32 zone_to     = zoning ? it->second.zone_to : 0;
+	const uint32 instance_to = zoning ? it->second.instance_to : 0;
 	m_sessions.erase(session_id); // stops the publish timer
+
+	if (was_spawned && zoning) {
+		auto pack = new ServerPacket(ServerOP_HeadlessZoning, sizeof(ServerHeadlessZoning_Struct));
+		auto *z   = reinterpret_cast<ServerHeadlessZoning_Struct *>(pack->pBuffer);
+		strn0cpy(z->session_id, session_id.c_str(), sizeof(z->session_id));
+		z->zone_id     = zone_to;
+		z->instance_id = instance_to;
+		worldserver.SendPacket(pack);
+		safe_delete(pack);
+		return;
+	}
 
 	if (!was_spawned) {
 		SendSpawned(session_id, 0, "character failed to enter the zone");
@@ -637,6 +741,17 @@ void HeadlessClientManager::SendFrame(const std::string &session_id, const eqhea
 	memcpy(f->data, body.data(), body.size());
 	worldserver.SendPacket(pack);
 	safe_delete(pack);
+}
+
+void HeadlessClientManager::SendZoneEvent(const std::string &session_id, int status, uint32 zone_id, const std::string &detail)
+{
+	eqheadless::ServerFrame frame;
+	auto *z = frame.mutable_event()->mutable_zone();
+	z->set_status(static_cast<eqheadless::ZoneStatus>(status));
+	z->set_zone_id(zone_id);
+	z->set_zone(ShortName(zone_id));
+	z->set_detail(detail);
+	SendFrame(session_id, frame);
 }
 
 void HeadlessClientManager::SendSpawned(const std::string &session_id, uint32 spawn_id, const std::string &error)

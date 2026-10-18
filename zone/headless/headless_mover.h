@@ -48,6 +48,8 @@ public:
 	void Stop(Result why);
 	// turn on the spot to face a point, as the client's /face; returns "" or why it can't
 	std::string Face(const glm::vec3 &point);
+	// accept a server-side move within the zone (#goto, summon), as the client does
+	void Place(const glm::vec3 &pos, float heading);
 	bool Moving() const { return m_moving; }
 
 private:

@@ -150,11 +150,25 @@ message MoveEvent {
   float      z      = 4;
 }
 
+enum ZoneStatus {
+  ZONE_LEAVING = 0; // the server let us go; a new Welcome and Snapshot follow once we're in `zone`
+  ZONE_REFUSED = 1; // the zone change didn't happen; detail says why
+}
+
+// zoning (e.g. GM #zone, a zone line, a port): the session survives it
+message ZoneEvent {
+  ZoneStatus status  = 1;
+  uint32     zone_id = 2;
+  string     zone    = 3; // short name
+  string     detail  = 4;
+}
+
 message GameEvent {
   oneof event {
     ChatMessage   chat    = 1;
     ServerMessage message = 2;
     MoveEvent     move    = 3;
+    ZoneEvent     zone    = 4;
   }
 }
 

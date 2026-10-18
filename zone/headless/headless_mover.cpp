@@ -171,6 +171,13 @@ std::string HeadlessMover::Face(const glm::vec3 &point)
 	return "";
 }
 
+void HeadlessMover::Place(const glm::vec3 &pos, float heading)
+{
+	Stop(Result::Stopped);
+	m_pos = pos;
+	SendUpdate(pos, heading, 0);
+}
+
 void HeadlessMover::Tick()
 {
 	Client *me = m_stream->GetClient();
