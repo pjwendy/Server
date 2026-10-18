@@ -22,6 +22,7 @@
 #include "common/eqemu_logsys.h"
 #include "common/servertalk.h"
 #include "common/strings.h"
+#include "common/timer.h"
 #include "zone/client.h"
 #include "zone/corpse.h"
 #include "zone/entity.h"
@@ -40,6 +41,7 @@ extern Zone        *zone;
 
 namespace {
 	constexpr uint64 PUBLISH_INTERVAL_MS = 250;
+	constexpr uint64 MOVEMENT_HISTORY_MS = 1000;
 	// smaller position changes aren't worth a delta
 	constexpr float  MOVE_EPSILON        = 0.25f;
 
@@ -151,12 +153,30 @@ void HeadlessClientManager::HandleCommand(ServerPacket *pack)
 		return;
 	}
 
-	SendResult(session_id, cmd.id(), Execute(it->second.stream, me, cmd));
+	SendResult(session_id, cmd.id(), Execute(session_id, it->second, me, cmd));
 }
 
-std::string HeadlessClientManager::Execute(NullStream *stream, Client *me, const eqheadless::Command &cmd)
+std::string HeadlessClientManager::Execute(const std::string &session_id, Session &session, Client *me, const eqheadless::Command &cmd)
 {
+	NullStream *stream = session.stream;
+
 	switch (cmd.action_case()) {
+		case eqheadless::Command::kMoveTo: {
+			if (!session.mover) {
+				return "character is not ready to move";
+			}
+			const auto &m = cmd.move_to();
+			if (!std::isfinite(m.x()) || !std::isfinite(m.y()) || !std::isfinite(m.z())) {
+				return "destination must be finite";
+			}
+			return session.mover->Start(glm::vec3(m.x(), m.y(), m.z()));
+		}
+		case eqheadless::Command::kStop: {
+			if (session.mover) {
+				session.mover->Stop(HeadlessMover::Result::Stopped);
+			}
+			return "";
+		}
 		case eqheadless::Command::kTarget: {
 			const uint32 id = cmd.target().spawn_id();
 			if (id != 0 && !entity_list.GetMob(id)) {
@@ -200,6 +220,9 @@ std::string HeadlessClientManager::Execute(NullStream *stream, Client *me, const
 			return "";
 		}
 		case eqheadless::Command::kSit: {
+			if (cmd.sit().sit() && session.mover) {
+				session.mover->Stop(HeadlessMover::Result::Stopped); // sitting ends a walk
+			}
 			auto app = new EQApplicationPacket(OP_SpawnAppearance, sizeof(SpawnAppearance_Struct));
 			auto *sa = reinterpret_cast<SpawnAppearance_Struct *>(app->pBuffer);
 			sa->spawn_id  = me->GetID();
@@ -321,11 +344,58 @@ void HeadlessClientManager::ReportSpawned(const std::string &session_id, uint32 
 	Publish(session_id, true);
 
 	auto it = m_sessions.find(session_id);
-	if (it != m_sessions.end()) {
-		it->second.publish_timer = std::make_unique<EQ::Timer>(
-			PUBLISH_INTERVAL_MS, true, [this, session_id](EQ::Timer *) { Publish(session_id, false); }
-		);
+	if (it == m_sessions.end()) {
+		return;
 	}
+
+	Session &session = it->second;
+	session.publish_timer = std::make_unique<EQ::Timer>(
+		PUBLISH_INTERVAL_MS, true, [this, session_id](EQ::Timer *) { Publish(session_id, false); }
+	);
+
+	session.mover = std::make_unique<HeadlessMover>(
+		session.stream, [this, session_id](HeadlessMover::Result result, const glm::vec3 &where) {
+			static const eqheadless::MoveStatus statuses[] = {
+				eqheadless::MOVE_ARRIVED, eqheadless::MOVE_STOPPED, eqheadless::MOVE_STUCK,
+				eqheadless::MOVE_NO_PATH, eqheadless::MOVE_ZONE_LINE,
+			};
+			eqheadless::ServerFrame frame;
+			auto *move = frame.mutable_event()->mutable_move();
+			move->set_status(statuses[static_cast<int>(result)]);
+			move->set_x(where.x);
+			move->set_y(where.y);
+			move->set_z(where.z);
+			SendFrame(session_id, frame);
+		}
+	);
+
+	// the real client reports its recent movement every second (OP_FloatListThing); without
+	// it cheat detection flags a moving character as MQGhost after 70s
+	session.history_timer = std::make_unique<EQ::Timer>(
+		MOVEMENT_HISTORY_MS, true, [this, session_id](EQ::Timer *) {
+			auto s = m_sessions.find(session_id);
+			if (s != m_sessions.end()) {
+				SendMovementHistory(s->second);
+			}
+		}
+	);
+}
+
+void HeadlessClientManager::SendMovementHistory(Session &session)
+{
+	Client *me = session.stream ? session.stream->GetClient() : nullptr;
+	if (!me || !me->Connected()) {
+		return;
+	}
+
+	auto app = new EQApplicationPacket(OP_FloatListThing, sizeof(UpdateMovementEntry));
+	auto *e  = reinterpret_cast<UpdateMovementEntry *>(app->pBuffer);
+	e->Y         = me->GetY();
+	e->X         = me->GetX();
+	e->Z         = me->GetZ();
+	e->type      = 0; // ordinary movement
+	e->timestamp = Timer::GetCurrentTime();
+	session.stream->Inject(app);
 }
 
 void HeadlessClientManager::OnStreamDestroyed(const std::string &session_id, bool was_spawned)

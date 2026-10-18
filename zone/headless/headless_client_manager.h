@@ -19,6 +19,7 @@
 
 #include "common/event/timer.h"
 #include "common/types.h"
+#include "zone/headless/headless_mover.h"
 
 #include <map>
 #include <memory>
@@ -74,12 +75,15 @@ private:
 	struct Session {
 		NullStream                              *stream = nullptr; // owned by its Client
 		std::unique_ptr<EQ::Timer>               publish_timer;
+		std::unique_ptr<EQ::Timer>               history_timer; // OP_FloatListThing, as real clients send
+		std::unique_ptr<HeadlessMover>           mover;
 		std::unordered_map<uint32, SeenSpawn>    seen;
 		std::string                              last_self; // serialized Self last sent
 	};
 
 	// returns "" when accepted, otherwise why not
-	std::string Execute(NullStream *stream, Client *me, const eqheadless::Command &cmd);
+	std::string Execute(const std::string &session_id, Session &session, Client *me, const eqheadless::Command &cmd);
+	void SendMovementHistory(Session &session);
 	void SendResult(const std::string &session_id, uint32 command_id, const std::string &error);
 
 	void Publish(const std::string &session_id, bool snapshot);

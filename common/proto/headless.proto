@@ -83,13 +83,20 @@ message ChatCommand {
 }
 message SitCommand    { bool sit = 1; }                // false stands up
 
+// Walk to a point along the zone's navmesh at the character's legal run speed, sending the
+// same position updates a real client sends. Progress shows in Self; a MoveEvent reports the end.
+message MoveToCommand { float x = 1; float y = 2; float z = 3; }
+message StopCommand   {}
+
 message Command {
   uint32 id = 1; // echoed in CommandResult
   oneof action {
-    TargetCommand target = 2;
-    AttackCommand attack = 3;
-    ChatCommand   chat   = 4;
-    SitCommand    sit    = 5;
+    TargetCommand target  = 2;
+    AttackCommand attack  = 3;
+    ChatCommand   chat    = 4;
+    SitCommand    sit     = 5;
+    MoveToCommand move_to = 6;
+    StopCommand   stop    = 7;
   }
 }
 
@@ -120,10 +127,26 @@ message ServerMessage {
   repeated string args       = 6;
 }
 
+enum MoveStatus {
+  MOVE_ARRIVED   = 0;
+  MOVE_STOPPED   = 1; // StopCommand, a new MoveTo, or the character sat down
+  MOVE_STUCK     = 2; // no progress (rooted, blocked)
+  MOVE_NO_PATH   = 3; // no route to the destination
+  MOVE_ZONE_LINE = 4; // the route reaches a zone line or teleport; stopped there (zoning is M5)
+}
+
+message MoveEvent {
+  MoveStatus status = 1;
+  float      x      = 2; // where the character ended up
+  float      y      = 3;
+  float      z      = 4;
+}
+
 message GameEvent {
   oneof event {
     ChatMessage   chat    = 1;
     ServerMessage message = 2;
+    MoveEvent     move    = 3;
   }
 }
 

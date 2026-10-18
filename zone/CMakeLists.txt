@@ -674,10 +674,12 @@ set_property(TARGET gm_commands_zone PROPERTY FOLDER libraries)
 if(EQEMU_BUILD_HEADLESS)
     list(APPEND zone_sources
         headless/headless_client_manager.cpp
+        headless/headless_mover.cpp
         headless/null_stream.cpp
     )
     list(APPEND zone_headers
         headless/headless_client_manager.h
+        headless/headless_mover.h
         headless/null_stream.h
     )
 endif()
