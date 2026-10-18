@@ -556,8 +556,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			Mob  *mob  = group->members[i];
 			gm->set_name(group->membername[i]);
 			gm->set_spawn_id(mob ? mob->GetID() : 0);
-			// Group::IsLeader(const char *) matches any member, so compare names
-			gm->set_leader(Strings::EqualFold(group->GetLeaderName(), group->membername[i]));
+			gm->set_leader(group->IsLeader(group->membername[i]));
 			gm->set_bot(mob && mob->IsBot());
 		}
 	}

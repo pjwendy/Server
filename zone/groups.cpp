@@ -2578,15 +2578,16 @@ bool Group::AnyMemberHasDzLockout(const std::string& expedition, const std::stri
 }
 
 bool Group::IsLeader(const char* name) {
-	if (name) {
-		for (const auto& m : membername) {
-			if (!strcmp(m, name)) {
-				return true;
-			}
-		}
+	if (!name || !name[0]) {
+		return false;
 	}
 
-	return false;
+	// the leader may be in another zone, leaving only the stored name
+	if (leader) {
+		return Strings::EqualFold(leader->GetName(), name);
+	}
+
+	return Strings::EqualFold(GetLeaderName(), name);
 }
 
 std::string Group::GetLeaderName() {
