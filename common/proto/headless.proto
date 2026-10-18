@@ -42,7 +42,9 @@ enum RefusedReason {
   REFUSED_ALREADY_ONLINE    = 7;
   REFUSED_ZONE_BLOCKED      = 8;
   REFUSED_TIMEOUT           = 9;  // no Hello within the handshake timeout
-  REFUSED_NOT_IMPLEMENTED   = 10; // authenticated, but spawning isn't implemented yet (M0)
+  REFUSED_NOT_IMPLEMENTED   = 10; // e.g. a feature this server doesn't support yet
+  REFUSED_ZONE_UNAVAILABLE  = 11; // the character's zone couldn't be started
+  REFUSED_SPAWN_FAILED      = 12; // the zone couldn't load the character
 }
 
 message Refused {

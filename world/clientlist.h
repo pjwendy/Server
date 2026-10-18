@@ -76,7 +76,7 @@ public:
 	void	DisconnectByIP(uint32 in_ip);
 	void	CLCheckStale();
 	void	CLEKeepAlive(uint32 numupdates, uint32* wid);
-	void	CLEAdd(uint32 login_server_id, const char* login_server_name, const char* login_name, const char* login_key, int16 world_admin = AccountStatus::Player, uint32 ip_address = 0, uint8 is_local=0);
+	ClientListEntry* CLEAdd(uint32 login_server_id, const char* login_server_name, const char* login_name, const char* login_key, int16 world_admin = AccountStatus::Player, uint32 ip_address = 0, uint8 is_local=0);
 	void	UpdateClientGuild(uint32 char_id, uint32 guild_id);
 	bool    IsAccountInGame(uint32 iLSID);
 

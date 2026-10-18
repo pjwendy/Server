@@ -381,7 +381,7 @@ void ClientList::SendCLEList(const int16& admin, const char* to, WorldTCPConnect
 	);
 }
 
-void ClientList::CLEAdd(
+ClientListEntry* ClientList::CLEAdd(
 	uint32 login_server_id,
 	const char *login_server_name,
 	const char *login_name,
@@ -403,6 +403,7 @@ void ClientList::CLEAdd(
 	);
 
 	clientlist.Append(tmp);
+	return tmp;
 }
 
 void ClientList::CLCheckStale() {

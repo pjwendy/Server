@@ -50,6 +50,9 @@
 #include "world/world_config.h"
 #include "world/worlddb.h"
 #include "world/zonelist.h"
+#ifdef EQEMU_HEADLESS
+#include "world/headless/headless_gateway.h"
+#endif
 
 extern GroupLFPList LFPGroupList;
 extern volatile bool RunLoops;
@@ -910,6 +913,20 @@ void ZoneServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p) {
 
 			break;
 		}
+#ifdef EQEMU_HEADLESS
+		case ServerOP_HeadlessSpawned: {
+			if (auto *gateway = HeadlessGateway::Instance()) {
+				gateway->HandleSpawned(pack);
+			}
+			break;
+		}
+		case ServerOP_HeadlessGone: {
+			if (auto *gateway = HeadlessGateway::Instance()) {
+				gateway->HandleGone(pack);
+			}
+			break;
+		}
+#endif
 		case ServerOP_ClientList: {
 			if (pack->size != sizeof(ServerClientList_Struct)) {
 				LogInfo("Wrong size on ServerOP_ClientList. Got: [{}], Expected: [{}]", pack->size, sizeof(ServerClientList_Struct));
