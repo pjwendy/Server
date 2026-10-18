@@ -51,6 +51,8 @@ public:
 private:
 	void Tick();
 	void SendUpdate(const glm::vec3 &pos, float heading, uint32 animation);
+	// a real client clicks closed doors it walks into; returns true while we wait for one to open
+	bool HandleDoors(uint64 now);
 
 	NullStream                 *m_stream;
 	DoneCallback               m_on_done;
@@ -66,4 +68,8 @@ private:
 	// stuck detection
 	glm::vec3 m_progress_pos{0.0f};
 	uint64    m_progress_ms = 0;
+
+	// the door we clicked and are waiting on
+	uint32 m_door_entity  = 0;
+	uint64 m_door_wait_ms = 0;
 };

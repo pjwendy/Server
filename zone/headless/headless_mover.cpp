@@ -22,6 +22,8 @@
 #include "common/eqemu_logsys.h"
 #include "common/misc_functions.h"
 #include "zone/client.h"
+#include "zone/doors.h"
+#include "zone/entity.h"
 #include "zone/headless/null_stream.h"
 #include "zone/pathfinder_interface.h"
 #include "zone/zone.h"
@@ -30,7 +32,8 @@
 
 #include <chrono>
 
-extern Zone *zone;
+extern Zone       *zone;
+extern EntityList entity_list;
 
 namespace {
 	constexpr uint64 TICK_MS        = 100;
@@ -39,6 +42,10 @@ namespace {
 	constexpr float  ARRIVE_EPSILON = 0.5f;
 	constexpr uint64 STUCK_MS       = 3000;
 	constexpr float  STUCK_DISTANCE = 1.0f;
+	// doors: how far ahead to look, how far up/down they can be, how long to wait for one
+	constexpr float  DOOR_LOOKAHEAD    = 15.0f;
+	constexpr float  DOOR_HEIGHT_RANGE = 20.0f;
+	constexpr uint64 DOOR_WAIT_MS      = 3000;
 
 	uint64 NowMs()
 	{
@@ -171,6 +178,15 @@ void HeadlessMover::Tick()
 	}
 
 	const uint64 now   = NowMs();
+
+	if (HandleDoors(now)) {
+		m_progress_ms = now; // waiting for a door isn't being stuck
+		return;
+	}
+	if (!m_moving) {
+		return; // HandleDoors gave up on a door
+	}
+
 	const float  speed = me->GetRunspeed() * SPEED_TO_UNITS; // units per second; 0 when rooted/stunned
 	float        step  = speed * (TICK_MS / 1000.0f);
 
@@ -214,6 +230,72 @@ void HeadlessMover::Tick()
 	else if (now - m_progress_ms > STUCK_MS) {
 		Stop(Result::Stuck);
 	}
+}
+
+bool HeadlessMover::HandleDoors(uint64 now)
+{
+	Client *me = m_stream->GetClient();
+
+	// waiting on a door we clicked
+	if (m_door_entity) {
+		auto *door = entity_list.GetDoorsByID(m_door_entity);
+		if (!door || door->IsDoorOpen()) {
+			m_door_entity = 0;
+			return false;
+		}
+		if (now > m_door_wait_ms) {
+			LogHeadlessClient("[{}] door [{}] didn't open; giving up", me->GetCleanName(), door->GetDoorID());
+			m_door_entity = 0;
+			Stop(Result::Stuck);
+		}
+		return m_door_entity != 0;
+	}
+
+	if (m_next >= m_path.size()) {
+		return false;
+	}
+
+	// the stretch of route just ahead of us
+	const glm::vec3 &next = m_path[m_next];
+	glm::vec3 dir(next.x - m_pos.x, next.y - m_pos.y, 0.0f);
+	const float len = glm::length(dir);
+	if (len < 0.01f) {
+		return false;
+	}
+	const glm::vec3 ahead = m_pos + (dir / len) * std::min(len, DOOR_LOOKAHEAD);
+
+	for (auto &[id, door] : entity_list.GetDoorsList()) {
+		if (!door || door->IsDoorOpen() || door->IsDoorBlacklisted()) {
+			continue;
+		}
+		// never "click" teleporters (PoK books, portals): that would zone the character
+		if (door->HasDestinationZone()) {
+			continue;
+		}
+		const auto &dp = door->GetPosition();
+		if (std::fabs(dp.z - m_pos.z) > DOOR_HEIGHT_RANGE ||
+			glm::length(glm::vec3(dp.x - m_pos.x, dp.y - m_pos.y, 0.0f)) > DOOR_LOOKAHEAD) {
+			continue;
+		}
+		if (!door->IsDoorBetween(glm::vec4(m_pos, 0.0f), glm::vec4(ahead, 0.0f), door->GetSize())) {
+			continue;
+		}
+
+		// click it, as a player would; the server checks distance, keys and locks
+		auto app = new EQApplicationPacket(OP_ClickDoor, sizeof(ClickDoor_Struct));
+		auto *cd = reinterpret_cast<ClickDoor_Struct *>(app->pBuffer);
+		cd->doorid    = door->GetDoorID();
+		cd->player_id = me->GetID();
+		m_stream->Inject(app);
+
+		m_door_entity  = door->GetEntityID();
+		m_door_wait_ms = now + DOOR_WAIT_MS;
+		SendUpdate(m_pos, me->GetHeading(), 0); // stop in front of it
+		LogHeadlessClient("[{}] clicking door [{}] ({})", me->GetCleanName(), door->GetDoorID(), door->GetDoorName());
+		return true;
+	}
+
+	return false;
 }
 
 void HeadlessMover::SendUpdate(const glm::vec3 &pos, float heading, uint32 animation)
