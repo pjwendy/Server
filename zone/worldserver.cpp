@@ -658,6 +658,10 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 		HeadlessClientManager::Instance()->HandleDespawn(pack);
 		break;
 	}
+	case ServerOP_HeadlessCommand: {
+		HeadlessClientManager::Instance()->HandleCommand(pack);
+		break;
+	}
 #endif
 	case ServerOP_DropClient: {
 		if (pack->size != sizeof(ServerZoneDropClient_Struct)) {

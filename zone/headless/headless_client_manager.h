@@ -26,11 +26,13 @@
 #include <unordered_map>
 
 class Client;
+class EQApplicationPacket;
 class Mob;
 class NullStream;
 class ServerPacket;
 
 namespace eqheadless {
+	class Command;
 	class ServerFrame;
 	class Spawn;
 }
@@ -51,10 +53,12 @@ public:
 
 	void HandleSpawn(ServerPacket *pack);   // ServerOP_HeadlessSpawn
 	void HandleDespawn(ServerPacket *pack); // ServerOP_HeadlessDespawn
+	void HandleCommand(ServerPacket *pack); // ServerOP_HeadlessCommand
 
 	// called by NullStream
 	void ReportSpawned(const std::string &session_id, uint32 spawn_id);
 	void OnStreamDestroyed(const std::string &session_id, bool was_spawned);
+	void OnOutgoing(const std::string &session_id, const EQApplicationPacket *app);
 
 	static bool IsHeadless(Mob *mob);
 
@@ -73,6 +77,10 @@ private:
 		std::unordered_map<uint32, SeenSpawn>    seen;
 		std::string                              last_self; // serialized Self last sent
 	};
+
+	// returns "" when accepted, otherwise why not
+	std::string Execute(NullStream *stream, Client *me, const eqheadless::Command &cmd);
+	void SendResult(const std::string &session_id, uint32 command_id, const std::string &error);
 
 	void Publish(const std::string &session_id, bool snapshot);
 	void FillSpawn(eqheadless::Spawn *out, Mob *mob);

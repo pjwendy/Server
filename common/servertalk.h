@@ -300,6 +300,7 @@
 #define ServerOP_HeadlessDespawn 0x6402 // world -> zone: the controlling session ended
 #define ServerOP_HeadlessGone    0x6403 // zone -> world: the headless character left the zone
 #define ServerOP_HeadlessFrame   0x6404 // zone -> world: a serialized eqheadless.ServerFrame for the session's SDK
+#define ServerOP_HeadlessCommand 0x6405 // world -> zone: a serialized eqheadless.Command (ServerHeadlessFrame_Struct)
 
 enum {
 	CZUpdateType_Character,

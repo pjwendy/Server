@@ -80,6 +80,10 @@ private:
 		uint32      wid            = 0; // ClientListEntry id
 		uint32      spawn_id       = 0;
 		uint64      deadline_ms    = 0; // for WaitingForZone / Spawning
+
+		// HeadlessClients:CommandRateLimit token bucket
+		double rate_tokens     = -1; // < 0 until first use
+		uint64 rate_refill_ms  = 0;
 	};
 
 	void OnConnection(std::shared_ptr<EQ::Net::TCPConnection> connection);
@@ -92,6 +96,8 @@ private:
 	bool CheckZoneAllowed(Session *s);
 	void TrySpawn(Session *s);
 	void SendDespawn(Session *s);
+	void ForwardCommand(Session *s, const eqheadless::Command &cmd);
+	bool TakeRateToken(Session *s);
 
 	Session *FindByPacketSession(const char *session_id, size_t length);
 	int CountActive(uint32 account_id = 0) const;

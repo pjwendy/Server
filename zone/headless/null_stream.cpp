@@ -32,8 +32,28 @@ NullStream::NullStream(const std::string &session_id, const std::string &charact
 
 NullStream::~NullStream()
 {
+	for (auto *app : m_inbound) {
+		delete app;
+	}
+	m_inbound.clear();
+
 	// the Client deletes its stream when it leaves the zone (or failed to enter it)
 	HeadlessClientManager::Instance()->OnStreamDestroyed(m_session_id, m_step == Step::Done);
+}
+
+void NullStream::Inject(EQApplicationPacket *app)
+{
+	if (app) {
+		m_inbound.push_back(app);
+	}
+}
+
+void NullStream::QueuePacket(const EQApplicationPacket *p, bool ack_req)
+{
+	// before we're in the zone it's all zone-in traffic; nothing for the SDK
+	if (p && m_step == Step::Done) {
+		HeadlessClientManager::Instance()->OnOutgoing(m_session_id, p);
+	}
 }
 
 uint32 NullStream::GetRemoteIP() const
@@ -52,6 +72,7 @@ void NullStream::FastQueuePacket(EQApplicationPacket **p, bool ack_req)
 {
 	// FastQueuePacket transfers ownership
 	if (p && *p) {
+		QueuePacket(*p, ack_req);
 		delete *p;
 		*p = nullptr;
 	}
@@ -100,6 +121,11 @@ EQApplicationPacket *NullStream::PopPacket()
 			return nullptr;
 		case Step::Done:
 		default:
+			if (!m_inbound.empty()) {
+				auto *app = m_inbound.front();
+				m_inbound.pop_front();
+				return app; // Client::Process deletes it
+			}
 			return nullptr;
 	}
 }

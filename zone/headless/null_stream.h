@@ -19,14 +19,17 @@
 
 #include "common/eq_stream_intf.h"
 
+#include <deque>
 #include <string>
 
 class Client;
 
-// The "connection" of a headless character. There is no network: outgoing packets are
-// dropped, and PopPacket() replays a real RoF2 client's zone-in handshake (ZoneEntry,
-// ReqClientSpawn, WorldObjectsSent, ClientReady) one packet per Client::Process() tick,
-// so every zone-in handler runs unchanged. Owned and deleted by its Client.
+// The "connection" of a headless character. There is no network. PopPacket() first replays a
+// real RoF2 client's zone-in handshake (ZoneEntry, ReqClientSpawn, WorldObjectsSent,
+// ClientReady) one packet per Client::Process() tick, so every zone-in handler runs unchanged;
+// after that it hands out packets injected for SDK commands. Once in the zone, outgoing packets
+// are shown to HeadlessClientManager (events, the client's half of exchanges such as targeting)
+// and then dropped. Owned and deleted by its Client.
 class NullStream : public EQStreamInterface {
 public:
 	NullStream(const std::string &session_id, const std::string &character);
@@ -38,7 +41,10 @@ public:
 	const std::string &SessionID() const { return m_session_id; }
 	bool SpawnReported() const { return m_step == Step::Done; }
 
-	void QueuePacket(const EQApplicationPacket *p, bool ack_req = true) override {}
+	// queue a packet "from the client"; takes ownership
+	void Inject(EQApplicationPacket *app);
+
+	void QueuePacket(const EQApplicationPacket *p, bool ack_req = true) override;
 	void FastQueuePacket(EQApplicationPacket **p, bool ack_req = true) override;
 	EQApplicationPacket *PopPacket() override;
 	void Close() override { m_state = CLOSED; }
@@ -75,4 +81,6 @@ private:
 	EQStreamState m_state   = ESTABLISHED;
 	Step          m_step    = Step::ZoneEntry;
 	bool          m_yield   = false; // one handshake packet per Process() tick
+
+	std::deque<EQApplicationPacket *> m_inbound; // injected command packets
 };

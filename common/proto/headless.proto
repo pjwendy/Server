@@ -52,11 +52,86 @@ message Refused {
   string        detail = 2; // human-readable
 }
 
+// ---- commands (M2.2) ----
+//
+// Commands are carried out the way a real client would ask for them: the server builds the
+// packet a client would send and its normal handler runs, with all its checks. A CommandResult
+// with ok=true means "accepted"; the outcome shows up in state (e.g. Self.target_id) and events
+// (e.g. "You cannot see your target.").
+
+// EQ chat channel numbers
+enum ChatChannel {
+  CHAT_GUILD     = 0;
+  CHAT_GROUP     = 2;
+  CHAT_SHOUT     = 3;
+  CHAT_AUCTION   = 4;
+  CHAT_OOC       = 5;
+  CHAT_BROADCAST = 6;
+  CHAT_TELL      = 7;
+  CHAT_SAY       = 8;
+  CHAT_GMSAY     = 11;
+  CHAT_TELL_ECHO = 14;
+  CHAT_RAID      = 15;
+}
+
+message TargetCommand { uint32 spawn_id = 1; }         // 0 clears the target
+message AttackCommand { bool on = 1; }                 // auto-attack
+message ChatCommand {
+  ChatChannel channel = 1;
+  string      text    = 2;  // in say, "#..." are GM commands and "^..." bot commands, as for players
+  string      to      = 3;  // tell recipient
+}
+message SitCommand    { bool sit = 1; }                // false stands up
+
+message Command {
+  uint32 id = 1; // echoed in CommandResult
+  oneof action {
+    TargetCommand target = 2;
+    AttackCommand attack = 3;
+    ChatCommand   chat   = 4;
+    SitCommand    sit    = 5;
+  }
+}
+
+message CommandResult {
+  uint32 id    = 1;
+  bool   ok    = 2;
+  string error = 3;
+}
+
+// ---- events (M2.2) ----
+
+message ChatMessage {
+  ChatChannel channel  = 1;
+  string      from     = 2;
+  string      to       = 3; // set for tells
+  string      text     = 4;
+  uint32      language = 5;
+}
+
+// A line of game text. The server sends either plain text (text set) or a client string id
+// with arguments (string_id set), which the client looks up in eqstr_us.txt.
+message ServerMessage {
+  uint32          type       = 1; // chat colour / message type
+  string          text       = 2;
+  uint32          speak_mode = 3; // 0 raw, 1 say, 2 shout, 3 emote-alt, 4 emote, 5 group
+  string          sayer      = 4;
+  uint32          string_id  = 5;
+  repeated string args       = 6;
+}
+
+message GameEvent {
+  oneof event {
+    ChatMessage   chat    = 1;
+    ServerMessage message = 2;
+  }
+}
+
 // client -> server
 message ClientFrame {
   oneof payload {
-    Hello hello = 1;
-    // Command command = 2;   (M2)
+    Hello   hello   = 1;
+    Command command = 2;
   }
 }
 
@@ -138,7 +213,8 @@ message ServerFrame {
     Welcome    welcome  = 1;
     Refused    refused  = 2;
     Snapshot   snapshot = 3;
-    StateDelta delta    = 4;
-    // GameEvent event = 5; CommandResult result = 6;  (M2.2)
+    StateDelta    delta    = 4;
+    GameEvent     event    = 5;
+    CommandResult result   = 6;
   }
 }

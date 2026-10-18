@@ -32,6 +32,7 @@
 
 #include "fmt/format.h"
 
+#include <algorithm>
 #include <chrono>
 
 namespace {
@@ -222,8 +223,61 @@ void HeadlessGateway::HandleFrame(Session *s, const eqheadless::ClientFrame &fra
 		return;
 	}
 
-	// commands arrive in M2; until then anything after Hello is ignored
-	LogHeadlessClientDetail("Ignoring frame on [{}]: commands are not implemented yet", s->id);
+	if (frame.payload_case() == eqheadless::ClientFrame::kCommand && s->phase == Phase::InGame) {
+		ForwardCommand(s, frame.command());
+		return;
+	}
+
+	LogHeadlessClientDetail("Ignoring frame on [{}] in phase [{}]", s->id, static_cast<int>(s->phase));
+}
+
+bool HeadlessGateway::TakeRateToken(Session *s)
+{
+	const double limit = std::max(1, RuleI(HeadlessClients, CommandRateLimit));
+	const uint64 now   = NowMs();
+
+	if (s->rate_tokens < 0) {
+		s->rate_tokens    = limit;
+		s->rate_refill_ms = now;
+	}
+
+	s->rate_tokens    = std::min(limit, s->rate_tokens + (now - s->rate_refill_ms) * limit / 1000.0);
+	s->rate_refill_ms = now;
+
+	if (s->rate_tokens < 1.0) {
+		return false;
+	}
+
+	s->rate_tokens -= 1.0;
+	return true;
+}
+
+void HeadlessGateway::ForwardCommand(Session *s, const eqheadless::Command &cmd)
+{
+	if (!TakeRateToken(s)) {
+		eqheadless::ServerFrame frame;
+		auto *r = frame.mutable_result();
+		r->set_id(cmd.id());
+		r->set_ok(false);
+		r->set_error(fmt::format("rate limited (HeadlessClients:CommandRateLimit is {}/s)", RuleI(HeadlessClients, CommandRateLimit)));
+		Send(s, frame);
+		return;
+	}
+
+	auto *zs = ZSList::Instance()->FindByID(s->zone_server_id);
+	if (!zs) {
+		return; // OnTick closes sessions whose zone went away
+	}
+
+	std::string body;
+	cmd.SerializeToString(&body);
+
+	auto pack = std::make_unique<ServerPacket>(ServerOP_HeadlessCommand, sizeof(ServerHeadlessFrame_Struct) + body.size());
+	auto *f = reinterpret_cast<ServerHeadlessFrame_Struct *>(pack->pBuffer);
+	strn0cpy(f->session_id, s->id.c_str(), sizeof(f->session_id));
+	f->length = static_cast<uint32>(body.size());
+	memcpy(f->data, body.data(), body.size());
+	zs->SendPacket(pack.get());
 }
 
 void HeadlessGateway::HandleHello(Session *s, const eqheadless::Hello &hello)

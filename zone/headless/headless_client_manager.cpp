@@ -17,6 +17,8 @@
 */
 #include "zone/headless/headless_client_manager.h"
 
+#include "common/eq_constants.h"
+#include "common/eq_packet_structs.h"
 #include "common/eqemu_logsys.h"
 #include "common/servertalk.h"
 #include "common/strings.h"
@@ -108,11 +110,206 @@ void HeadlessClientManager::HandleDespawn(ServerPacket *pack)
 		return;
 	}
 
-	// the stream now reports not-established, so Client::Process() runs the normal
-	// linkdead/logout path, which saves the character and removes it from the zone
+	// log out now rather than standing linkdead for Zone:ClientLinkdeadMS: a kicked client is
+	// saved and removed on its next Process() (client_process.cpp, CLIENT_KICKED)
 	LogHeadlessClient("Session [{}] ended; logging its character out", it->first);
 	it->second.publish_timer.reset();
-	it->second.stream->Close();
+	if (auto *me = it->second.stream->GetClient()) {
+		me->Kick("headless session ended");
+	}
+	else {
+		it->second.stream->Close();
+	}
+}
+
+void HeadlessClientManager::HandleCommand(ServerPacket *pack)
+{
+	if (pack->size < sizeof(ServerHeadlessFrame_Struct)) {
+		return;
+	}
+
+	auto *f = reinterpret_cast<ServerHeadlessFrame_Struct *>(pack->pBuffer);
+	if (sizeof(ServerHeadlessFrame_Struct) + f->length > pack->size) {
+		return;
+	}
+
+	const std::string session_id = SessionID(f->session_id, sizeof(f->session_id));
+	auto it = m_sessions.find(session_id);
+	if (it == m_sessions.end() || !it->second.stream) {
+		return;
+	}
+
+	eqheadless::Command cmd;
+	if (!cmd.ParseFromArray(f->data, static_cast<int>(f->length))) {
+		SendResult(session_id, 0, "malformed command");
+		return;
+	}
+
+	Client *me = it->second.stream->GetClient();
+	if (!me || !me->Connected()) {
+		SendResult(session_id, cmd.id(), "character is not in the zone");
+		return;
+	}
+
+	SendResult(session_id, cmd.id(), Execute(it->second.stream, me, cmd));
+}
+
+std::string HeadlessClientManager::Execute(NullStream *stream, Client *me, const eqheadless::Command &cmd)
+{
+	switch (cmd.action_case()) {
+		case eqheadless::Command::kTarget: {
+			const uint32 id = cmd.target().spawn_id();
+			if (id != 0 && !entity_list.GetMob(id)) {
+				return fmt::format("no spawn with id {}", id);
+			}
+
+			// a real client sends OP_TargetCommand and, when the server echoes it back,
+			// OP_TargetMouse (OnOutgoing does that half). Clearing goes straight to TargetMouse.
+			auto app = new EQApplicationPacket(id ? OP_TargetCommand : OP_TargetMouse, sizeof(ClientTarget_Struct));
+			reinterpret_cast<ClientTarget_Struct *>(app->pBuffer)->new_target = id;
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kAttack: {
+			auto app = new EQApplicationPacket(OP_AutoAttack, 4);
+			app->pBuffer[0] = cmd.attack().on() ? 1 : 0;
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kChat: {
+			const auto &chat = cmd.chat();
+			if (chat.text().empty()) {
+				return "empty message";
+			}
+			if (chat.text().size() > 512) {
+				return "message longer than 512 characters";
+			}
+			if (chat.channel() == eqheadless::CHAT_TELL && chat.to().empty()) {
+				return "a tell needs a recipient";
+			}
+
+			auto app = new EQApplicationPacket(OP_ChannelMessage, sizeof(ChannelMessage_Struct) + chat.text().size() + 1);
+			auto *cm = reinterpret_cast<ChannelMessage_Struct *>(app->pBuffer);
+			strn0cpy(cm->targetname, chat.to().c_str(), sizeof(cm->targetname));
+			strn0cpy(cm->sender, me->GetName(), sizeof(cm->sender));
+			cm->language          = Language::CommonTongue;
+			cm->chan_num          = static_cast<uint32>(chat.channel());
+			cm->skill_in_language = Language::MaxValue;
+			memcpy(cm->message, chat.text().c_str(), chat.text().size() + 1);
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kSit: {
+			auto app = new EQApplicationPacket(OP_SpawnAppearance, sizeof(SpawnAppearance_Struct));
+			auto *sa = reinterpret_cast<SpawnAppearance_Struct *>(app->pBuffer);
+			sa->spawn_id  = me->GetID();
+			sa->type      = AppearanceType::Animation;
+			sa->parameter = cmd.sit().sit() ? Animation::Sitting : Animation::Standing;
+			stream->Inject(app);
+			return "";
+		}
+		default:
+			return "unknown command";
+	}
+}
+
+void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQApplicationPacket *app)
+{
+	auto it = m_sessions.find(session_id);
+	if (it == m_sessions.end() || !it->second.stream) {
+		return;
+	}
+
+	eqheadless::ServerFrame frame;
+
+	switch (app->GetOpcode()) {
+		case OP_TargetCommand: {
+			// the server approved our target: the client's half is to select it (OP_TargetMouse)
+			if (app->size == sizeof(ClientTarget_Struct)) {
+				auto mouse = new EQApplicationPacket(OP_TargetMouse, sizeof(ClientTarget_Struct));
+				memcpy(mouse->pBuffer, app->pBuffer, sizeof(ClientTarget_Struct));
+				it->second.stream->Inject(mouse);
+			}
+			return;
+		}
+		case OP_ChannelMessage: {
+			if (app->size < sizeof(ChannelMessage_Struct)) {
+				return;
+			}
+			auto *cm   = reinterpret_cast<const ChannelMessage_Struct *>(app->pBuffer);
+			auto *chat = frame.mutable_event()->mutable_chat();
+			chat->set_channel(static_cast<eqheadless::ChatChannel>(cm->chan_num));
+			chat->set_from(std::string(cm->sender, strnlen(cm->sender, sizeof(cm->sender))));
+			chat->set_to(std::string(cm->targetname, strnlen(cm->targetname, sizeof(cm->targetname))));
+			chat->set_text(std::string(cm->message, strnlen(cm->message, app->size - sizeof(ChannelMessage_Struct))));
+			chat->set_language(cm->language);
+			break;
+		}
+		case OP_SpecialMesg: {
+			// speak mode, journal mode, language, type, target, sayer\0, 3 x int32, message\0
+			const size_t header = 3 + 4 + 4;
+			if (app->size <= header) {
+				return;
+			}
+			const char *p   = reinterpret_cast<const char *>(app->pBuffer);
+			const char *end = p + app->size;
+			auto *msg = frame.mutable_event()->mutable_message();
+			msg->set_speak_mode(static_cast<uint8>(p[0]));
+			uint32 type;
+			memcpy(&type, p + 3, sizeof(type));
+			msg->set_type(type);
+			const char *sayer = p + header;
+			const size_t sayer_len = strnlen(sayer, end - sayer);
+			msg->set_sayer(std::string(sayer, sayer_len));
+			const char *text = sayer + sayer_len + 1 + 12;
+			if (text < end) {
+				msg->set_text(std::string(text, strnlen(text, end - text)));
+			}
+			break;
+		}
+		case OP_FormattedMessage: {
+			if (app->size < sizeof(FormattedMessage_Struct)) {
+				return;
+			}
+			auto *fm  = reinterpret_cast<const FormattedMessage_Struct *>(app->pBuffer);
+			auto *msg = frame.mutable_event()->mutable_message();
+			msg->set_string_id(fm->string_id);
+			msg->set_type(fm->type);
+			// arguments are \0-separated, ending with an extra \0
+			const char *a   = fm->message;
+			const char *end = reinterpret_cast<const char *>(app->pBuffer) + app->size;
+			while (a < end && *a) {
+				const size_t n = strnlen(a, end - a);
+				msg->add_args(std::string(a, n));
+				a += n + 1;
+			}
+			break;
+		}
+		case OP_SimpleMessage: {
+			if (app->size < sizeof(SimpleMessage_Struct)) {
+				return;
+			}
+			auto *sm  = reinterpret_cast<const SimpleMessage_Struct *>(app->pBuffer);
+			auto *msg = frame.mutable_event()->mutable_message();
+			msg->set_string_id(sm->string_id);
+			msg->set_type(sm->color);
+			break;
+		}
+		default:
+			return;
+	}
+
+	SendFrame(session_id, frame);
+}
+
+void HeadlessClientManager::SendResult(const std::string &session_id, uint32 command_id, const std::string &error)
+{
+	eqheadless::ServerFrame frame;
+	auto *r = frame.mutable_result();
+	r->set_id(command_id);
+	r->set_ok(error.empty());
+	r->set_error(error);
+	SendFrame(session_id, frame);
 }
 
 void HeadlessClientManager::ReportSpawned(const std::string &session_id, uint32 spawn_id)
