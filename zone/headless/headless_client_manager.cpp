@@ -22,6 +22,7 @@
 #include "common/eqemu_logsys.h"
 #include "common/rulesys.h"
 #include "common/servertalk.h"
+#include "common/spdat.h"
 #include "common/strings.h"
 #include "common/timer.h"
 #include "common/zone_store.h"
@@ -33,6 +34,7 @@
 #include "zone/headless/null_stream.h"
 #include "zone/worldserver.h"
 #include "zone/zone.h"
+#include "zone/zonedb.h"
 
 #include "headless.pb.h"
 
@@ -48,6 +50,42 @@ namespace {
 	constexpr uint64 MOVEMENT_HISTORY_MS = 1000;
 	// smaller position changes aren't worth a delta
 	constexpr float  MOVE_EPSILON        = 0.25f;
+	// the client takes a few seconds to memorise a spell (an approximation; it varies a little)
+	constexpr uint32 MEMORIZE_MS         = 3000;
+
+	uint64 NowMs()
+	{
+		return Timer::GetCurrentTime();
+	}
+
+	std::string SpellName(uint32 spell_id)
+	{
+		return IsValidSpell(spell_id) ? spells[spell_id].name : "";
+	}
+
+	EQApplicationPacket *StandUp(Client *me)
+	{
+		auto app = new EQApplicationPacket(OP_SpawnAppearance, sizeof(SpawnAppearance_Struct));
+		auto *sa = reinterpret_cast<SpawnAppearance_Struct *>(app->pBuffer);
+		sa->spawn_id  = me->GetID();
+		sa->type      = AppearanceType::Animation;
+		sa->parameter = Animation::Standing;
+		return app;
+	}
+
+	EQApplicationPacket *SitDown(Client *me)
+	{
+		auto app = StandUp(me);
+		reinterpret_cast<SpawnAppearance_Struct *>(app->pBuffer)->parameter = Animation::Sitting;
+		return app;
+	}
+
+	EQApplicationPacket *Uint32Packet(EmuOpcode op, uint32 value)
+	{
+		auto app = new EQApplicationPacket(op, sizeof(uint32));
+		memcpy(app->pBuffer, &value, sizeof(uint32));
+		return app;
+	}
 
 	eqheadless::SpawnType SpawnTypeOf(Mob *mob)
 	{
@@ -325,6 +363,142 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			}
 			return session.mover->Face(glm::vec3(mob->GetX(), mob->GetY(), mob->GetZ()));
 		}
+		case eqheadless::Command::kCast: {
+			const uint32 gem = cmd.cast().gem();
+			if (gem >= EQ::spells::SPELL_GEM_COUNT) {
+				return fmt::format("gem must be 0-{}", EQ::spells::SPELL_GEM_COUNT - 1);
+			}
+			const uint32 spell_id = me->GetPP().mem_spells[gem];
+			if (!IsValidSpell(spell_id)) {
+				return fmt::format("gem {} is empty", gem + 1);
+			}
+			if (cmd.cast().spell_id() && cmd.cast().spell_id() != spell_id) {
+				return fmt::format("gem {} holds {}, not spell {}", gem + 1, SpellName(spell_id), cmd.cast().spell_id());
+			}
+			if (me->IsCasting()) {
+				return "already casting";
+			}
+			const uint64 now = NowMs();
+			if (now < session.mem_until_ms) {
+				return "still memorising";
+			}
+			if (now < session.gem_ready_ms[gem]) {
+				return fmt::format("{} is not ready yet", SpellName(spell_id));
+			}
+
+			// a player stops to cast, and standing up is part of casting
+			if (session.mover && session.mover->Moving()) {
+				session.mover->Stop(HeadlessMover::Result::Stopped);
+			}
+			if (me->IsSitting()) {
+				stream->Inject(StandUp(me));
+			}
+
+			Mob  *target = me->GetTarget();
+			auto app    = new EQApplicationPacket(OP_CastSpell, sizeof(CastSpell_Struct));
+			auto *cs    = reinterpret_cast<CastSpell_Struct *>(app->pBuffer);
+			cs->slot          = gem;
+			cs->spell_id      = spell_id;
+			cs->inventoryslot = 0xFFFF;
+			cs->target_id     = target ? target->GetID() : me->GetID();
+			stream->Inject(app);
+
+			// the client's gem refresh: every gem waits out the recovery time, this one its recast too
+			const auto &sp = spells[spell_id];
+			for (auto &ready : session.gem_ready_ms) {
+				ready = std::max<uint64>(ready, now + sp.cast_time + sp.recovery_time);
+			}
+			session.gem_ready_ms[gem] = std::max<uint64>(session.gem_ready_ms[gem], now + sp.cast_time + std::max(sp.recovery_time, sp.recast_time));
+			return "";
+		}
+		case eqheadless::Command::kStopCast: {
+			if (!me->IsCasting()) {
+				return "not casting";
+			}
+			stream->Inject(new EQApplicationPacket(OP_ManaChange, 0)); // the client's "stop casting"
+			return "";
+		}
+		case eqheadless::Command::kMemorize: {
+			const uint32 gem      = cmd.memorize().gem();
+			const uint32 spell_id = cmd.memorize().spell_id();
+			if (gem >= EQ::spells::SPELL_GEM_COUNT) {
+				return fmt::format("gem must be 0-{}", EQ::spells::SPELL_GEM_COUNT - 1);
+			}
+			const uint64 now = NowMs();
+			if (now < session.mem_until_ms) {
+				return "already memorising";
+			}
+			if (me->IsCasting()) {
+				return "can't memorise while casting";
+			}
+
+			auto make = [me, gem](uint32 id, uint32 how) {
+				auto app = new EQApplicationPacket(OP_MemorizeSpell, sizeof(MemorizeSpell_Struct));
+				auto *ms = reinterpret_cast<MemorizeSpell_Struct *>(app->pBuffer);
+				ms->slot     = gem;
+				ms->spell_id = id;
+				ms->scribing = how;
+				return app;
+			};
+
+			if (spell_id == 0) {
+				const uint32 current = me->GetPP().mem_spells[gem];
+				if (!IsValidSpell(current)) {
+					return fmt::format("gem {} is already empty", gem + 1);
+				}
+				stream->Inject(make(current, memSpellForget));
+				return "";
+			}
+			if (!IsValidSpell(spell_id) || !me->HasSpellScribed(spell_id)) {
+				return fmt::format("spell {} is not in your spellbook", spell_id);
+			}
+
+			// the client sits to memorise and takes a few seconds over it
+			if (session.mover && session.mover->Moving()) {
+				session.mover->Stop(HeadlessMover::Result::Stopped);
+			}
+			if (!me->IsSitting()) {
+				stream->Inject(SitDown(me));
+			}
+			session.mem_until_ms = now + MEMORIZE_MS;
+			session.mem_timer    = std::make_unique<EQ::Timer>(
+				MEMORIZE_MS, false, [this, session_id, make, spell_id](EQ::Timer *) {
+					auto s = m_sessions.find(session_id);
+					if (s != m_sessions.end() && s->second.stream && s->second.stream->GetClient()) {
+						s->second.stream->Inject(make(spell_id, memSpellMemorize));
+					}
+				}
+			);
+			return "";
+		}
+		case eqheadless::Command::kConsider: {
+			Mob *mob = entity_list.GetMob(cmd.consider().spawn_id());
+			if (!mob) {
+				return fmt::format("no spawn with id {}", cmd.consider().spawn_id());
+			}
+			auto app = new EQApplicationPacket(OP_Consider, sizeof(Consider_Struct));
+			auto *c  = reinterpret_cast<Consider_Struct *>(app->pBuffer);
+			c->playerid = me->GetID();
+			c->targetid = mob->GetID();
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kLoot: {
+			const uint32 id = cmd.loot().corpse_id();
+			Entity *e = entity_list.GetID(id);
+			if (!e || !e->IsCorpse()) {
+				return fmt::format("no corpse with id {}", id);
+			}
+			if (session.loot_corpse) {
+				return "already looting";
+			}
+			// as the client: open the corpse, and once the server has listed its items (it echoes
+			// the request back), loot them all and close it (OnOutgoing does that half)
+			session.loot_corpse = id;
+			std::fill(std::begin(session.loot_coin), std::end(session.loot_coin), 0);
+			stream->Inject(Uint32Packet(OP_LootRequest, id));
+			return "";
+		}
 		case eqheadless::Command::kDisband: {
 			if (!me->GetGroup() && !me->GetRaid()) {
 				return "not in a group";
@@ -401,6 +575,40 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			it->second.stream->Inject(zc_app);
 			return;
 		}
+		case OP_ZonePlayerToBind: {
+			// death (or a respawn choice): the client answers like any zone request, asking for the
+			// bind zone (0 means this zone; the server works it out from its zone mode)
+			if (app->size < sizeof(ZonePlayerToBind_Struct)) {
+				return;
+			}
+			auto   *bind = reinterpret_cast<const ZonePlayerToBind_Struct *>(app->pBuffer);
+			Client *me   = it->second.stream->GetClient();
+			if (!me) {
+				return;
+			}
+			if (bind->bind_zone_id && bind->bind_zone_id != zone->GetZoneID()) {
+				const std::string refusal = ZoneRefusal(ShortName(bind->bind_zone_id));
+				if (!refusal.empty()) {
+					SendZoneEvent(session_id, eqheadless::ZONE_REFUSED, bind->bind_zone_id, refusal);
+					return;
+				}
+			}
+			if (it->second.mover) {
+				it->second.mover->Stop(HeadlessMover::Result::Stopped);
+			}
+
+			auto zc_app = new EQApplicationPacket(OP_ZoneChange, sizeof(ZoneChange_Struct));
+			auto *zc    = reinterpret_cast<ZoneChange_Struct *>(zc_app->pBuffer);
+			strn0cpy(zc->char_name, me->GetName(), sizeof(zc->char_name));
+			zc->zoneID     = bind->bind_zone_id;
+			zc->instanceID = bind->bind_instance_id;
+			zc->x          = bind->x;
+			zc->y          = bind->y;
+			zc->z          = bind->z;
+			zc->success    = 0;
+			it->second.stream->Inject(zc_app);
+			return;
+		}
 		case OP_ZoneChange: {
 			// the server's answer to our OP_ZoneChange. On success a real client disconnects and
 			// re-enters through world; we close, and world spawns us in the new zone.
@@ -418,6 +626,113 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			it->second.publish_timer.reset();
 			SendZoneEvent(session_id, eqheadless::ZONE_LEAVING, zc->zoneID, "");
 			it->second.stream->Close(); // Client::Process sees it with bZoning set: "left the zone", not linkdead
+			return;
+		}
+		case OP_Consider: {
+			if (app->size < sizeof(Consider_Struct)) {
+				return;
+			}
+			auto *c   = reinterpret_cast<const Consider_Struct *>(app->pBuffer);
+			auto *con = frame.mutable_event()->mutable_consider();
+			con->set_spawn_id(c->targetid);
+			con->set_color(c->level); // GetLevelCon(): a ConsiderColor
+			con->set_faction(c->faction);
+			con->set_hp(c->cur_hp);
+			con->set_max_hp(c->max_hp);
+			break;
+		}
+		case OP_MoneyOnCorpse: {
+			Session &session = it->second;
+			if (!session.loot_corpse || app->size < sizeof(moneyOnCorpseStruct)) {
+				return;
+			}
+			auto *m = reinterpret_cast<const moneyOnCorpseStruct *>(app->pBuffer);
+			switch (static_cast<LootResponse>(m->response)) {
+				case LootResponse::Normal:
+				case LootResponse::Normal2:
+					session.loot_coin[0] = m->platinum;
+					session.loot_coin[1] = m->gold;
+					session.loot_coin[2] = m->silver;
+					session.loot_coin[3] = m->copper;
+					return; // the item list and the echoed request follow
+				case LootResponse::LootAll:
+					return;
+				default: {
+					static const char *reasons[] = {"someone else is looting it", "", "you can't loot it right now", "", "you can't loot with hostiles nearby", "you're too far away"};
+					auto *loot = frame.mutable_event()->mutable_loot();
+					loot->set_corpse_id(session.loot_corpse);
+					loot->set_ok(false);
+					loot->set_error(m->response < 6 ? reasons[m->response] : "loot refused");
+					session.loot_corpse = 0;
+					break;
+				}
+			}
+			break;
+		}
+		case OP_LootRequest: {
+			// the server's echo: the corpse's items now have loot slots
+			Session &session = it->second;
+			Client  *me      = session.stream->GetClient();
+			if (!me || !session.loot_corpse || app->size != sizeof(uint32)) {
+				return;
+			}
+			uint32 id;
+			memcpy(&id, app->pBuffer, sizeof(id));
+			if (id != session.loot_corpse) {
+				return;
+			}
+			auto *loot = frame.mutable_event()->mutable_loot();
+			loot->set_corpse_id(id);
+			loot->set_ok(true);
+			loot->set_platinum(session.loot_coin[0]);
+			loot->set_gold(session.loot_coin[1]);
+			loot->set_silver(session.loot_coin[2]);
+			loot->set_copper(session.loot_coin[3]);
+
+			Entity *e = entity_list.GetID(id);
+			if (e && e->IsCorpse()) {
+				for (const auto *item : e->CastToCorpse()->GetLootItems()) {
+					if (!item || item->lootslot < EQ::invslot::CORPSE_BEGIN || item->lootslot > EQ::invslot::CORPSE_END) {
+						continue;
+					}
+					auto li = new EQApplicationPacket(OP_LootItem, sizeof(LootingItem_Struct));
+					auto *l = reinterpret_cast<LootingItem_Struct *>(li->pBuffer);
+					l->lootee    = id;
+					l->looter    = me->GetID();
+					l->slot_id   = item->lootslot;
+					l->auto_loot = 1;
+					session.stream->Inject(li);
+					const auto *data = database.GetItem(item->item_id);
+					loot->add_items(data ? data->Name : fmt::format("item {}", item->item_id));
+				}
+			}
+			session.stream->Inject(Uint32Packet(OP_EndLootRequest, id));
+			session.loot_corpse = 0;
+			break;
+		}
+		case OP_Death: {
+			Client *me = it->second.stream->GetClient();
+			if (!me || app->size < sizeof(Death_Struct)) {
+				return;
+			}
+			auto *d = reinterpret_cast<const Death_Struct *>(app->pBuffer);
+			if (d->spawn_id != me->GetID()) {
+				return; // someone else died
+			}
+			auto *death = frame.mutable_event()->mutable_death();
+			Mob  *killer = entity_list.GetMob(d->killer_id);
+			death->set_killer(killer ? killer->GetCleanName() : "");
+			death->set_corpse_id(d->corpseid);
+			death->set_spell_id(IsValidSpell(d->spell_id) ? d->spell_id : 0);
+			death->set_damage(d->damage);
+			it->second.loot_corpse = 0;
+			break;
+		}
+		case OP_RespawnWindow: {
+			// Character:RespawnFromHover: the client picks where to respawn; we take our bind point
+			if (app->size > sizeof(uint32)) {
+				it->second.stream->Inject(Uint32Packet(OP_RespawnWindow, 0));
+			}
 			return;
 		}
 		case OP_ChannelMessage: {
@@ -614,6 +929,7 @@ void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob)
 		out->set_owner_id(mob->GetOwnerID());
 	}
 	out->set_headless(IsHeadless(mob));
+	out->set_target_id(mob->GetTarget() ? mob->GetTarget()->GetID() : 0);
 }
 
 void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot)
@@ -651,6 +967,38 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 	self->set_sitting(me->IsSitting());
 	self->set_auto_attack(me->AutoAttackEnabled());
 	self->set_casting_spell_id(me->IsCasting() ? me->CastingSpellID() : 0);
+	const uint64 now = NowMs();
+	for (int i = 0; i < EQ::spells::SPELL_GEM_COUNT; ++i) {
+		const uint32 id = me->GetPP().mem_spells[i];
+		if (!IsValidSpell(id)) {
+			continue;
+		}
+		auto *gem = self->add_gems();
+		gem->set_slot(i);
+		gem->set_spell_id(id);
+		gem->set_name(SpellName(id));
+		gem->set_ready(now >= session.gem_ready_ms[i] && now >= session.mem_until_ms && !me->IsCasting());
+	}
+	if (Buffs_Struct *buffs = me->GetBuffs()) {
+		for (int i = 0; i < me->GetMaxTotalSlots(); ++i) {
+			if (!IsValidSpell(buffs[i].spellid)) {
+				continue;
+			}
+			auto *buff = self->add_buffs();
+			buff->set_spell_id(buffs[i].spellid);
+			buff->set_name(SpellName(buffs[i].spellid));
+			buff->set_ticks(buffs[i].ticsremaining);
+		}
+	}
+	for (auto &[id, mob] : entity_list.GetMobList()) {
+		if (mob && mob->IsNPC() && !mob->IsCorpse() && mob->CastToNPC()->IsOnHatelist(me)) {
+			self->add_haters(id);
+		}
+	}
+	self->set_platinum(me->GetPP().platinum);
+	self->set_gold(me->GetPP().gold);
+	self->set_silver(me->GetPP().silver);
+	self->set_copper(me->GetPP().copper);
 	if (Group *group = me->GetGroup()) {
 		for (int i = 0; i < MAX_GROUP_MEMBERS; ++i) {
 			if (!group->membername[i][0]) {
@@ -678,6 +1026,58 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 	std::unordered_set<uint32> present;
 	bool changed = snapshot;
 
+	// spellbook and inventory change rarely: send them only when they do
+	eqheadless::SpellBook book;
+	for (int i = 0; i < EQ::spells::SPELLBOOK_SIZE; ++i) {
+		const uint32 id = me->GetSpellIDByBookSlot(i);
+		if (!IsValidSpell(id)) {
+			continue;
+		}
+		auto *spell = book.add_spells();
+		spell->set_spell_id(id);
+		spell->set_name(SpellName(id));
+		spell->set_level(IsPlayerClass(me->GetClass()) ? spells[id].classes[me->GetClass() - 1] : 0);
+	}
+	std::string book_bytes;
+	book.SerializeToString(&book_bytes);
+	if (snapshot || book_bytes != session.last_book) {
+		(snapshot ? frame.mutable_snapshot()->mutable_book() : frame.mutable_delta()->mutable_book())->Swap(&book);
+		session.last_book = std::move(book_bytes);
+		changed = true;
+	}
+
+	eqheadless::Inventory inventory;
+	auto add_item = [&inventory](int16 slot, const EQ::ItemInstance *inst) {
+		auto *item = inventory.add_items();
+		item->set_slot(slot);
+		item->set_item_id(inst->GetID());
+		item->set_name(inst->GetItem()->Name);
+		item->set_charges(inst->GetCharges());
+		item->set_container(inst->IsClassBag());
+	};
+	for (int16 slot = EQ::invslot::POSSESSIONS_BEGIN; slot <= EQ::invslot::POSSESSIONS_END; ++slot) {
+		const EQ::ItemInstance *inst = me->GetInv().GetItem(slot);
+		if (!inst || !inst->GetItem()) {
+			continue;
+		}
+		add_item(slot, inst);
+		if (inst->IsClassBag()) {
+			for (uint8 sub = 0; sub < EQ::invbag::SLOT_COUNT; ++sub) {
+				const EQ::ItemInstance *in_bag = inst->GetItem(sub);
+				if (in_bag && in_bag->GetItem()) {
+					add_item(EQ::InventoryProfile::CalcSlotId(slot, sub), in_bag);
+				}
+			}
+		}
+	}
+	std::string inventory_bytes;
+	inventory.SerializeToString(&inventory_bytes);
+	if (snapshot || inventory_bytes != session.last_inventory) {
+		(snapshot ? frame.mutable_snapshot()->mutable_inventory() : frame.mutable_delta()->mutable_inventory())->Swap(&inventory);
+		session.last_inventory = std::move(inventory_bytes);
+		changed = true;
+	}
+
 	for (auto &[id, mob] : entity_list.GetMobList()) {
 		if (!mob || mob == me) {
 			continue;
@@ -692,13 +1092,17 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			const SeenSpawn &s = seen->second;
 			if (std::fabs(s.x - mob->GetX()) < MOVE_EPSILON && std::fabs(s.y - mob->GetY()) < MOVE_EPSILON &&
 				std::fabs(s.z - mob->GetZ()) < MOVE_EPSILON && s.heading == mob->GetHeading() &&
-				s.hp_pct == hp_pct && s.level == mob->GetLevel() && s.name == mob->GetCleanName()) {
+				s.hp_pct == hp_pct && s.level == mob->GetLevel() && s.name == mob->GetCleanName() &&
+				s.target_id == (mob->GetTarget() ? mob->GetTarget()->GetID() : 0)) {
 				continue;
 			}
 		}
 
 		FillSpawn(snapshot ? frame.mutable_snapshot()->add_spawns() : frame.mutable_delta()->add_spawns_changed(), mob);
-		session.seen[id] = SeenSpawn{mob->GetX(), mob->GetY(), mob->GetZ(), mob->GetHeading(), hp_pct, mob->GetLevel(), mob->GetCleanName()};
+		session.seen[id] = SeenSpawn{
+			mob->GetX(), mob->GetY(), mob->GetZ(), mob->GetHeading(), hp_pct, mob->GetLevel(), mob->GetCleanName(),
+			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u
+		};
 		changed = true;
 	}
 

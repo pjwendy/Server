@@ -21,6 +21,7 @@
 #include "common/types.h"
 #include "zone/headless/headless_mover.h"
 
+#include <array>
 #include <map>
 #include <memory>
 #include <string>
@@ -70,6 +71,7 @@ private:
 		uint32 hp_pct;
 		uint32 level;
 		std::string name;
+		uint32 target_id;
 	};
 
 	struct Session {
@@ -82,6 +84,15 @@ private:
 		bool                                     zoning      = false; // the server let us go to zone_to
 		uint32                                   zone_to     = 0;
 		uint32                                   instance_to = 0;
+		// casting and memorising, as the client tracks them
+		std::array<uint64, 12>                   gem_ready_ms{};   // per gem: refreshing until
+		uint64                                   mem_until_ms = 0; // memorising until
+		std::unique_ptr<EQ::Timer>               mem_timer;
+		// looting: the corpse we asked to loot, and the coin it had
+		uint32                                   loot_corpse = 0;
+		uint32                                   loot_coin[4] = {};
+		std::string                              last_book;      // serialized SpellBook last sent
+		std::string                              last_inventory; // serialized Inventory last sent
 	};
 
 	// returns "" when accepted, otherwise why not

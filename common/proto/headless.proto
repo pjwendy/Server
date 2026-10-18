@@ -91,7 +91,16 @@ message StopCommand   {}
 // AllowGroupWithPlayers). Empty name invites the current target.
 message InviteCommand { string name = 1; }
 message FaceCommand   { uint32 spawn_id = 1; }         // turn to face a spawn (0: the target), as /face
-message DisbandCommand {}                              // leave the group, as /disband
+message DisbandCommand {}
+// cast the spell memorised in a gem (0-based) on your current target, or yourself with none. The
+// module enforces what the client does: not while casting, and each gem's refresh time.
+message CastCommand     { uint32 gem = 1; uint32 spell_id = 2; } // spell_id 0: whatever is in the gem
+message StopCastCommand {}                                          // interrupt your cast
+// memorise a spell from your book into a gem; as in the client you sit, and it takes a few seconds.
+// spell_id 0 forgets the gem.
+message MemorizeCommand { uint32 gem = 1; uint32 spell_id = 2; }
+message ConsiderCommand { uint32 spawn_id = 1; }                    // the answer is a ConsiderEvent
+message LootCommand     { uint32 corpse_id = 1; }                   // loot everything; answer: LootEvent                              // leave the group, as /disband
 
 message Command {
   uint32 id = 1; // echoed in CommandResult
@@ -105,6 +114,11 @@ message Command {
     InviteCommand invite  = 8;
     DisbandCommand disband = 9;
     FaceCommand   face    = 10;
+    CastCommand     cast      = 11;
+    StopCastCommand stop_cast = 12;
+    MemorizeCommand memorize  = 13;
+    ConsiderCommand consider  = 14;
+    LootCommand     loot      = 15;
   }
 }
 
@@ -163,12 +177,41 @@ message ZoneEvent {
   string     detail  = 4;
 }
 
+message ConsiderEvent {
+  uint32 spawn_id = 1;
+  uint32 color    = 2; // con colour: 2 green, 4 dark blue, 6 grey, 10 white, 13 red, 15 yellow, 18 light blue
+  uint32 faction  = 3; // 1 ally ... 5 indifferent ... 9 scowls
+  int32  hp       = 4;
+  int32  max_hp   = 5;
+}
+
+message LootEvent {
+  uint32          corpse_id = 1;
+  bool            ok        = 2;
+  string          error     = 3; // why not, when !ok
+  repeated string items     = 4; // what we tried to loot; game messages say what we got
+  uint32          platinum  = 5; // coin on the corpse (looted automatically)
+  uint32          gold      = 6;
+  uint32          silver    = 7;
+  uint32          copper    = 8;
+}
+
+message DeathEvent {
+  string killer    = 1;
+  uint32 corpse_id = 2;
+  uint32 spell_id  = 3; // 0 if not a spell
+  uint32 damage    = 4;
+}
+
 message GameEvent {
   oneof event {
-    ChatMessage   chat    = 1;
-    ServerMessage message = 2;
-    MoveEvent     move    = 3;
-    ZoneEvent     zone    = 4;
+    ChatMessage   chat     = 1;
+    ServerMessage message  = 2;
+    MoveEvent     move     = 3;
+    ZoneEvent     zone     = 4;
+    ConsiderEvent consider = 5;
+    LootEvent     loot     = 6;
+    DeathEvent    death    = 7; // ours; the server then sends us to our bind point (a zone change)
   }
 }
 
@@ -209,6 +252,7 @@ message Spawn {
   uint32    hp_pct     = 11; // 0-100
   uint32    owner_id   = 12; // pet / bot owner spawn id, 0 if none (bots: their owning character)
   bool      headless   = 13; // a headless (AI-controlled) character
+  uint32    target_id  = 14; // who it has targeted (for NPCs in combat: who it's hitting), 0 if none
 }
 
 message Self {
@@ -232,7 +276,45 @@ message Self {
   bool   auto_attack      = 18;
   uint32 casting_spell_id = 19; // 0 if not casting
   repeated GroupMember group = 20; // empty when not grouped; includes ourselves
+  repeated Gem    gems     = 21; // memorised spells
+  repeated Buff   buffs    = 22;
+  uint32          platinum = 23; // carried coin
+  uint32          gold     = 24;
+  uint32          silver   = 25;
+  uint32          copper   = 26;
+  repeated uint32 haters   = 27; // NPCs with us on their hate list: we're engaged while any are
 }
+
+message Gem {
+  uint32 slot     = 1; // 0-based
+  uint32 spell_id = 2;
+  string name     = 3;
+  bool   ready    = 4; // not refreshing
+}
+
+message Buff {
+  uint32 spell_id = 1;
+  string name     = 2;
+  int32  ticks    = 3; // 6s ticks left; -1 permanent
+}
+
+message BookSpell {
+  uint32 spell_id = 1;
+  string name     = 2;
+  uint32 level    = 3; // the level our class gets it
+}
+
+message SpellBook { repeated BookSpell spells = 1; }
+
+message Item {
+  int32  slot      = 1; // EQEmu inventory slot id
+  uint32 item_id   = 2;
+  string name      = 3;
+  int32  charges   = 4;
+  bool   container = 5;
+}
+
+message Inventory { repeated Item items = 1; }
 
 message GroupMember {
   string name     = 1;
@@ -252,12 +334,16 @@ message Snapshot {
   Self           me     = 1;
   ZoneInfo       zone   = 2;
   repeated Spawn spawns = 3; // everyone else in the zone
+  SpellBook      book      = 4;
+  Inventory      inventory = 5;
 }
 
 message StateDelta {
   Self            me             = 1; // always the full Self (small)
   repeated Spawn  spawns_changed = 2; // added or changed spawns, full records
   repeated uint32 spawns_removed = 3;
+  SpellBook       book           = 4; // only when it changed
+  Inventory       inventory      = 5; // only when it changed
 }
 
 // server -> client
