@@ -47,6 +47,9 @@
 #include "zone/titles.h"
 #include "zone/zone_config.h"
 #include "zone/zone.h"
+#ifdef EQEMU_HEADLESS
+#include "zone/headless/headless_client_manager.h"
+#endif
 
 #include <cstdarg>
 #include <cstdio>
@@ -646,6 +649,16 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 		}
 		break;
 	}
+#ifdef EQEMU_HEADLESS
+	case ServerOP_HeadlessSpawn: {
+		HeadlessClientManager::Instance()->HandleSpawn(pack);
+		break;
+	}
+	case ServerOP_HeadlessDespawn: {
+		HeadlessClientManager::Instance()->HandleDespawn(pack);
+		break;
+	}
+#endif
 	case ServerOP_DropClient: {
 		if (pack->size != sizeof(ServerZoneDropClient_Struct)) {
 			break;

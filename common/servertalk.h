@@ -294,6 +294,12 @@
 #define ServerOP_PlayerEvent 0x5100
 #define ServerOP_SendPlayerEventSettings 0x5101
 
+// headless clients (HeadlessClients:* rules)
+#define ServerOP_HeadlessSpawn   0x6400 // world -> zone: create a headless character (after ServerOP_ZoneIncClient)
+#define ServerOP_HeadlessSpawned 0x6401 // zone -> world: spawn finished or failed
+#define ServerOP_HeadlessDespawn 0x6402 // world -> zone: the controlling session ended
+#define ServerOP_HeadlessGone    0x6403 // zone -> world: the headless character left the zone
+
 enum {
 	CZUpdateType_Character,
 	CZUpdateType_Group,
@@ -486,6 +492,22 @@ struct ServerZoneIncomingClient_Struct {
 struct ServerZoneDropClient_Struct
 {
 	uint32 lsid;
+};
+
+struct ServerHeadlessSpawn_Struct {
+	char   session_id[40];
+	char   character[64];
+	uint32 character_id;
+};
+
+struct ServerHeadlessSpawned_Struct {
+	char   session_id[40];
+	uint32 spawn_id; // 0 on failure
+	char   error[128];
+};
+
+struct ServerHeadlessSession_Struct { // ServerOP_HeadlessDespawn / ServerOP_HeadlessGone
+	char session_id[40];
 };
 
 struct ServerChangeWID_Struct {

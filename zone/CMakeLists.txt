@@ -671,7 +671,22 @@ target_include_directories(gm_commands_zone PRIVATE ..)
 set_target_properties(gm_commands_zone PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE 32)
 set_property(TARGET gm_commands_zone PROPERTY FOLDER libraries)
 
+if(EQEMU_BUILD_HEADLESS)
+    list(APPEND zone_sources
+        headless/headless_client_manager.cpp
+        headless/null_stream.cpp
+    )
+    list(APPEND zone_headers
+        headless/headless_client_manager.h
+        headless/null_stream.h
+    )
+endif()
+
 add_executable(zone ${zone_sources} ${zone_headers})
+
+if(EQEMU_BUILD_HEADLESS)
+    target_compile_definitions(zone PRIVATE EQEMU_HEADLESS)
+endif()
 
 install(TARGETS zone RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 
