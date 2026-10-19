@@ -80,22 +80,10 @@ HeadlessMover::HeadlessMover(NullStream *stream, DoneCallback on_done)
 
 HeadlessMover::~HeadlessMover() = default;
 
-std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone_lines)
+bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destination, bool through_zone_lines)
 {
-	Client *me = m_stream->GetClient();
-	if (!me) {
-		return "character is not in the zone";
-	}
-
-	if (m_moving) {
-		Stop(Result::Stopped);
-	}
-
-	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
 	m_path.clear();
 	m_stop_at_end = false;
-	m_through     = through_zone_lines;
-
 	m_lift_phase = LiftPhase::None;
 	if (zone->pathing) {
 		bool partial = false;
@@ -144,17 +132,66 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 			if (short_of_it) {
 				LogHeadlessClient(
 					"[{}] no full route to [{:.1f}, {:.1f}, {:.1f}]: the nearest it gets is [{:.1f}, {:.1f}, {:.1f}]",
-					me->GetCleanName(), destination.x, destination.y, destination.z,
+					m_stream->GetClient() ? m_stream->GetClient()->GetCleanName() : "?", destination.x, destination.y, destination.z,
 					m_path.back().x, m_path.back().y, m_path.back().z
 				);
 			}
 			m_path.clear();
-			m_on_done(Result::NoPath, start);
-			return "";
+			return false;
 		}
 	}
 	else {
 		m_path.push_back(destination); // no navmesh: walk straight, following the floor
+	}
+	return true;
+}
+
+float HeadlessMover::Check(const glm::vec3 &destination)
+{
+	Client *me = m_stream->GetClient();
+	if (!me) {
+		return -1.0f;
+	}
+	// plan without walking: keep a walk that's under way as it is
+	const auto path  = m_path;
+	const auto stop  = m_stop_at_end;
+	const auto board = m_board;
+	const auto btn   = m_lift_button;
+	const auto phase = m_lift_phase;
+	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
+	float length = -1.0f;
+	if (PlanRoute(start, destination, false)) {
+		length = 0.0f;
+		glm::vec3 prev = start;
+		for (const auto &p : m_path) {
+			length += glm::length(p - prev);
+			prev = p;
+		}
+	}
+	m_path        = path;
+	m_stop_at_end = stop;
+	m_board       = board;
+	m_lift_button = btn;
+	m_lift_phase  = phase;
+	return length;
+}
+
+std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone_lines)
+{
+	Client *me = m_stream->GetClient();
+	if (!me) {
+		return "character is not in the zone";
+	}
+
+	if (m_moving) {
+		Stop(Result::Stopped);
+	}
+
+	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
+	m_through = through_zone_lines;
+	if (!PlanRoute(start, destination, through_zone_lines)) {
+		m_on_done(Result::NoPath, start);
+		return "";
 	}
 
 	// a real client stands up to walk

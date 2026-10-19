@@ -280,11 +280,24 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			if (!session.mover) {
 				return "character is not ready to move";
 			}
-			session.zone_line_to = 0;
 			const auto &m = cmd.move_to();
 			if (!std::isfinite(m.x()) || !std::isfinite(m.y()) || !std::isfinite(m.z())) {
 				return "destination must be finite";
 			}
+			if (m.plan_only()) {
+				const float length = session.mover->Check(glm::vec3(m.x(), m.y(), m.z()));
+				eqheadless::ServerFrame frame;
+				auto *move = frame.mutable_event()->mutable_move();
+				move->set_status(length >= 0.0f ? eqheadless::MOVE_ARRIVED : eqheadless::MOVE_NO_PATH);
+				move->set_x(m.x());
+				move->set_y(m.y());
+				move->set_z(m.z());
+				move->set_plan_only(true);
+				move->set_route_length(std::max(length, 0.0f));
+				SendFrame(session_id, frame);
+				return "";
+			}
+			session.zone_line_to = 0; // a walk of our own ends a ZoneTo
 			return session.mover->Start(glm::vec3(m.x(), m.y(), m.z()));
 		}
 		case eqheadless::Command::kStop: {

@@ -85,7 +85,9 @@ message SitCommand    { bool sit = 1; }                // false stands up
 
 // Walk to a point along the zone's navmesh at the character's legal run speed, sending the
 // same position updates a real client sends. Progress shows in Self; a MoveEvent reports the end.
-message MoveToCommand { float x = 1; float y = 2; float z = 3; }
+// plan_only: don't walk, just answer with a MoveEvent (plan_only set): ARRIVED and the route's
+// length if there's a way there, NO_PATH if not. A walk under way carries on.
+message MoveToCommand { float x = 1; float y = 2; float z = 3; bool plan_only = 4; }
 message StopCommand   {}
 // group invite, as /invite: a player, or an EQEmu bot you own (HeadlessClients:AllowBots /
 // AllowGroupWithPlayers). Empty name invites the current target.
@@ -182,6 +184,8 @@ message MoveEvent {
   float      x      = 2; // where the character ended up
   float      y      = 3;
   float      z      = 4;
+  bool       plan_only    = 5; // the answer to a plan_only MoveTo: x, y, z are where we asked about
+  float      route_length = 6; // plan_only and ARRIVED: how far the walk would be
 }
 
 enum ZoneStatus {

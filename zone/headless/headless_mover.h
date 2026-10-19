@@ -51,6 +51,9 @@ public:
 	// (Result::ZoneLine) without stepping in, unless through_zone_lines: then it walks into it.
 	std::string Start(const glm::vec3 &destination, bool through_zone_lines = false);
 	void Stop(Result why);
+	// plan a route without walking (a walk under way carries on): its length, or -1 if there's
+	// no way there
+	float Check(const glm::vec3 &destination);
 	// turn on the spot to face a point, as the client's /face; returns "" or why it can't
 	std::string Face(const glm::vec3 &point);
 	// accept a server-side move within the zone (#goto, summon), as the client does
@@ -59,6 +62,8 @@ public:
 
 private:
 	void Tick();
+	// fills m_path (and the lift plan) for a walk from start; false if there's no way there
+	bool PlanRoute(const glm::vec3 &start, const glm::vec3 &destination, bool through_zone_lines);
 	void SendUpdate(const glm::vec3 &pos, float heading, uint32 animation);
 	// a real client clicks closed doors it walks into; returns true while we wait for one to open
 	bool HandleDoors(uint64 now);
