@@ -40,6 +40,8 @@
 extern Zone       *zone;
 extern EntityList entity_list;
 
+static float FloorBelow(const glm::vec3 &p); // the floor under a point (below)
+
 namespace {
 	constexpr uint64 TICK_MS        = 100;
 	// mob movement uses frame_time * speed * 0.4 * 1.45 (mob_movement_manager.cpp); match it
@@ -63,6 +65,21 @@ namespace {
 	constexpr float  CLIFF_NEAR        = 120.0f;
 	constexpr float  CLIFF_DZ          = 40.0f;
 	constexpr int    PARTIAL_LEGS      = 12;
+	// doors and gates were solid when a zone's navmesh was built, so a route can end at a doorway
+	// with the rest of the way on a separate piece of navmesh beyond it: step across the doorway
+	// (the mover opens the door) when the two pieces come this close
+	constexpr float  DOOR_GAP          = 40.0f;
+	constexpr float  DOOR_GAP_ZONING   = 60.0f;
+	constexpr float  DOOR_GAP_DZ       = 20.0f;
+	// and when zoning, walk straight the rest of the way if the zone's map shows a way: floor all
+	// along, no steps steeper than a stair, nothing in the way at body height (a tunnel or gateway
+	// the navmesh left out)
+	constexpr float  ZONE_GAP          = 800.0f;
+	constexpr float  ZONE_GAP_DZ       = 120.0f;
+	constexpr float  STRAIGHT_STEP     = 8.0f;
+	constexpr float  STRAIGHT_RISE     = 8.0f;   // up: a stair
+	constexpr float  STRAIGHT_DROP     = 40.0f;  // down: a ledge a player just steps off
+	constexpr float  BODY_HEIGHT       = 4.0f;
 
 	float Flat(const glm::vec3 &a, const glm::vec3 &b)
 	{
@@ -170,6 +187,65 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 	return true;
 }
 
+bool HeadlessMover::StraightWalkable(const glm::vec3 &from, const glm::vec3 &to)
+{
+	if (!zone->zonemap) {
+		return false;
+	}
+	const float total = Flat(from, to);
+	if (total < 1.0f) {
+		return true;
+	}
+	glm::vec3 prev(from.x, from.y, FloorBelow(from));
+	for (float d = STRAIGHT_STEP; d < total + STRAIGHT_STEP; d += STRAIGHT_STEP) {
+		const float     f = std::min(d, total) / total;
+		const glm::vec3 above(from.x + (to.x - from.x) * f, from.y + (to.y - from.y) * f, prev.z + STRAIGHT_RISE + 2.0f);
+		const float     floor = FloorBelow(above);
+		const float rise = floor - prev.z;
+		if (floor == above.z || rise > STRAIGHT_RISE || rise < -STRAIGHT_DROP) {
+			LogHeadlessClient("straight walk to [{:.0f}, {:.0f}]: {} at [{:.0f}, {:.0f}] ({:.0f} of {:.0f} units, floor {:.1f} after {:.1f})",
+				to.x, to.y, floor == above.z ? "no floor" : (rise > 0 ? "a step too high" : "too far down"), above.x, above.y, d, total, floor, prev.z);
+			return false; // no floor (a drop) or a step too high (a wall or a cliff)
+		}
+		const glm::vec3 here(above.x, above.y, floor);
+		// stepping down off a ledge: look level from where we are (the ledge's own edge isn't in the way)
+		const glm::vec3 look = rise < 0.0f ? glm::vec3(here.x, here.y, prev.z) : here;
+		if (!zone->zonemap->CheckLoS(prev + glm::vec3(0, 0, BODY_HEIGHT), look + glm::vec3(0, 0, BODY_HEIGHT))) {
+			LogHeadlessClient("straight walk to [{:.0f}, {:.0f}]: something in the way at [{:.0f}, {:.0f}, {:.0f}] ({:.0f} of {:.0f} units)",
+				to.x, to.y, here.x, here.y, here.z, d, total);
+			return false; // something in the way
+		}
+		prev = here;
+	}
+	return true;
+}
+
+bool HeadlessMover::BridgeGap(const glm::vec3 &pos, const glm::vec3 &destination, float max_gap)
+{
+	if (!zone->pathing) {
+		return false;
+	}
+	// from the destination back towards us: where its piece of navmesh gets closest to where we are
+	bool partial = false;
+	bool stuck   = false;
+	auto back    = zone->pathing->FindRoute(destination, pos, partial, stuck);
+	if (back.size() < 2) {
+		return false;
+	}
+	const glm::vec3 edge = back.back().pos;
+	if (Flat(edge, pos) > max_gap || std::fabs(edge.z - pos.z) > DOOR_GAP_DZ) {
+		return false;
+	}
+	// the rest of the way from there, as any walk is planned (zone lines, partial legs)
+	if (!PlanRoute(edge, destination, m_through)) {
+		return false;
+	}
+	LogHeadlessClient("[{}] stepping across a [{:.0f}]-unit gap in the navmesh (a doorway?) towards [{:.0f}, {:.0f}]",
+		m_stream->GetClient() ? m_stream->GetClient()->GetCleanName() : "?", Flat(edge, pos), destination.x, destination.y);
+	m_path.insert(m_path.begin(), edge);
+	return true;
+}
+
 float HeadlessMover::Check(const glm::vec3 &destination)
 {
 	Client *me = m_stream->GetClient();
@@ -231,8 +307,20 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 	m_final   = destination;
 	m_legs    = 0;
 	if (!PlanRoute(start, destination, through_zone_lines)) {
-		m_on_done(Result::NoPath, start);
-		return "";
+		if (BridgeGap(start, destination, through_zone_lines ? DOOR_GAP_ZONING : DOOR_GAP)) {
+			// stepping across a doorway onto the rest of the way
+		}
+		else if (through_zone_lines && Flat(start, destination) <= ZONE_GAP && std::fabs(start.z - destination.z) <= ZONE_GAP_DZ &&
+			StraightWalkable(start, destination)) {
+			LogHeadlessClient("[{}] no navmesh route to the zone line [{:.0f}] units away: walking straight",
+				me->GetCleanName(), Flat(start, destination));
+			m_path = {destination};
+			m_partial = false;
+		}
+		else {
+			m_on_done(Result::NoPath, start);
+			return "";
+		}
 	}
 
 	// a real client stands up to walk
@@ -418,6 +506,23 @@ void HeadlessMover::Tick()
 			return;
 		}
 		if (++m_legs > PARTIAL_LEGS || !PlanRoute(pos, m_final, m_through)) {
+			if (BridgeGap(pos, m_final, m_through ? DOOR_GAP_ZONING : DOOR_GAP)) {
+				m_next = 0;
+				return;
+			}
+			if (m_through && Flat(pos, m_final) <= ZONE_GAP && std::fabs(pos.z - m_final.z) <= ZONE_GAP_DZ &&
+				StraightWalkable(pos, m_final)) {
+				LogHeadlessClient("[{}] the navmesh ends [{:.0f}] units short of the zone line: walking the rest",
+					me->GetCleanName(), Flat(pos, m_final));
+				m_path = {m_final};
+				m_partial = false;
+				m_next = 0;
+				return;
+			}
+			if (m_through) {
+				LogHeadlessClient("[{}] no way to the zone line from [{:.0f}, {:.0f}, {:.0f}]: [{:.0f}] units short, and the map shows no straight way",
+					me->GetCleanName(), pos.x, pos.y, pos.z, Flat(pos, m_final));
+			}
 			Stop(Result::NoPath);
 			return;
 		}

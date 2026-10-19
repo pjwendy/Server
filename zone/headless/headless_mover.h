@@ -85,6 +85,12 @@ private:
 	bool PlanWithLift(const glm::vec3 &start, const glm::vec3 &destination, float direct_length);
 	// the lift part of a walk; returns true while the lift has us (calling it, riding it)
 	bool HandleLift(uint64 now);
+	// the zone's map shows a way straight there: floor all along, no step higher than a stair, and
+	// nothing in the way at body height
+	static bool StraightWalkable(const glm::vec3 &from, const glm::vec3 &to);
+	// a route that ends at a doorway (doors were solid when the navmesh was built): step across onto
+	// the destination's piece of navmesh if it comes within max_gap; true if m_path now goes there
+	bool BridgeGap(const glm::vec3 &pos, const glm::vec3 &destination, float max_gap);
 	// a navmesh route, or {} with *length = -1 if there isn't one
 	static std::vector<glm::vec3> Route(const glm::vec3 &from, const glm::vec3 &to, float *length);
 
