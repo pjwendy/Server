@@ -1200,7 +1200,8 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		}
 	}
 	for (auto &[id, mob] : entity_list.GetMobList()) {
-		if (mob && mob->IsNPC() && !mob->IsCorpse() && mob->CastToNPC()->IsOnHatelist(me)) {
+		if (mob && mob->IsNPC() && !mob->IsCorpse() && mob->GetID() != 0 && mob->GetHP() > 0 &&
+			mob->CastToNPC()->IsOnHatelist(me)) { // not one that's dying
 			self->add_haters(id);
 		}
 	}
@@ -1350,7 +1351,9 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 
 	// spawns: every mob in the zone except ourselves, and corpses (EQEmu keeps those in their own list)
 	auto publish_spawn = [&](uint32 id, Mob *mob) {
-		if (!mob || mob == me) {
+		// a dying NPC stays in the mob list for a moment with its id already 0, before its corpse
+		// takes over: the client never sees it, so neither do we (it would be a spawn with id 0)
+		if (!mob || mob == me || mob->GetID() == 0) {
 			return;
 		}
 
