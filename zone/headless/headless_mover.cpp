@@ -184,17 +184,27 @@ float HeadlessMover::Check(const glm::vec3 &destination)
 	const auto phase = m_lift_phase;
 	const auto part  = m_partial;
 	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
-	float length = -1.0f;
-	if (PlanRoute(start, destination, false)) {
-		length = 0.0f;
-		glm::vec3 prev = start;
+	// as a walk would go: a partial route's legs, each planned from where the last one ends
+	float     length = 0.0f;
+	glm::vec3 from   = start;
+	bool      there  = false;
+	for (int leg = 0; leg <= PARTIAL_LEGS; ++leg) {
+		if (!PlanRoute(from, destination, false) || m_path.empty()) {
+			break;
+		}
+		glm::vec3 prev = from;
 		for (const auto &p : m_path) {
 			length += glm::length(p - prev);
 			prev = p;
 		}
-		if (m_partial && !m_path.empty()) {
-			length += Flat(m_path.back(), destination); // the rest of the way, as the crow flies
+		from = m_path.back();
+		if (!m_partial || Flat(from, destination) <= PARTIAL_OK) {
+			there = true;
+			break;
 		}
+	}
+	if (!there) {
+		length = -1.0f;
 	}
 	m_path        = path;
 	m_stop_at_end = stop;

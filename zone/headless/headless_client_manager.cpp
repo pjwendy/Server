@@ -575,6 +575,11 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				return fmt::format("{} has no zone line to {}", zone->GetShortName(), ShortName(zone_id));
 			}
 
+			// end a walk that's under way first: its "stopped" must not be taken as this ZoneTo failing
+			if (session.mover->Moving()) {
+				session.zone_line_to = 0;
+				session.mover->Stop(HeadlessMover::Result::Stopped);
+			}
 			session.zone_line_to = zone_id;
 			const std::string error = session.mover->Start(ZonePointSpot(best, here), true);
 			if (!error.empty()) {
