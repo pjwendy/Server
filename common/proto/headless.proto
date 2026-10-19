@@ -103,7 +103,14 @@ message ConsiderCommand { uint32 spawn_id = 1; }                    // the answe
 message LootCommand     { uint32 corpse_id = 1; }                   // loot everything; answer: LootEvent
 // walk to this zone's zone line for `zone` (a short name from ZoneInfo.exits) and through it, as a
 // player does; a ZoneEvent follows. Plain MoveTo stops at zone lines instead.
-message ZoneToCommand   { string zone = 1; }                              // leave the group, as /disband
+message ZoneToCommand   { string zone = 1; }
+// merchants, as the client's merchant window: open (stand within ~20 units), buy and sell, close.
+// Opening sends a MerchantEvent with what it sells.
+message MerchantCommand { uint32 npc_id = 1; bool open = 2; }
+message BuyCommand      { uint32 npc_id = 1; uint32 merchant_slot = 2; uint32 quantity = 3; }
+message SellCommand     { uint32 npc_id = 1; int32 slot = 2; uint32 quantity = 3; } // slot: inventory slot
+// pick an item up and put it down elsewhere (equip it, put a bag in a slot); swaps with what's there
+message MoveItemCommand { int32 from_slot = 1; int32 to_slot = 2; uint32 quantity = 3; }                              // leave the group, as /disband
 
 message Command {
   uint32 id = 1; // echoed in CommandResult
@@ -123,6 +130,10 @@ message Command {
     ConsiderCommand consider  = 14;
     LootCommand     loot      = 15;
     ZoneToCommand   zone_to   = 16;
+    MerchantCommand merchant  = 17;
+    BuyCommand      buy       = 18;
+    SellCommand     sell      = 19;
+    MoveItemCommand move_item = 20;
   }
 }
 
@@ -200,6 +211,12 @@ message LootEvent {
   uint32          copper    = 8;
 }
 
+message MerchantEvent {
+  uint32        npc_id = 1;
+  bool          open   = 2;
+  repeated Item items  = 3; // for sale: slot is the merchant slot, price what it costs us (copper)
+}
+
 message DeathEvent {
   string killer    = 1;
   uint32 corpse_id = 2;
@@ -216,6 +233,7 @@ message GameEvent {
     ConsiderEvent consider = 5;
     LootEvent     loot     = 6;
     DeathEvent    death    = 7; // ours; the server then sends us to our bind point (a zone change)
+    MerchantEvent merchant = 8;
   }
 }
 
@@ -287,6 +305,8 @@ message Self {
   uint32          silver   = 25;
   uint32          copper   = 26;
   repeated uint32 haters   = 27; // NPCs with us on their hate list: we're engaged while any are
+  uint32          weight   = 28; // carried weight (as the client shows it)
+  uint32          capacity = 29; // carry more than this (= STR) and you're encumbered
 }
 
 message Gem {
@@ -316,6 +336,31 @@ message Item {
   string name      = 3;
   int32  charges   = 4;
   bool   container = 5;
+  // what it is, for deciding what to wear, keep and sell
+  int32  ac        = 6;
+  int32  hp        = 7;
+  int32  mana      = 8;
+  int32  endurance = 9;
+  int32  str       = 10;
+  int32  sta       = 11;
+  int32  agi       = 12;
+  int32  dex       = 13;
+  int32  wis       = 14;
+  int32  int       = 15;
+  int32  cha       = 16;
+  uint32 damage    = 17;
+  uint32 delay     = 18;
+  uint32 slots     = 19; // bitmask of worn slots it fits (bit n = slot n)
+  uint32 req_level = 20;
+  float  weight    = 21;
+  uint32 price     = 22; // base value in copper (merchant items: what it costs us)
+  bool   no_drop   = 23;
+  bool   lore      = 24;
+  bool   magic     = 25;
+  uint32 bag_slots = 26; // containers
+  uint32 bag_size  = 27; // biggest item it holds: 0 tiny ... 4 giant
+  uint32 item_type = 28; // EQ item type (skill), e.g. 0 1H slashing, 10 armour, 11 misc
+  bool   usable    = 29; // our race and class can equip it, and we're high enough level
 }
 
 message Inventory { repeated Item items = 1; }

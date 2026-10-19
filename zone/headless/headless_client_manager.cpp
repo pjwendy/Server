@@ -23,6 +23,9 @@
 #include "common/rulesys.h"
 #include "common/servertalk.h"
 #include "common/spdat.h"
+#include "common/classes.h"
+#include "common/races.h"
+#include "common/item_data.h"
 #include "common/strings.h"
 #include "common/timer.h"
 #include "common/zone_store.h"
@@ -565,6 +568,69 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			}
 			return error;
 		}
+		case eqheadless::Command::kMerchant: {
+			Mob *npc = entity_list.GetMob(cmd.merchant().npc_id());
+			if (cmd.merchant().open()) {
+				if (!npc || !npc->IsNPC() || npc->GetClass() != Class::Merchant) {
+					return "that's not a merchant";
+				}
+				if (DistanceSquared(me->GetPosition(), npc->GetPosition()) > USE_NPC_RANGE2) {
+					return "too far from the merchant";
+				}
+				auto app = new EQApplicationPacket(OP_ShopRequest, sizeof(MerchantClick_Struct));
+				auto *mc = reinterpret_cast<MerchantClick_Struct *>(app->pBuffer);
+				mc->npc_id    = npc->GetID();
+				mc->player_id = me->GetID();
+				mc->command   = MerchantActions::Open;
+				mc->unknown020 = -1;
+				stream->Inject(app);
+			}
+			else {
+				auto app = new EQApplicationPacket(OP_ShopEnd, sizeof(MerchantClick_Struct));
+				reinterpret_cast<MerchantClick_Struct *>(app->pBuffer)->npc_id = cmd.merchant().npc_id();
+				stream->Inject(app);
+			}
+			return "";
+		}
+		case eqheadless::Command::kBuy: {
+			const auto &b = cmd.buy();
+			// the struct names are the server's point of view: a player buying sends Merchant_Sell_Struct
+			auto app = new EQApplicationPacket(OP_ShopPlayerBuy, sizeof(Merchant_Sell_Struct));
+			auto *ms = reinterpret_cast<Merchant_Sell_Struct *>(app->pBuffer);
+			ms->npcid    = b.npc_id();
+			ms->playerid = me->GetID();
+			ms->itemslot = b.merchant_slot();
+			ms->quantity = std::max<uint32>(1, b.quantity());
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kSell: {
+			const auto &sl = cmd.sell();
+			const EQ::ItemInstance *inst = me->GetInv().GetItem(sl.slot());
+			if (!inst || !inst->GetItem()) {
+				return fmt::format("nothing in slot {}", sl.slot());
+			}
+			auto app = new EQApplicationPacket(OP_ShopPlayerSell, sizeof(Merchant_Purchase_Struct));
+			auto *mp = reinterpret_cast<Merchant_Purchase_Struct *>(app->pBuffer);
+			mp->npcid    = sl.npc_id();
+			mp->itemslot = sl.slot();
+			mp->quantity = sl.quantity() ? sl.quantity() : (inst->IsStackable() ? std::max<int16>(1, inst->GetCharges()) : 1);
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kMoveItem: {
+			const auto &mv = cmd.move_item();
+			if (!me->GetInv().GetItem(mv.from_slot())) {
+				return fmt::format("nothing in slot {}", mv.from_slot());
+			}
+			auto app = new EQApplicationPacket(OP_MoveItem, sizeof(MoveItem_Struct));
+			auto *mi = reinterpret_cast<MoveItem_Struct *>(app->pBuffer);
+			mi->from_slot       = mv.from_slot();
+			mi->to_slot         = mv.to_slot();
+			mi->number_in_stack = mv.quantity();
+			stream->Inject(app);
+			return "";
+		}
 		case eqheadless::Command::kDisband: {
 			if (!me->GetGroup() && !me->GetRaid()) {
 				return "not in a group";
@@ -693,6 +759,39 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			SendZoneEvent(session_id, eqheadless::ZONE_LEAVING, zc->zoneID, "");
 			it->second.stream->Close(); // Client::Process sees it with bZoning set: "left the zone", not linkdead
 			return;
+		}
+		case OP_ShopRequest: {
+			// the server opened (or refused) the merchant window: list what it sells
+			if (app->size < sizeof(MerchantClick_Struct)) {
+				return;
+			}
+			auto   *mc = reinterpret_cast<const MerchantClick_Struct *>(app->pBuffer);
+			Client *me = it->second.stream->GetClient();
+			Mob    *npc = entity_list.GetMob(mc->npc_id);
+			auto   *ev = frame.mutable_event()->mutable_merchant();
+			ev->set_npc_id(mc->npc_id);
+			ev->set_open(mc->command == MerchantActions::Open);
+			if (me && npc && npc->IsNPC() && mc->command == MerchantActions::Open) {
+				const float mod = me->CalcPriceMod(npc, false);
+				for (const auto &ml : zone->merchanttable[npc->CastToNPC()->MerchantType]) {
+					const EQ::ItemData *item = database.GetItem(ml.item);
+					if (!item || (ml.level_required && me->GetLevel() < ml.level_required)) {
+						continue;
+					}
+					auto *out = ev->add_items();
+					FillItem(out, item, me);
+					out->set_slot(ml.slot);
+					float price = item->Price * item->SellRate;
+					if (!RuleB(Merchant, UseClassicPriceMod)) {
+						price *= RuleR(Merchant, SellCostMod);
+					}
+					if (RuleB(Merchant, UsePriceMod)) {
+						price *= mod;
+					}
+					out->set_price(static_cast<uint32>(std::max(0.0f, price)));
+				}
+			}
+			break;
 		}
 		case OP_Consider: {
 			if (app->size < sizeof(Consider_Struct)) {
@@ -1073,6 +1172,8 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			self->add_haters(id);
 		}
 	}
+	self->set_weight(me->CalcCurrentWeight() / 10);
+	self->set_capacity(me->GetSTR());
 	self->set_platinum(me->GetPP().platinum);
 	self->set_gold(me->GetPP().gold);
 	self->set_silver(me->GetPP().silver);
@@ -1137,13 +1238,11 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 	}
 
 	eqheadless::Inventory inventory;
-	auto add_item = [&inventory](int16 slot, const EQ::ItemInstance *inst) {
+	auto add_item = [&inventory, me](int16 slot, const EQ::ItemInstance *inst) {
 		auto *item = inventory.add_items();
+		FillItem(item, inst->GetItem(), me);
 		item->set_slot(slot);
-		item->set_item_id(inst->GetID());
-		item->set_name(inst->GetItem()->Name);
 		item->set_charges(inst->GetCharges());
-		item->set_container(inst->IsClassBag());
 	};
 	for (int16 slot = EQ::invslot::POSSESSIONS_BEGIN; slot <= EQ::invslot::POSSESSIONS_END; ++slot) {
 		const EQ::ItemInstance *inst = me->GetInv().GetItem(slot);
@@ -1235,6 +1334,37 @@ void HeadlessClientManager::SendFrame(const std::string &session_id, const eqhea
 	memcpy(f->data, body.data(), body.size());
 	worldserver.SendPacket(pack);
 	safe_delete(pack);
+}
+
+void HeadlessClientManager::FillItem(eqheadless::Item *out, const EQ::ItemData *item, Client *me)
+{
+	out->set_item_id(item->ID);
+	out->set_name(item->Name);
+	out->set_container(item->ItemClass == EQ::item::ItemClassBag);
+	out->set_ac(item->AC);
+	out->set_hp(item->HP);
+	out->set_mana(item->Mana);
+	out->set_endurance(item->Endur);
+	out->set_str(item->AStr);
+	out->set_sta(item->ASta);
+	out->set_agi(item->AAgi);
+	out->set_dex(item->ADex);
+	out->set_wis(item->AWis);
+	out->set_int_(item->AInt);
+	out->set_cha(item->ACha);
+	out->set_damage(item->Damage);
+	out->set_delay(item->Delay);
+	out->set_slots(item->Slots);
+	out->set_req_level(item->ReqLevel);
+	out->set_weight(item->Weight / 10.0f);
+	out->set_price(item->Price);
+	out->set_no_drop(item->NoDrop == 0);
+	out->set_lore(item->LoreFlag);
+	out->set_magic(item->Magic);
+	out->set_bag_slots(item->BagSlots);
+	out->set_bag_size(item->BagSize);
+	out->set_item_type(item->ItemType);
+	out->set_usable(me && item->IsEquipable(me->GetBaseRace(), me->GetClass()) && item->ReqLevel <= me->GetLevel());
 }
 
 void HeadlessClientManager::RequestZoneLine(const std::string &session_id, Session &session, const glm::vec3 &where)

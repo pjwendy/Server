@@ -28,6 +28,7 @@
 #include <unordered_map>
 
 class Client;
+namespace EQ { struct ItemData; }
 class EQApplicationPacket;
 class Mob;
 class NullStream;
@@ -35,6 +36,7 @@ class ServerPacket;
 
 namespace eqheadless {
 	class Command;
+	class Item;
 	class ServerFrame;
 	class Spawn;
 }
@@ -107,6 +109,7 @@ private:
 	void SendSpawned(const std::string &session_id, uint32 spawn_id, const std::string &error);
 	void SendZoneEvent(const std::string &session_id, int status, uint32 zone_id, const std::string &detail);
 	void RequestZoneLine(const std::string &session_id, Session &session, const glm::vec3 &where);
+	static void FillItem(eqheadless::Item *out, const EQ::ItemData *item, Client *me);
 
 	std::map<std::string, Session> m_sessions; // session id -> session
 };
