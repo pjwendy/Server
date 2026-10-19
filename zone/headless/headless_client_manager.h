@@ -96,6 +96,7 @@ private:
 		uint32                                   loot_coin[4] = {};
 		std::string                              last_book;      // serialized SpellBook last sent
 		std::string                              last_inventory; // serialized Inventory last sent
+		std::string                              last_bots;      // serialized OwnedBots last sent
 	};
 
 	// returns "" when accepted, otherwise why not
@@ -109,7 +110,7 @@ private:
 	void SendSpawned(const std::string &session_id, uint32 spawn_id, const std::string &error);
 	void SendZoneEvent(const std::string &session_id, int status, uint32 zone_id, const std::string &detail);
 	void RequestZoneLine(const std::string &session_id, Session &session, const glm::vec3 &where);
-	static void FillItem(eqheadless::Item *out, const EQ::ItemData *item, Client *me);
+	static void FillItem(eqheadless::Item *out, const EQ::ItemData *item, Mob *holder);
 
 	std::map<std::string, Session> m_sessions; // session id -> session
 };

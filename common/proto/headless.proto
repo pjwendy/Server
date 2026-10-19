@@ -307,6 +307,7 @@ message Self {
   repeated uint32 haters   = 27; // NPCs with us on their hate list: we're engaged while any are
   uint32          weight   = 28; // carried weight (as the client shows it)
   uint32          capacity = 29; // carry more than this (= STR) and you're encumbered
+  uint32          race_bit = 30; // our bit in Item.races
 }
 
 message Gem {
@@ -360,8 +361,23 @@ message Item {
   uint32 bag_slots = 26; // containers
   uint32 bag_size  = 27; // biggest item it holds: 0 tiny ... 4 giant
   uint32 item_type = 28; // EQ item type (skill), e.g. 0 1H slashing, 10 armour, 11 misc
-  bool   usable    = 29; // our race and class can equip it, and we're high enough level
+  bool   usable    = 29; // its holder (us, or the bot wearing it) can equip it at its level
+  uint32 classes   = 30; // bitmask: bit (class - 1)
+  uint32 races     = 31; // bitmask of player races (EQ race bits: human 1, barbarian 2, ... dwarf 128 ...)
 }
+
+// our EQEmu bots and what they wear; we equip them (^inventorygive)
+message BotGear {
+  uint32        spawn_id  = 1;
+  string        name      = 2;
+  uint32        class_id  = 3;
+  uint32        race_id   = 4;
+  uint32        level     = 5;
+  uint32        race_bit  = 6; // its bit in Item.races
+  repeated Item equipment = 7; // slot is the worn slot
+}
+
+message OwnedBots { repeated BotGear bots = 1; }
 
 message Inventory { repeated Item items = 1; }
 
@@ -394,6 +410,7 @@ message Snapshot {
   repeated Spawn spawns = 3; // everyone else in the zone
   SpellBook      book      = 4;
   Inventory      inventory = 5;
+  OwnedBots      bots      = 6;
 }
 
 message StateDelta {
@@ -402,6 +419,7 @@ message StateDelta {
   repeated uint32 spawns_removed = 3;
   SpellBook       book           = 4; // only when it changed
   Inventory       inventory      = 5; // only when it changed
+  OwnedBots       bots           = 6; // only when it changed
 }
 
 // server -> client

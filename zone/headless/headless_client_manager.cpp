@@ -1172,6 +1172,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			self->add_haters(id);
 		}
 	}
+	self->set_race_bit(GetPlayerRaceBit(me->GetBaseRace()));
 	self->set_weight(me->CalcCurrentWeight() / 10);
 	self->set_capacity(me->GetSTR());
 	self->set_platinum(me->GetPP().platinum);
@@ -1259,6 +1260,38 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			}
 		}
 	}
+	// our bots' equipment, for the leader to gear them
+	eqheadless::OwnedBots owned;
+	for (auto &[bid, mob] : entity_list.GetMobList()) {
+		if (!mob || !mob->IsBot() || mob->CastToBot()->GetBotOwner() != me) {
+			continue;
+		}
+		Bot  *b  = mob->CastToBot();
+		auto *bg = owned.add_bots();
+		bg->set_spawn_id(b->GetID());
+		bg->set_name(b->GetCleanName());
+		bg->set_class_id(b->GetClass());
+		bg->set_race_id(b->GetBaseRace());
+		bg->set_level(b->GetLevel());
+		bg->set_race_bit(GetPlayerRaceBit(b->GetBaseRace()));
+		for (int16 slot = EQ::invslot::EQUIPMENT_BEGIN; slot <= EQ::invslot::EQUIPMENT_END; ++slot) {
+			const EQ::ItemInstance *inst = b->GetBotItem(slot);
+			if (inst && inst->GetItem()) {
+				auto *it = bg->add_equipment();
+				FillItem(it, inst->GetItem(), b);
+				it->set_slot(slot);
+				it->set_charges(inst->GetCharges());
+			}
+		}
+	}
+	std::string bots_bytes;
+	owned.SerializeToString(&bots_bytes);
+	if (snapshot || bots_bytes != session.last_bots) {
+		(snapshot ? frame.mutable_snapshot()->mutable_bots() : frame.mutable_delta()->mutable_bots())->Swap(&owned);
+		session.last_bots = std::move(bots_bytes);
+		changed = true;
+	}
+
 	std::string inventory_bytes;
 	inventory.SerializeToString(&inventory_bytes);
 	if (snapshot || inventory_bytes != session.last_inventory) {
@@ -1336,7 +1369,7 @@ void HeadlessClientManager::SendFrame(const std::string &session_id, const eqhea
 	safe_delete(pack);
 }
 
-void HeadlessClientManager::FillItem(eqheadless::Item *out, const EQ::ItemData *item, Client *me)
+void HeadlessClientManager::FillItem(eqheadless::Item *out, const EQ::ItemData *item, Mob *me)
 {
 	out->set_item_id(item->ID);
 	out->set_name(item->Name);
@@ -1365,6 +1398,8 @@ void HeadlessClientManager::FillItem(eqheadless::Item *out, const EQ::ItemData *
 	out->set_bag_size(item->BagSize);
 	out->set_item_type(item->ItemType);
 	out->set_usable(me && item->IsEquipable(me->GetBaseRace(), me->GetClass()) && item->ReqLevel <= me->GetLevel());
+	out->set_classes(item->Classes);
+	out->set_races(item->Races);
 }
 
 void HeadlessClientManager::RequestZoneLine(const std::string &session_id, Session &session, const glm::vec3 &where)
