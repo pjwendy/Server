@@ -110,6 +110,11 @@ private:
 
 	// a lift on the route: m_path[m_board] is the platform where we get on, m_path[m_board + 1]
 	// the same platform at the other floor, m_path[m_board - 1] the call button's landing
+	// a partial route being walked in legs towards m_final
+	glm::vec3 m_final{0.0f};
+	bool      m_partial = false;
+	int       m_legs    = 0;
+
 	enum class LiftPhase { None, ToButton, Calling, Boarding, Riding, Off };
 	LiftPhase m_lift_phase  = LiftPhase::None;
 	size_t    m_board       = 0;

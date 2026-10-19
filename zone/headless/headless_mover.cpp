@@ -55,6 +55,19 @@ namespace {
 	// off the navmesh)
 	constexpr float  PARTIAL_OK        = 20.0f;
 	constexpr float  PARTIAL_OK_Z      = 25.0f;
+	// a partial route that isn't there yet is still walked if it gets this much closer (the search
+	// runs out of nodes on long routes; FindRoute keeps 1024 polygons), then planned again from its
+	// end, up to PARTIAL_LEGS times. Not when it ends beside the destination but far above or below
+	// it: that's a cliff top over the target, not the way there.
+	constexpr float  PARTIAL_PROGRESS  = 50.0f;
+	constexpr float  CLIFF_NEAR        = 120.0f;
+	constexpr float  CLIFF_DZ          = 40.0f;
+	constexpr int    PARTIAL_LEGS      = 12;
+
+	float Flat(const glm::vec3 &a, const glm::vec3 &b)
+	{
+		return glm::length(glm::vec3(a.x - b.x, a.y - b.y, 0.0f));
+	}
 	// lifts: platform door type, how long the platform takes to come when called, how fast it
 	// rides, how near the platform's centre we stand, and when a lift is worth it over walking
 	constexpr uint8  LIFT_OPEN_TYPE    = 59;
@@ -128,6 +141,17 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 		const bool short_of_it = partial && !m_stop_at_end && !m_path.empty() &&
 			(glm::length(glm::vec3(m_path.back().x - destination.x, m_path.back().y - destination.y, 0.0f)) > PARTIAL_OK ||
 			 std::fabs(m_path.back().z - destination.z) > PARTIAL_OK_Z);
+		m_partial = false;
+		if (short_of_it && !stuck) {
+			const glm::vec3 &end      = m_path.back();
+			const float      left     = Flat(end, destination);
+			const bool       progress = Flat(start, destination) - left >= PARTIAL_PROGRESS;
+			const bool       cliff    = left < CLIFF_NEAR && std::fabs(end.z - destination.z) > CLIFF_DZ;
+			if (progress && !cliff) {
+				m_partial = true; // walk it, then plan again from its end
+				return true;
+			}
+		}
 		if (!via_lift && (m_path.empty() || stuck || short_of_it)) {
 			if (short_of_it) {
 				LogHeadlessClient(
@@ -158,6 +182,7 @@ float HeadlessMover::Check(const glm::vec3 &destination)
 	const auto board = m_board;
 	const auto btn   = m_lift_button;
 	const auto phase = m_lift_phase;
+	const auto part  = m_partial;
 	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
 	float length = -1.0f;
 	if (PlanRoute(start, destination, false)) {
@@ -167,12 +192,16 @@ float HeadlessMover::Check(const glm::vec3 &destination)
 			length += glm::length(p - prev);
 			prev = p;
 		}
+		if (m_partial && !m_path.empty()) {
+			length += Flat(m_path.back(), destination); // the rest of the way, as the crow flies
+		}
 	}
 	m_path        = path;
 	m_stop_at_end = stop;
 	m_board       = board;
 	m_lift_button = btn;
 	m_lift_phase  = phase;
+	m_partial     = part;
 	return length;
 }
 
@@ -189,6 +218,8 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 
 	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
 	m_through = through_zone_lines;
+	m_final   = destination;
+	m_legs    = 0;
 	if (!PlanRoute(start, destination, through_zone_lines)) {
 		m_on_done(Result::NoPath, start);
 		return "";
@@ -369,6 +400,20 @@ void HeadlessMover::Tick()
 
 	SendUpdate(pos, heading, arrived ? 0 : static_cast<uint32>(me->GetRunspeed()));
 
+	if (arrived && m_partial) {
+		// the end of a partial route: carry on towards where we were going
+		m_pos = pos;
+		if (Flat(pos, m_final) <= PARTIAL_OK) {
+			Stop(Result::Arrived);
+			return;
+		}
+		if (++m_legs > PARTIAL_LEGS || !PlanRoute(pos, m_final, m_through)) {
+			Stop(Result::NoPath);
+			return;
+		}
+		m_next = 0;
+		return;
+	}
 	if (arrived) {
 		Stop(m_stop_at_end ? Result::ZoneLine : Result::Arrived);
 		return;
