@@ -142,8 +142,10 @@ SharedDatabase::MailKeys SharedDatabase::GetMailKey(uint32 character_id)
 		return MailKeys{ };
 	}
 
+	// a character that never entered the world through world's character select (or whose key
+	// was cleared) has an empty or short key: substr(8) would throw and take the zone down
 	return MailKeys{
-		.mail_key = e.mailkey.substr(8),
+		.mail_key = e.mailkey.size() >= 8 ? e.mailkey.substr(8) : std::string(),
 		.mail_key_full = e.mailkey
 	};
 }
