@@ -18,6 +18,7 @@
 #include "world/headless/headless_gateway.h"
 
 #include "common/eqemu_logsys.h"
+#include "common/random.h"
 #include "common/rulesys.h"
 #include "common/servertalk.h"
 #include "common/strings.h"
@@ -445,6 +446,10 @@ void HeadlessGateway::TrySpawn(Session *s)
 	strn0cpy(szic->charname, s->character.c_str(), sizeof(szic->charname));
 	strn0cpy(szic->lskey, "", sizeof(szic->lskey));
 	zs->SendPacket(inc.get());
+
+	// a session's mail key, as world sets one when a client enters the world (the zone reads it on
+	// zone-in, and a character that never went through character select has none)
+	database.SetMailKey(s->character_id, LOOPBACK_IP, EQ::Random::Instance()->Int(1, INT_MAX));
 
 	// 2. spawn it with no network client
 	auto spawn = std::make_unique<ServerPacket>(ServerOP_HeadlessSpawn, sizeof(ServerHeadlessSpawn_Struct));
