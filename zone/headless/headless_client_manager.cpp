@@ -1324,9 +1324,10 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		changed = true;
 	}
 
-	for (auto &[id, mob] : entity_list.GetMobList()) {
+	// spawns: every mob in the zone except ourselves, and corpses (EQEmu keeps those in their own list)
+	auto publish_spawn = [&](uint32 id, Mob *mob) {
 		if (!mob || mob == me) {
-			continue;
+			return;
 		}
 
 		present.insert(id);
@@ -1340,7 +1341,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 				std::fabs(s.z - mob->GetZ()) < MOVE_EPSILON && s.heading == mob->GetHeading() &&
 				s.hp_pct == hp_pct && s.level == mob->GetLevel() && s.name == mob->GetCleanName() &&
 				s.target_id == (mob->GetTarget() ? mob->GetTarget()->GetID() : 0)) {
-				continue;
+				return;
 			}
 		}
 
@@ -1350,6 +1351,12 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u
 		};
 		changed = true;
+	};
+	for (auto &[id, mob] : entity_list.GetMobList()) {
+		publish_spawn(id, mob);
+	}
+	for (auto &[id, corpse] : entity_list.GetCorpseList()) {
+		publish_spawn(id, corpse);
 	}
 
 	if (!snapshot) {
