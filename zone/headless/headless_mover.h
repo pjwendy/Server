@@ -27,16 +27,20 @@
 #include <string>
 #include <vector>
 
+class Client;
+class Doors;
 class NullStream;
 
 // The client's half of walking somewhere. A real client simulates its own movement and
 // reports positions; the server's Handle_OP_ClientUpdate then runs anti-cheat speed checks,
 // aggro, proximity and broadcasts to other players. The mover does the client's part: it
 // follows a navmesh route at the character's run speed, keeps to the floor, and injects the
-// same OP_ClientUpdate packets a real client sends.
+// same OP_ClientUpdate packets a real client sends. It opens doors on the way (when it has the
+// key), and rides lifts when that's much shorter than walking round: click the call button, wait
+// for the platform, step on, ride it up or down, step off.
 class HeadlessMover {
 public:
-	enum class Result { Arrived, Stopped, Stuck, NoPath, ZoneLine };
+	enum class Result { Arrived, Stopped, Stuck, NoPath, ZoneLine, Locked };
 
 	using DoneCallback = std::function<void(Result, const glm::vec3 &where)>;
 
@@ -58,6 +62,26 @@ private:
 	void SendUpdate(const glm::vec3 &pos, float heading, uint32 animation);
 	// a real client clicks closed doors it walks into; returns true while we wait for one to open
 	bool HandleDoors(uint64 now);
+	// what the server's click handler would let this character open (key, keyring, guild, GM)
+	static bool CanOpen(Client *me, Doors *door);
+
+	// a lift: a platform door (open type 59) that moves `door_param` units up from where it
+	// rests, called by buttons at the bottom and the top
+	struct Lift {
+		uint8     bottom_button = 0;
+		uint8     top_button    = 0;
+		glm::vec3 bottom{0.0f};  // standing on the platform, down
+		glm::vec3 top{0.0f};     // ... and up
+		glm::vec3 bottom_landing{0.0f}; // the call buttons, on each floor
+		glm::vec3 top_landing{0.0f};
+	};
+	static std::vector<Lift> FindLifts();
+	// replaces m_path with a route through a lift when that's much shorter; true if it did
+	bool PlanWithLift(const glm::vec3 &start, const glm::vec3 &destination, float direct_length);
+	// the lift part of a walk; returns true while the lift has us (calling it, riding it)
+	bool HandleLift(uint64 now);
+	// a navmesh route, or {} with *length = -1 if there isn't one
+	static std::vector<glm::vec3> Route(const glm::vec3 &from, const glm::vec3 &to, float *length);
 
 	NullStream                 *m_stream;
 	DoneCallback               m_on_done;
@@ -78,4 +102,12 @@ private:
 	// the door we clicked and are waiting on
 	uint32 m_door_entity  = 0;
 	uint64 m_door_wait_ms = 0;
+
+	// a lift on the route: m_path[m_board] is the platform where we get on, m_path[m_board + 1]
+	// the same platform at the other floor, m_path[m_board - 1] the call button's landing
+	enum class LiftPhase { None, ToButton, Calling, Boarding, Riding, Off };
+	LiftPhase m_lift_phase  = LiftPhase::None;
+	size_t    m_board       = 0;
+	uint8     m_lift_button = 0;
+	uint64    m_lift_ms     = 0;   // calling: when the platform should be here; riding: when we got on
 };

@@ -21,6 +21,8 @@
 #include "common/eq_packet_structs.h"
 #include "common/eqemu_logsys.h"
 #include "common/misc_functions.h"
+#include "common/rulesys.h"
+#include "zone/map.h"
 #include "zone/client.h"
 #include "zone/doors.h"
 #include "zone/entity.h"
@@ -31,7 +33,9 @@
 
 #include "glm/geometric.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <map>
 
 extern Zone       *zone;
 extern EntityList entity_list;
@@ -47,6 +51,19 @@ namespace {
 	constexpr float  DOOR_LOOKAHEAD    = 15.0f;
 	constexpr float  DOOR_HEIGHT_RANGE = 20.0f;
 	constexpr uint64 DOOR_WAIT_MS      = 3000;
+	// a partial route counts if it ends this close to where we were going (mobs stand a little
+	// off the navmesh)
+	constexpr float  PARTIAL_OK        = 20.0f;
+	constexpr float  PARTIAL_OK_Z      = 25.0f;
+	// lifts: platform door type, how long the platform takes to come when called, how fast it
+	// rides, how near the platform's centre we stand, and when a lift is worth it over walking
+	constexpr uint8  LIFT_OPEN_TYPE    = 59;
+	constexpr uint64 LIFT_CALL_MS      = 4000;
+	constexpr float  LIFT_SPEED        = 12.0f;   // units per second
+	constexpr float  PLATFORM_RADIUS   = 12.0f;
+	constexpr float  LIFT_MIN_CLIMB    = 30.0f;   // floors at least this far apart
+	constexpr float  LIFT_SAVING       = 0.75f;   // ride when it's under 3/4 of the walk (or no walk)
+	constexpr float  LIFT_RIDE_COST    = 60.0f;   // a ride "costs" this many units of walking
 
 	uint64 NowMs()
 	{
@@ -79,11 +96,35 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 	m_stop_at_end = false;
 	m_through     = through_zone_lines;
 
+	m_lift_phase = LiftPhase::None;
 	if (zone->pathing) {
 		bool partial = false;
 		bool stuck   = false;
 		auto route   = zone->pathing->FindRoute(start, destination, partial, stuck);
+		float direct = 0.0f;
+		const glm::vec3 *last = nullptr;
 		for (auto &node : route) {
+			if (last) {
+				direct += glm::length(node.pos - *last);
+			}
+			last = &node.pos;
+		}
+		// with no navmesh path at all, FindRoute answers with just the destination (NPCs walk
+		// straight there); a real route starts where we stand, so it has two nodes or more
+		const bool fallback = route.size() == 1 && glm::length(route.front().pos - destination) < 0.1f &&
+			glm::length(glm::vec3(destination.x - start.x, destination.y - start.y, 0.0f)) > PARTIAL_OK;
+		if (fallback) {
+			route.clear();
+		}
+		const bool walkable = !route.empty() && !stuck && !partial;
+		bool via_lift = false;
+		if (!through_zone_lines && std::fabs(destination.z - start.z) >= LIFT_MIN_CLIMB) {
+			via_lift = PlanWithLift(start, destination, walkable ? direct : -1.0f);
+		}
+		for (auto &node : route) {
+			if (via_lift) {
+				break; // PlanWithLift has the path
+			}
 			if (node.teleport) {
 				// a zone line (or teleporter): walk up to it, and into it when zoning
 				if (through_zone_lines) {
@@ -94,7 +135,20 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 			}
 			m_path.push_back(node.pos);
 		}
-		if (m_path.empty() || stuck) {
+		// a partial route ends wherever the navmesh gets closest, which can be a cliff top above
+		// the destination or a ledge beside it: walking it isn't getting there
+		const bool short_of_it = partial && !m_stop_at_end && !m_path.empty() &&
+			(glm::length(glm::vec3(m_path.back().x - destination.x, m_path.back().y - destination.y, 0.0f)) > PARTIAL_OK ||
+			 std::fabs(m_path.back().z - destination.z) > PARTIAL_OK_Z);
+		if (!via_lift && (m_path.empty() || stuck || short_of_it)) {
+			if (short_of_it) {
+				LogHeadlessClient(
+					"[{}] no full route to [{:.1f}, {:.1f}, {:.1f}]: the nearest it gets is [{:.1f}, {:.1f}, {:.1f}]",
+					me->GetCleanName(), destination.x, destination.y, destination.z,
+					m_path.back().x, m_path.back().y, m_path.back().z
+				);
+			}
+			m_path.clear();
 			m_on_done(Result::NoPath, start);
 			return "";
 		}
@@ -206,6 +260,15 @@ void HeadlessMover::Tick()
 
 	const uint64 now   = NowMs();
 
+	if (m_lift_phase != LiftPhase::None && HandleLift(now)) {
+		m_progress_ms  = now; // waiting for or riding a lift isn't being stuck
+		m_progress_pos = m_pos;
+		return;
+	}
+	if (!m_moving) {
+		return;
+	}
+
 	if (HandleDoors(now)) {
 		m_progress_ms = now; // waiting for a door isn't being stuck
 		return;
@@ -219,6 +282,10 @@ void HeadlessMover::Tick()
 
 	glm::vec3 pos = m_pos;
 	while (step > 0.0f && m_next < m_path.size()) {
+		if ((m_lift_phase == LiftPhase::ToButton && m_next == m_board) ||
+			(m_lift_phase == LiftPhase::Boarding && m_next == m_board + 1)) {
+			break; // at the button, or on the platform: HandleLift takes over
+		}
 		const glm::vec3 &target = m_path[m_next];
 		glm::vec3 to(target.x - pos.x, target.y - pos.y, 0.0f);
 		const float dist = glm::length(to);
@@ -234,8 +301,18 @@ void HeadlessMover::Tick()
 		}
 	}
 
-	// keep to the floor, as the client's physics would
-	pos.z = me->GetFixedZ(pos);
+	// keep to the floor, as the client's physics would; but on a platform (and stepping on or off
+	// one) the floor is the platform, which the zone's map doesn't have
+	const bool on_platform =
+		(m_lift_phase == LiftPhase::Boarding) ||
+		(m_lift_phase == LiftPhase::Off && m_board + 1 < m_path.size() &&
+		 glm::length(glm::vec3(pos.x - m_path[m_board + 1].x, pos.y - m_path[m_board + 1].y, 0.0f)) < PLATFORM_RADIUS * 2);
+	if (on_platform) {
+		pos.z = m_path[std::min(m_next, m_path.size() - 1)].z;
+	}
+	else {
+		pos.z = me->GetFixedZ(pos);
+	}
 
 	// the client notices zone lines itself (the server knows them from the water map's regions):
 	// walk into one only when zoning, otherwise stop short of it
@@ -319,6 +396,12 @@ bool HeadlessMover::HandleDoors(uint64 now)
 			continue;
 		}
 
+		if (!CanOpen(me, door)) {
+			LogHeadlessClient("[{}] door [{}] ({}) is locked and we can't open it", me->GetCleanName(), door->GetDoorID(), door->GetDoorName());
+			Stop(Result::Locked);
+			return true;
+		}
+
 		// click it, as a player would; the server checks distance, keys and locks
 		auto app = new EQApplicationPacket(OP_ClickDoor, sizeof(ClickDoor_Struct));
 		auto *cd = reinterpret_cast<ClickDoor_Struct *>(app->pBuffer);
@@ -334,6 +417,251 @@ bool HeadlessMover::HandleDoors(uint64 now)
 	}
 
 	return false;
+}
+
+bool HeadlessMover::CanOpen(Client *me, Doors *door)
+{
+	if (me->GetGM()) {
+		return true;
+	}
+	if (door->GetGuildID() > 0) {
+		return door->GetGuildID() == me->GuildID();
+	}
+	const uint32 key = door->GetKeyItem();
+	if (key) {
+		if (me->KeyRingCheck(key)) {
+			return true;
+		}
+		if (RuleB(Doors, RequireKeyOnCursor)) {
+			const auto *cursor = me->GetInv().GetItem(EQ::invslot::slotCursor);
+			return cursor && cursor->GetID() == key;
+		}
+		return me->GetInv().HasItem(key, 1) != INVALID_INDEX;
+	}
+	// a lock that only picks open: that needs lockpicks on the cursor and the skill (not yet)
+	return door->GetLockpick() == 0;
+}
+
+// the floor under a point (the zone's map), or the point's own height if there's no map
+static float FloorBelow(const glm::vec3 &p)
+{
+	if (!zone->zonemap) {
+		return p.z;
+	}
+	glm::vec3   at(p.x, p.y, p.z + 5.0f);
+	const float z = zone->zonemap->FindBestZ(at, nullptr);
+	return z == BEST_Z_INVALID ? p.z : z;
+}
+
+std::vector<HeadlessMover::Lift> HeadlessMover::FindLifts()
+{
+	// doors don't move between zone boots: work the lifts out once per zone
+	static std::vector<Lift> cached;
+	static uint32            cached_zone = 0;
+	static uint16            cached_instance = 0;
+	if (cached_zone == zone->GetZoneID() && cached_instance == zone->GetInstanceID()) {
+		return cached;
+	}
+
+	struct Found {
+		Doors              *platform = nullptr;
+		std::vector<Doors *> buttons;
+	};
+	std::map<uint8, Found> platforms;
+	for (auto &[id, d] : entity_list.GetDoorsList()) {
+		if (!d || d->GetOpenType() != LIFT_OPEN_TYPE || d->GetTriggerDoorID() == 0) {
+			continue;
+		}
+		Doors *platform = entity_list.FindDoor(d->GetTriggerDoorID());
+		if (!platform || platform->GetOpenType() != LIFT_OPEN_TYPE || platform->GetDoorParam() <= 0) {
+			continue;
+		}
+		auto &f = platforms[platform->GetDoorID()];
+		f.platform = platform;
+		f.buttons.push_back(d);
+	}
+
+	std::vector<Lift> lifts;
+	for (auto &[id, f] : platforms) {
+		if (f.buttons.size() < 2) {
+			continue;
+		}
+		const auto  &pp   = f.platform->GetPosition();
+		const float rest  = pp.z;
+		const float risen = pp.z + f.platform->GetDoorParam();
+		Doors *low  = *std::min_element(f.buttons.begin(), f.buttons.end(), [&](Doors *a, Doors *b) {
+			return std::fabs(a->GetPosition().z - rest) < std::fabs(b->GetPosition().z - rest);
+		});
+		Doors *high = *std::min_element(f.buttons.begin(), f.buttons.end(), [&](Doors *a, Doors *b) {
+			return std::fabs(a->GetPosition().z - risen) < std::fabs(b->GetPosition().z - risen);
+		});
+		if (low == high || high->GetPosition().z - low->GetPosition().z < LIFT_MIN_CLIMB) {
+			continue;
+		}
+		Lift lift;
+		lift.bottom_button  = low->GetDoorID();
+		lift.top_button     = high->GetDoorID();
+		// the floors: below each call button (they're at hand height on the landings)
+		const auto &lb      = low->GetPosition();
+		const auto &hb      = high->GetPosition();
+		lift.bottom_landing = glm::vec3(lb.x, lb.y, FloorBelow(glm::vec3(lb.x, lb.y, lb.z)));
+		lift.top_landing    = glm::vec3(hb.x, hb.y, FloorBelow(glm::vec3(hb.x, hb.y, hb.z)));
+		// where to stand: a platform model's origin is off to one side (Kelethin's are ~100 units
+		// out), but its call buttons sit either side of the shaft, so stand between them
+		const glm::vec2 shaft((lb.x + hb.x) / 2.0f, (lb.y + hb.y) / 2.0f);
+		lift.bottom = glm::vec3(shaft.x, shaft.y, lift.bottom_landing.z);
+		lift.top    = glm::vec3(shaft.x, shaft.y, lift.top_landing.z);
+		// the map should have a hole there at the top (the platform isn't in it)
+		const float under = FloorBelow(glm::vec3(shaft.x, shaft.y, lift.top_landing.z));
+		LogHeadlessClient(
+			"lift [{}]: [{:.0f}, {:.0f}] from z [{:.0f}] to [{:.0f}], buttons [{}] / [{}]{}",
+			f.platform->GetDoorID(), shaft.y, shaft.x, lift.bottom.z, lift.top.z, lift.bottom_button, lift.top_button,
+			under < lift.top_landing.z - LIFT_MIN_CLIMB ? "" : " (no shaft in the map there?)"
+		);
+		lifts.push_back(lift);
+	}
+	cached          = lifts;
+	cached_zone     = zone->GetZoneID();
+	cached_instance = zone->GetInstanceID();
+	return lifts;
+}
+
+std::vector<glm::vec3> HeadlessMover::Route(const glm::vec3 &from, const glm::vec3 &to, float *length)
+{
+	std::vector<glm::vec3> out;
+	*length = -1.0f;
+	if (!zone->pathing) {
+		return out;
+	}
+	bool partial = false;
+	bool stuck   = false;
+	auto route   = zone->pathing->FindRoute(from, to, partial, stuck);
+	if (route.empty() || stuck || partial || (route.size() == 1 && glm::length(from - to) > PARTIAL_OK)) {
+		return out; // (one node: FindRoute's straight-line answer when there's no path)
+	}
+	float total = 0.0f;
+	for (auto &node : route) {
+		if (node.teleport) {
+			return {}; // through a zone line: not a way to a lift
+		}
+		if (!out.empty()) {
+			total += glm::length(node.pos - out.back());
+		}
+		out.push_back(node.pos);
+	}
+	*length = total;
+	return out;
+}
+
+bool HeadlessMover::PlanWithLift(const glm::vec3 &start, const glm::vec3 &destination, float direct_length)
+{
+	struct Best {
+		float                  length = -1.0f;
+		std::vector<glm::vec3> path;
+		size_t                 board  = 0;
+		uint8                  button = 0;
+	} best;
+
+	for (const auto &lift : FindLifts()) {
+		const float mid = (lift.bottom.z + lift.top.z) / 2.0f;
+		bool up;
+		if (start.z < mid && destination.z > mid) {
+			up = true;
+		}
+		else if (start.z > mid && destination.z < mid) {
+			up = false;
+		}
+		else {
+			continue;
+		}
+		const glm::vec3 &on_landing  = up ? lift.bottom_landing : lift.top_landing;
+		const glm::vec3 &off_landing = up ? lift.top_landing : lift.bottom_landing;
+		const glm::vec3 &on          = up ? lift.bottom : lift.top;
+		const glm::vec3 &off         = up ? lift.top : lift.bottom;
+
+		float to_lift, from_lift;
+		auto  leg1 = Route(start, on_landing, &to_lift);
+		auto  leg2 = Route(off_landing, destination, &from_lift);
+		if (to_lift < 0.0f || from_lift < 0.0f) {
+			continue;
+		}
+		const float length = to_lift + from_lift + LIFT_RIDE_COST +
+			glm::length(on - on_landing) + glm::length(off - off_landing);
+		if (best.length >= 0.0f && length >= best.length) {
+			continue;
+		}
+		best.length = length;
+		best.path   = leg1;
+		best.path.push_back(on_landing);
+		best.board  = best.path.size();
+		best.path.push_back(on);
+		best.path.push_back(off);
+		best.path.push_back(off_landing);
+		best.path.insert(best.path.end(), leg2.begin(), leg2.end());
+		best.button = up ? lift.bottom_button : lift.top_button;
+	}
+
+	if (best.length < 0.0f || (direct_length >= 0.0f && best.length > direct_length * LIFT_SAVING)) {
+		return false;
+	}
+	m_path        = std::move(best.path);
+	m_board       = best.board;
+	m_lift_button = best.button;
+	m_lift_phase  = LiftPhase::ToButton;
+	LogHeadlessClient("lift: [{:.0f}] units via door [{}] instead of [{:.0f}] walking", best.length, m_lift_button, direct_length);
+	return true;
+}
+
+bool HeadlessMover::HandleLift(uint64 now)
+{
+	Client *me = m_stream->GetClient();
+	switch (m_lift_phase) {
+		case LiftPhase::ToButton:
+			if (m_next != m_board) {
+				return false;
+			}
+			{
+				// press the call button, as a player would; the platform comes to us
+				auto app = new EQApplicationPacket(OP_ClickDoor, sizeof(ClickDoor_Struct));
+				auto *cd = reinterpret_cast<ClickDoor_Struct *>(app->pBuffer);
+				cd->doorid    = m_lift_button;
+				cd->player_id = me->GetID();
+				m_stream->Inject(app);
+			}
+			LogHeadlessClient("[{}] calling the lift (door [{}])", me->GetCleanName(), m_lift_button);
+			m_lift_phase = LiftPhase::Calling;
+			m_lift_ms    = now + LIFT_CALL_MS;
+			SendUpdate(m_pos, me->GetHeading(), 0);
+			return true;
+		case LiftPhase::Calling:
+			if (now < m_lift_ms) {
+				return true;
+			}
+			m_lift_phase = LiftPhase::Boarding;
+			return false;
+		case LiftPhase::Boarding:
+			if (m_next != m_board + 1) {
+				return false;
+			}
+			m_lift_phase = LiftPhase::Riding;
+			m_lift_ms    = now;
+			return true;
+		case LiftPhase::Riding: {
+			const glm::vec3 &from = m_path[m_board];
+			const glm::vec3 &to   = m_path[m_board + 1];
+			const float      dz   = to.z - from.z;
+			const float      t    = std::min(1.0f, (now - m_lift_ms) / 1000.0f * LIFT_SPEED / std::max(std::fabs(dz), 1.0f));
+			m_pos = glm::vec3(from.x, from.y, from.z + dz * t);
+			SendUpdate(m_pos, me->GetHeading(), 0);
+			if (t >= 1.0f) {
+				m_next       = m_board + 2; // step off towards the landing
+				m_lift_phase = LiftPhase::Off;
+			}
+			return true;
+		}
+		default:
+			return false;
+	}
 }
 
 void HeadlessMover::SendUpdate(const glm::vec3 &pos, float heading, uint32 animation)

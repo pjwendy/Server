@@ -1020,7 +1020,7 @@ void HeadlessClientManager::ReportSpawned(const std::string &session_id, uint32 
 		session.stream, [this, session_id](HeadlessMover::Result result, const glm::vec3 &where) {
 			static const eqheadless::MoveStatus statuses[] = {
 				eqheadless::MOVE_ARRIVED, eqheadless::MOVE_STOPPED, eqheadless::MOVE_STUCK,
-				eqheadless::MOVE_NO_PATH, eqheadless::MOVE_ZONE_LINE,
+				eqheadless::MOVE_NO_PATH, eqheadless::MOVE_ZONE_LINE, eqheadless::MOVE_LOCKED,
 			};
 			eqheadless::ServerFrame frame;
 			auto *move = frame.mutable_event()->mutable_move();
