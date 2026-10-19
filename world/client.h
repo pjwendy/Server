@@ -68,11 +68,15 @@ public:
 	inline EQ::versions::ClientVersion	GetClientVersion()	{ return m_ClientVersion; }
 	inline ClientListEntry* GetCLE()		{ return cle; }
 	inline void			SetCLE(ClientListEntry* iCLE)			{ cle = iCLE; }
-	bool StoreCharacter(
+	static bool StoreCharacter(
 		uint32 account_id,
 		PlayerProfile_Struct *p_player_profile_struct,
 		EQ::InventoryProfile *p_inventory_profile
 	);
+	// builds and stores a new character as character creation does (start zone, bind points, skills,
+	// languages, starting items) for a request that has already been validated and whose name is
+	// reserved; also used without a connected client (world headless:character-create)
+	static bool CreateCharacter(uint32 account_id, int16 admin, const char *name, CharCreate_Struct *cc, uint32 client_version_bit);
 
 private:
 
@@ -92,10 +96,10 @@ private:
 	uint32 m_ClientVersionBit;
 	bool OPCharCreate(char *name, CharCreate_Struct *cc);
 
-	void SetClassStartingSkills( PlayerProfile_Struct *pp );
-	void SetRaceStartingSkills( PlayerProfile_Struct *pp );
-	void SetRacialLanguages( PlayerProfile_Struct *pp );
-	void SetClassLanguages(PlayerProfile_Struct *pp);
+	static void SetClassStartingSkills(PlayerProfile_Struct *pp, uint32 client_version_bit);
+	static void SetRaceStartingSkills( PlayerProfile_Struct *pp );
+	static void SetRacialLanguages( PlayerProfile_Struct *pp );
+	static void SetClassLanguages(PlayerProfile_Struct *pp);
 
 	ClientListEntry* cle;
 	Timer	connect;

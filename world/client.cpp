@@ -1695,14 +1695,6 @@ void Client::SendApproveWorld()
 
 bool Client::OPCharCreate(char *name, CharCreate_Struct *cc)
 {
-	PlayerProfile_Struct pp;
-	EQ::InventoryProfile inv;
-
-	pp.SetPlayerProfileVersion(EQ::versions::ConvertClientVersionToMobVersion(EQ::versions::ConvertClientVersionBitToClientVersion(m_ClientVersionBit)));
-	inv.SetInventoryVersion(EQ::versions::ConvertClientVersionBitToClientVersion(m_ClientVersionBit));
-	inv.SetGMInventory(false); // character cannot have gm flag at this point
-
-	time_t  bday = time(nullptr);
 	in_addr in;
 
 	const uint32 stats_sum = (
@@ -1762,6 +1754,20 @@ bool Client::OPCharCreate(char *name, CharCreate_Struct *cc)
 		}
 	}
 
+	return CreateCharacter(GetAccountID(), GetAdmin(), name, cc, m_ClientVersionBit);
+}
+
+bool Client::CreateCharacter(uint32 account_id, int16 admin, const char *name, CharCreate_Struct *cc, uint32 client_version_bit)
+{
+	PlayerProfile_Struct pp;
+	EQ::InventoryProfile inv;
+
+	pp.SetPlayerProfileVersion(EQ::versions::ConvertClientVersionToMobVersion(EQ::versions::ConvertClientVersionBitToClientVersion(client_version_bit)));
+	inv.SetInventoryVersion(EQ::versions::ConvertClientVersionBitToClientVersion(client_version_bit));
+	inv.SetGMInventory(false); // character cannot have gm flag at this point
+
+	time_t bday = time(nullptr);
+
 	/* Convert incoming cc_s to the new PlayerProfile_Struct */
 	memset(&pp, 0, sizeof(PlayerProfile_Struct));	// start building the profile
 
@@ -1803,7 +1809,7 @@ bool Client::OPCharCreate(char *name, CharCreate_Struct *cc)
 	/* Set Racial and Class specific language and skills */
 	SetRacialLanguages(&pp);
 	SetRaceStartingSkills(&pp);
-	SetClassStartingSkills(&pp);
+	SetClassStartingSkills(&pp, client_version_bit);
 	SetClassLanguages(&pp);
 
 	memset(pp.spell_book, std::numeric_limits<uint8>::max(), (sizeof(uint32) * EQ::spells::SPELLBOOK_SIZE));
@@ -1817,7 +1823,7 @@ bool Client::OPCharCreate(char *name, CharCreate_Struct *cc)
 	pp.pvp = database.GetServerType() == 1 ? 1 : 0;
 
 	/* If it is an SoF Client and the SoF Start Zone rule is set, send new chars there */
-	if (m_ClientVersionBit & EQ::versions::maskSoFAndLater) {
+	if (client_version_bit & EQ::versions::maskSoFAndLater) {
 		LogInfo("Found [SoFStartZoneID] rule setting [{}]", RuleI(World, SoFStartZoneID));
 		if (RuleI(World, SoFStartZoneID) > 0) {
 			pp.zone_id = RuleI(World, SoFStartZoneID);
@@ -1832,7 +1838,7 @@ bool Client::OPCharCreate(char *name, CharCreate_Struct *cc)
 	}
 
 	/* use normal starting zone logic to either get defaults, or if startzone was set, load that from the db table.*/
-	const bool is_valid_start_zone = content_db.GetStartZone(&pp, cc, m_ClientVersionBit & EQ::versions::maskTitaniumAndEarlier);
+	const bool is_valid_start_zone = content_db.GetStartZone(&pp, cc, client_version_bit & EQ::versions::maskTitaniumAndEarlier);
 	if (!is_valid_start_zone){
 		return false;
 	}
@@ -1908,9 +1914,9 @@ bool Client::OPCharCreate(char *name, CharCreate_Struct *cc)
 		);
 	}
 
-	content_db.SetStartingItems(&pp, &inv, pp.race, pp.class_, pp.deity, pp.zone_id, pp.name, GetAdmin());
+	content_db.SetStartingItems(&pp, &inv, pp.race, pp.class_, pp.deity, pp.zone_id, pp.name, admin);
 
-	const bool success = StoreCharacter(GetAccountID(), &pp, &inv);
+	const bool success = StoreCharacter(account_id, &pp, &inv);
 
 	LogInfo("Character creation {} for [{}]", success ? "succeeded" : "failed", pp.name);
 	return success;
@@ -2183,7 +2189,7 @@ bool CheckCharCreateInfoTitanium(CharCreate_Struct *cc)
 	return Charerrors == 0;
 }
 
-void Client::SetClassStartingSkills(PlayerProfile_Struct *pp)
+void Client::SetClassStartingSkills(PlayerProfile_Struct *pp, uint32 client_version_bit)
 {
 	for (uint32 i = 0; i <= EQ::skills::HIGHEST_SKILL; ++i) {
 		if (pp->skills[i] == 0) {
@@ -2197,7 +2203,7 @@ void Client::SetClassStartingSkills(PlayerProfile_Struct *pp)
 		}
 	}
 
-	if (cle->GetClientVersion() < static_cast<uint8>(EQ::versions::ClientVersion::RoF2) && pp->class_ == Class::Berserker) {
+	if (EQ::versions::ConvertClientVersionBitToClientVersion(client_version_bit) < EQ::versions::ClientVersion::RoF2 && pp->class_ == Class::Berserker) {
 		pp->skills[EQ::skills::Skill1HPiercing] = pp->skills[EQ::skills::Skill2HPiercing];
 		pp->skills[EQ::skills::Skill2HPiercing] = 0;
 	}

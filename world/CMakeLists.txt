@@ -93,6 +93,7 @@ source_group("cli" REGULAR_EXPRESSION "cli/.*")
 
 if(EQEMU_BUILD_HEADLESS)
     list(APPEND world_sources
+        cli/cli_headless_characters.cpp
         cli/cli_headless_tokens.cpp
         headless/headless_gateway.cpp
         headless/headless_tokens.cpp
