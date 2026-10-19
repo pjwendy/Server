@@ -929,6 +929,19 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			it->second.loot_corpse = 0;
 			break;
 		}
+		case OP_SkillUpdate: {
+			// the client turns this into "You have become better at <skill>! (<value>)"
+			if (app->size < sizeof(SkillUpdate_Struct)) {
+				return;
+			}
+			auto *su    = reinterpret_cast<const SkillUpdate_Struct *>(app->pBuffer);
+			auto *skill = frame.mutable_event()->mutable_skill();
+			skill->set_skill_id(su->skillId);
+			skill->set_value(su->value);
+			skill->set_name(su->skillId >= 100 ? EQ::constants::GetLanguageName(static_cast<uint8>(su->skillId - 100))
+				: EQ::skills::GetSkillName(static_cast<EQ::skills::SkillType>(su->skillId)));
+			break;
+		}
 		case OP_RespawnWindow: {
 			// Character:RespawnFromHover: the client picks where to respawn; we take our bind point
 			if (app->size > sizeof(uint32)) {
