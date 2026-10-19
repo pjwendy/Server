@@ -631,6 +631,23 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			stream->Inject(app);
 			return "";
 		}
+		case eqheadless::Command::kScribe: {
+			const auto &sc = cmd.scribe();
+			const EQ::ItemInstance *inst = me->GetInv().GetItem(EQ::invslot::slotCursor);
+			if (!inst || !inst->GetItem() || inst->GetItem()->Scroll.Effect != static_cast<int32>(sc.spell_id())) {
+				return "pick up the scroll for that spell first (it must be on the cursor)";
+			}
+			if (sc.book_slot() >= EQ::spells::SPELLBOOK_SIZE || IsValidSpell(me->GetSpellIDByBookSlot(sc.book_slot()))) {
+				return fmt::format("spellbook page {} isn't free", sc.book_slot());
+			}
+			auto app = new EQApplicationPacket(OP_MemorizeSpell, sizeof(MemorizeSpell_Struct));
+			auto *ms = reinterpret_cast<MemorizeSpell_Struct *>(app->pBuffer);
+			ms->slot     = sc.book_slot();
+			ms->spell_id = sc.spell_id();
+			ms->scribing = memSpellScribing;
+			stream->Inject(app);
+			return "";
+		}
 		case eqheadless::Command::kDisband: {
 			if (!me->GetGroup() && !me->GetRaid()) {
 				return "not in a group";
@@ -1227,6 +1244,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		}
 		auto *spell = book.add_spells();
 		spell->set_spell_id(id);
+		spell->set_slot(i);
 		spell->set_name(SpellName(id));
 		spell->set_level(IsPlayerClass(me->GetClass()) ? spells[id].classes[me->GetClass() - 1] : 0);
 	}
@@ -1245,10 +1263,10 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		item->set_slot(slot);
 		item->set_charges(inst->GetCharges());
 	};
-	for (int16 slot = EQ::invslot::POSSESSIONS_BEGIN; slot <= EQ::invslot::POSSESSIONS_END; ++slot) {
+	auto add_with_bag = [&](int16 slot) {
 		const EQ::ItemInstance *inst = me->GetInv().GetItem(slot);
 		if (!inst || !inst->GetItem()) {
-			continue;
+			return;
 		}
 		add_item(slot, inst);
 		if (inst->IsClassBag()) {
@@ -1259,6 +1277,12 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 				}
 			}
 		}
+	};
+	for (int16 slot = EQ::invslot::POSSESSIONS_BEGIN; slot <= EQ::invslot::POSSESSIONS_END; ++slot) {
+		add_with_bag(slot);
+	}
+	for (int16 slot = EQ::invslot::BANK_BEGIN; slot <= EQ::invslot::BANK_END; ++slot) {
+		add_with_bag(slot);
 	}
 	// our bots' equipment, for the leader to gear them
 	eqheadless::OwnedBots owned;
@@ -1400,6 +1424,13 @@ void HeadlessClientManager::FillItem(eqheadless::Item *out, const EQ::ItemData *
 	out->set_usable(me && item->IsEquipable(me->GetBaseRace(), me->GetClass()) && item->ReqLevel <= me->GetLevel());
 	out->set_classes(item->Classes);
 	out->set_races(item->Races);
+	if (item->ItemType == EQ::item::ItemTypeSpell && IsValidSpell(item->Scroll.Effect)) {
+		out->set_scroll_spell(item->Scroll.Effect);
+		if (me && IsPlayerClass(me->GetClass())) {
+			const uint8 level = spells[item->Scroll.Effect].classes[me->GetClass() - 1];
+			out->set_scroll_level(level < 255 ? level : 0);
+		}
+	}
 }
 
 void HeadlessClientManager::RequestZoneLine(const std::string &session_id, Session &session, const glm::vec3 &where)

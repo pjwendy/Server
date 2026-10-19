@@ -109,8 +109,11 @@ message ZoneToCommand   { string zone = 1; }
 message MerchantCommand { uint32 npc_id = 1; bool open = 2; }
 message BuyCommand      { uint32 npc_id = 1; uint32 merchant_slot = 2; uint32 quantity = 3; }
 message SellCommand     { uint32 npc_id = 1; int32 slot = 2; uint32 quantity = 3; } // slot: inventory slot
-// pick an item up and put it down elsewhere (equip it, put a bag in a slot); swaps with what's there
-message MoveItemCommand { int32 from_slot = 1; int32 to_slot = 2; uint32 quantity = 3; }                              // leave the group, as /disband
+// pick an item up and put it down elsewhere (equip it, put a bag in a slot, bank it); swaps with
+// what's there. Bank slots (2000+) need a banker within reach, as in the client.
+message MoveItemCommand { int32 from_slot = 1; int32 to_slot = 2; uint32 quantity = 3; }
+// scribe the spell scroll on the cursor into the spellbook (book_slot: a free page), as the client
+message ScribeCommand   { uint32 book_slot = 1; uint32 spell_id = 2; }                              // leave the group, as /disband
 
 message Command {
   uint32 id = 1; // echoed in CommandResult
@@ -134,6 +137,7 @@ message Command {
     BuyCommand      buy       = 18;
     SellCommand     sell      = 19;
     MoveItemCommand move_item = 20;
+    ScribeCommand   scribe    = 21;
   }
 }
 
@@ -327,6 +331,7 @@ message BookSpell {
   uint32 spell_id = 1;
   string name     = 2;
   uint32 level    = 3; // the level our class gets it
+  uint32 slot     = 4; // its page in the book
 }
 
 message SpellBook { repeated BookSpell spells = 1; }
@@ -364,6 +369,8 @@ message Item {
   bool   usable    = 29; // its holder (us, or the bot wearing it) can equip it at its level
   uint32 classes   = 30; // bitmask: bit (class - 1)
   uint32 races     = 31; // bitmask of player races (EQ race bits: human 1, barbarian 2, ... dwarf 128 ...)
+  uint32 scroll_spell = 32; // a spell scroll: the spell it teaches
+  uint32 scroll_level = 33; // ... and the level our class can learn it at (0: not our class)
 }
 
 // our EQEmu bots and what they wear; we equip them (^inventorygive)
@@ -379,7 +386,7 @@ message BotGear {
 
 message OwnedBots { repeated BotGear bots = 1; }
 
-message Inventory { repeated Item items = 1; }
+message Inventory { repeated Item items = 1; } // carried and banked (bank slots 2000-2023 and their bags)
 
 message GroupMember {
   string name     = 1;
