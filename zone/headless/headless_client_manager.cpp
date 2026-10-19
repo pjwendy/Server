@@ -35,6 +35,7 @@
 #include "zone/worldserver.h"
 #include "zone/zone.h"
 #include "zone/zonedb.h"
+#include "zone/water_map.h"
 
 #include "headless.pb.h"
 
@@ -136,6 +137,31 @@ namespace {
 	{
 		const char *name = ZoneName(zone_id, true);
 		return name ? name : "";
+	}
+
+	bool Wild(float v)
+	{
+		return v >= 999998.0f || v <= -999998.0f;
+	}
+
+	// zone points this client version can use
+	std::vector<ZonePoint *> UsableZonePoints(Client *me)
+	{
+		std::vector<ZonePoint *> out;
+		LinkedListIterator<ZonePoint *> it(zone->zone_point_list);
+		for (it.Reset(); it.MoreElements(); it.Advance()) {
+			ZonePoint *zp = it.GetData();
+			if (zp && !zp->is_virtual && (zp->client_version_mask & me->ClientVersionBit()) && zp->target_zone_id != zone->GetZoneID()) {
+				out.push_back(zp);
+			}
+		}
+		return out;
+	}
+
+	// where to walk for a zone point: its position, with "anywhere" axes taken from ours
+	glm::vec3 ZonePointSpot(const ZonePoint *zp, const glm::vec3 &from)
+	{
+		return glm::vec3(Wild(zp->x) ? from.x : zp->x, Wild(zp->y) ? from.y : zp->y, Wild(zp->z) ? from.z : zp->z);
 	}
 
 	// by entity name ("a_rat00") or, failing that, clean name ("a rat"), ignoring case
@@ -250,6 +276,7 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			if (!session.mover) {
 				return "character is not ready to move";
 			}
+			session.zone_line_to = 0;
 			const auto &m = cmd.move_to();
 			if (!std::isfinite(m.x()) || !std::isfinite(m.y()) || !std::isfinite(m.z())) {
 				return "destination must be finite";
@@ -498,6 +525,45 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			std::fill(std::begin(session.loot_coin), std::end(session.loot_coin), 0);
 			stream->Inject(Uint32Packet(OP_LootRequest, id));
 			return "";
+		}
+		case eqheadless::Command::kZoneTo: {
+			if (!session.mover) {
+				return "character is not ready to move";
+			}
+			const std::string &name = cmd.zone_to().zone();
+			const uint32 zone_id    = ZoneID(name);
+			if (!zone_id) {
+				return fmt::format("no zone called {}", name);
+			}
+			const std::string refusal = ZoneRefusal(ShortName(zone_id));
+			if (!refusal.empty()) {
+				return refusal;
+			}
+
+			const glm::vec3 here(me->GetX(), me->GetY(), me->GetZ());
+			const ZonePoint *best = nullptr;
+			float best_dist       = 0.0f;
+			for (auto *zp : UsableZonePoints(me)) {
+				if (zp->target_zone_id != zone_id) {
+					continue;
+				}
+				const glm::vec3 spot = ZonePointSpot(zp, here);
+				const float dist     = glm::length(glm::vec2(spot.x - here.x, spot.y - here.y));
+				if (!best || dist < best_dist) {
+					best      = zp;
+					best_dist = dist;
+				}
+			}
+			if (!best) {
+				return fmt::format("{} has no zone line to {}", zone->GetShortName(), ShortName(zone_id));
+			}
+
+			session.zone_line_to = zone_id;
+			const std::string error = session.mover->Start(ZonePointSpot(best, here), true);
+			if (!error.empty()) {
+				session.zone_line_to = 0;
+			}
+			return error;
 		}
 		case eqheadless::Command::kDisband: {
 			if (!me->GetGroup() && !me->GetRaid()) {
@@ -846,6 +912,18 @@ void HeadlessClientManager::ReportSpawned(const std::string &session_id, uint32 
 			move->set_y(where.y);
 			move->set_z(where.z);
 			SendFrame(session_id, frame);
+
+			// ZoneTo: we're at (or in) the zone line; ask to go through it, as the client does
+			auto s = m_sessions.find(session_id);
+			if (s != m_sessions.end() && s->second.zone_line_to) {
+				if (result == HeadlessMover::Result::ZoneLine || result == HeadlessMover::Result::Arrived) {
+					RequestZoneLine(session_id, s->second, where);
+				}
+				else {
+					SendZoneEvent(session_id, eqheadless::ZONE_REFUSED, s->second.zone_line_to, "couldn't reach the zone line");
+				}
+				s->second.zone_line_to = 0;
+			}
 		}
 	);
 
@@ -1019,6 +1097,18 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		z->set_instance_id(zone->GetInstanceID());
 		z->set_short_name(zone->GetShortName());
 		z->set_long_name(zone->GetLongName());
+		std::unordered_set<uint32> listed;
+		for (auto *zp : UsableZonePoints(me)) {
+			if (!listed.insert(zp->target_zone_id).second) {
+				continue; // one exit per zone; ZoneTo picks the nearest line
+			}
+			auto *exit = z->add_exits();
+			exit->set_zone(ShortName(zp->target_zone_id));
+			exit->set_zone_id(zp->target_zone_id);
+			exit->set_x(zp->x);
+			exit->set_y(zp->y);
+			exit->set_z(zp->z);
+		}
 		session.seen.clear();
 	}
 
@@ -1145,6 +1235,33 @@ void HeadlessClientManager::SendFrame(const std::string &session_id, const eqhea
 	memcpy(f->data, body.data(), body.size());
 	worldserver.SendPacket(pack);
 	safe_delete(pack);
+}
+
+void HeadlessClientManager::RequestZoneLine(const std::string &session_id, Session &session, const glm::vec3 &where)
+{
+	Client *me = session.stream ? session.stream->GetClient() : nullptr;
+	if (!me) {
+		return;
+	}
+
+	const uint32 target = session.zone_line_to;
+	if (zone->HasWaterMap() && !zone->watermap->InZoneLine(where)) {
+		// the zone's regions don't put a zone line here; the server will still let us through but
+		// flags it (MQZoneUnknownDest), so say so in the log
+		LogHeadlessClient("[{}] asking to zone to [{}] from [{:.1f}, {:.1f}, {:.1f}], outside the water map's zone lines", me->GetCleanName(), ShortName(target), where.x, where.y, where.z);
+	}
+
+	// an unsolicited zone request names the zone; the server checks it against its zone points
+	auto app = new EQApplicationPacket(OP_ZoneChange, sizeof(ZoneChange_Struct));
+	auto *zc = reinterpret_cast<ZoneChange_Struct *>(app->pBuffer);
+	strn0cpy(zc->char_name, me->GetName(), sizeof(zc->char_name));
+	zc->zoneID     = target;
+	zc->instanceID = 0;
+	zc->x          = where.x;
+	zc->y          = where.y;
+	zc->z          = where.z;
+	zc->success    = 0;
+	session.stream->Inject(app);
 }
 
 void HeadlessClientManager::SendZoneEvent(const std::string &session_id, int status, uint32 zone_id, const std::string &detail)

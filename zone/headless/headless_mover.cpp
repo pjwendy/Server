@@ -26,6 +26,7 @@
 #include "zone/entity.h"
 #include "zone/headless/null_stream.h"
 #include "zone/pathfinder_interface.h"
+#include "zone/water_map.h"
 #include "zone/zone.h"
 
 #include "glm/geometric.hpp"
@@ -62,7 +63,7 @@ HeadlessMover::HeadlessMover(NullStream *stream, DoneCallback on_done)
 
 HeadlessMover::~HeadlessMover() = default;
 
-std::string HeadlessMover::Start(const glm::vec3 &destination)
+std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone_lines)
 {
 	Client *me = m_stream->GetClient();
 	if (!me) {
@@ -76,6 +77,7 @@ std::string HeadlessMover::Start(const glm::vec3 &destination)
 	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
 	m_path.clear();
 	m_stop_at_end = false;
+	m_through     = through_zone_lines;
 
 	if (zone->pathing) {
 		bool partial = false;
@@ -83,7 +85,10 @@ std::string HeadlessMover::Start(const glm::vec3 &destination)
 		auto route   = zone->pathing->FindRoute(start, destination, partial, stuck);
 		for (auto &node : route) {
 			if (node.teleport) {
-				// zone lines and teleporters need zoning (M5); walk up to them and stop
+				// a zone line (or teleporter): walk up to it, and into it when zoning
+				if (through_zone_lines) {
+					m_path.push_back(node.pos);
+				}
 				m_stop_at_end = true;
 				break;
 			}
@@ -231,6 +236,17 @@ void HeadlessMover::Tick()
 
 	// keep to the floor, as the client's physics would
 	pos.z = me->GetFixedZ(pos);
+
+	// the client notices zone lines itself (the server knows them from the water map's regions):
+	// walk into one only when zoning, otherwise stop short of it
+	if (zone->HasWaterMap() && zone->watermap->InZoneLine(pos) && !zone->watermap->InZoneLine(m_pos)) {
+		if (m_through) {
+			m_pos = pos;
+			SendUpdate(pos, me->GetHeading(), 0);
+		}
+		Stop(Result::ZoneLine);
+		return;
+	}
 	m_pos = pos;
 
 	const bool  arrived = m_next >= m_path.size();

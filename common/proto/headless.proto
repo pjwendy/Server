@@ -100,7 +100,10 @@ message StopCastCommand {}                                          // interrupt
 // spell_id 0 forgets the gem.
 message MemorizeCommand { uint32 gem = 1; uint32 spell_id = 2; }
 message ConsiderCommand { uint32 spawn_id = 1; }                    // the answer is a ConsiderEvent
-message LootCommand     { uint32 corpse_id = 1; }                   // loot everything; answer: LootEvent                              // leave the group, as /disband
+message LootCommand     { uint32 corpse_id = 1; }                   // loot everything; answer: LootEvent
+// walk to this zone's zone line for `zone` (a short name from ZoneInfo.exits) and through it, as a
+// player does; a ZoneEvent follows. Plain MoveTo stops at zone lines instead.
+message ZoneToCommand   { string zone = 1; }                              // leave the group, as /disband
 
 message Command {
   uint32 id = 1; // echoed in CommandResult
@@ -119,6 +122,7 @@ message Command {
     MemorizeCommand memorize  = 13;
     ConsiderCommand consider  = 14;
     LootCommand     loot      = 15;
+    ZoneToCommand   zone_to   = 16;
   }
 }
 
@@ -328,6 +332,15 @@ message ZoneInfo {
   uint32 instance_id = 2;
   string short_name  = 3;
   string long_name   = 4;
+  repeated ZoneExit exits = 5; // zone lines out of this zone
+}
+
+message ZoneExit {
+  string zone    = 1; // short name
+  uint32 zone_id = 2;
+  float  x       = 3; // where the zone line is; a coordinate of +-999999 means "anywhere along this axis"
+  float  y       = 4;
+  float  z       = 5;
 }
 
 message Snapshot {

@@ -43,8 +43,9 @@ public:
 	HeadlessMover(NullStream *stream, DoneCallback on_done);
 	~HeadlessMover();
 
-	// plans a route and starts walking; returns "" or why it can't
-	std::string Start(const glm::vec3 &destination);
+	// plans a route and starts walking; returns "" or why it can't. A walk stops at a zone line
+	// (Result::ZoneLine) without stepping in, unless through_zone_lines: then it walks into it.
+	std::string Start(const glm::vec3 &destination, bool through_zone_lines = false);
 	void Stop(Result why);
 	// turn on the spot to face a point, as the client's /face; returns "" or why it can't
 	std::string Face(const glm::vec3 &point);
@@ -67,6 +68,7 @@ private:
 	size_t                 m_next        = 0;
 	bool                   m_moving      = false;
 	bool                   m_stop_at_end = false; // the route ends at a zone line / teleport
+	bool                   m_through     = false; // walk into zone lines (ZoneTo)
 	uint16                 m_sequence    = 0;
 
 	// stuck detection
