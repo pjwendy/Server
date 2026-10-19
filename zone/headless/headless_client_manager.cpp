@@ -42,6 +42,7 @@
 
 #include "headless.pb.h"
 
+#include <algorithm>
 #include <cmath>
 #include <unordered_set>
 
@@ -1124,6 +1125,7 @@ void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob)
 	}
 	out->set_headless(IsHeadless(mob));
 	out->set_target_id(mob->GetTarget() ? mob->GetTarget()->GetID() : 0);
+	out->set_mana_pct(mob->GetMaxMana() > 0 ? static_cast<uint32>(std::lround(mob->GetManaRatio())) : 0);
 }
 
 void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot)
@@ -1190,6 +1192,15 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		}
 	}
 	self->set_race_bit(GetPlayerRaceBit(me->GetBaseRace()));
+	{
+		const double here = me->GetEXPForLevel(me->GetLevel()), next = me->GetEXPForLevel(me->GetLevel() + 1);
+		const double pct  = next > here ? (me->GetEXP() - here) * 100.0 / (next - here) : 0.0;
+		self->set_exp_pct(static_cast<float>(std::clamp(pct, 0.0, 100.0)));
+		const uint32 aa_need = me->GetRequiredAAExperience();
+		self->set_aa_exp_pct(aa_need ? std::min(100.0f, me->GetAAXP() * 100.0f / aa_need) : 0.0f);
+		self->set_aa_points(me->GetAAPoints());
+		self->set_aa_split(me->GetAAPercent());
+	}
 	self->set_weight(me->CalcCurrentWeight() / 10);
 	self->set_capacity(me->GetSTR());
 	self->set_platinum(me->GetPP().platinum);
@@ -1332,7 +1343,8 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 
 		present.insert(id);
 
-		const uint32 hp_pct = static_cast<uint32>(std::lround(std::max(0.0f, mob->GetHPRatio())));
+		const uint32 hp_pct   = static_cast<uint32>(std::lround(std::max(0.0f, mob->GetHPRatio())));
+		const uint32 mana_pct = mob->GetMaxMana() > 0 ? static_cast<uint32>(std::lround(mob->GetManaRatio())) : 0;
 		auto seen = session.seen.find(id);
 		const bool is_new = seen == session.seen.end();
 		if (!is_new) {
@@ -1340,7 +1352,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			if (std::fabs(s.x - mob->GetX()) < MOVE_EPSILON && std::fabs(s.y - mob->GetY()) < MOVE_EPSILON &&
 				std::fabs(s.z - mob->GetZ()) < MOVE_EPSILON && s.heading == mob->GetHeading() &&
 				s.hp_pct == hp_pct && s.level == mob->GetLevel() && s.name == mob->GetCleanName() &&
-				s.target_id == (mob->GetTarget() ? mob->GetTarget()->GetID() : 0)) {
+				s.target_id == (mob->GetTarget() ? mob->GetTarget()->GetID() : 0) && s.mana_pct == mana_pct) {
 				return;
 			}
 		}
@@ -1348,7 +1360,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		FillSpawn(snapshot ? frame.mutable_snapshot()->add_spawns() : frame.mutable_delta()->add_spawns_changed(), mob);
 		session.seen[id] = SeenSpawn{
 			mob->GetX(), mob->GetY(), mob->GetZ(), mob->GetHeading(), hp_pct, mob->GetLevel(), mob->GetCleanName(),
-			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u
+			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u, mana_pct
 		};
 		changed = true;
 	};

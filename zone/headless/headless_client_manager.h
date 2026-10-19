@@ -74,6 +74,7 @@ private:
 		uint32 level;
 		std::string name;
 		uint32 target_id;
+		uint32 mana_pct;
 	};
 
 	struct Session {

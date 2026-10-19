@@ -279,6 +279,7 @@ message Spawn {
   uint32    owner_id   = 12; // pet / bot owner spawn id, 0 if none (bots: their owning character)
   bool      headless   = 13; // a headless (AI-controlled) character
   uint32    target_id  = 14; // who it has targeted (for NPCs in combat: who it's hitting), 0 if none
+  uint32    mana_pct   = 15; // 0-100 (0 for spawns without mana)
 }
 
 message Self {
@@ -312,6 +313,10 @@ message Self {
   uint32          weight   = 28; // carried weight (as the client shows it)
   uint32          capacity = 29; // carry more than this (= STR) and you're encumbered
   uint32          race_bit = 30; // our bit in Item.races
+  float           exp_pct    = 31; // progress through the current level, 0-100
+  float           aa_exp_pct = 32; // progress to the next AA point, 0-100
+  uint32          aa_points  = 33; // unspent AA points
+  uint32          aa_split   = 34; // share of experience going to AA, 0-100
 }
 
 message Gem {
