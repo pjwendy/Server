@@ -24,6 +24,7 @@
 #include "world/wguild_mgr.h"
 #include "world/world_server_cli.h"
 #include "world/worlddb.h"
+#include "common/database_schema.h" // (needs <string>, <map> and <vector> included first)
 
 #include "fmt/format.h"
 
@@ -241,5 +242,90 @@ void WorldserverCLI::HeadlessGuildCreate(int argc, char **argv, argh::parser &cm
 			continue;
 		}
 		std::cout << fmt::format("  [{}] {}", name, guild_mgr.SetGuild(id, guild_id, GUILD_MEMBER) ? "joined" : "couldn't join") << std::endl;
+	}
+}
+
+namespace {
+	// every row of a bot: its pets, heal rotations and settings, then the bot
+	void DeleteBot(uint32 bot_id)
+	{
+		const std::vector<std::string> by_pet = {"bot_pet_buffs", "bot_pet_inventories"};
+		for (const auto &table : by_pet) {
+			database.QueryDatabase(fmt::format(
+				"DELETE FROM `{}` WHERE `pets_index` IN (SELECT `pets_index` FROM `bot_pets` WHERE `bot_id` = {})", table, bot_id));
+		}
+		database.QueryDatabase(fmt::format(
+			"DELETE FROM `bot_heal_rotation_targets` WHERE `heal_rotation_index` IN "
+			"(SELECT `heal_rotation_index` FROM `bot_heal_rotations` WHERE `bot_id` = {})", bot_id));
+		const std::vector<std::string> by_bot = {
+			"bot_blocked_buffs", "bot_buffs", "bot_heal_rotation_members", "bot_heal_rotations", "bot_inspect_messages",
+			"bot_inventories", "bot_pets", "bot_settings", "bot_spell_settings", "bot_stances", "bot_timers", "bot_data"
+		};
+		for (const auto &table : by_bot) {
+			database.QueryDatabase(fmt::format("DELETE FROM `{}` WHERE `bot_id` = {}", table, bot_id));
+		}
+	}
+}
+
+void WorldserverCLI::HeadlessCharacterDelete(int argc, char **argv, argh::parser &cmd, std::string &description)
+{
+	description = "Deletes headless characters for good (their bots, items, corpses and the rest), ignoring Character:SoftDeletes; "
+		"only characters on accounts with a headless token";
+
+	std::vector<std::string> arguments = {"{Name,Name,...}"};
+	std::vector<std::string> options   = {"--guild=<name> (delete this guild too)"};
+
+	if (cmd[{"-h", "--help"}]) {
+		return;
+	}
+
+	EQEmuCommand::ValidateCmdInput(arguments, options, cmd, argc, argv);
+
+	if (const std::string guild_name = cmd("--guild").str(); !guild_name.empty()) {
+		guild_mgr.SetDatabase(&database)->SetContentDatabase(&content_db);
+		guild_mgr.LoadGuilds();
+		const uint32 guild_id = guild_mgr.GetGuildIDByName(guild_name.c_str());
+		if (guild_id == GUILD_NONE) {
+			std::cout << fmt::format("No guild called [{}]", guild_name) << std::endl;
+		}
+		else {
+			std::cout << fmt::format("Guild [{}] ({}) {}", guild_name, guild_id,
+				guild_mgr.DeleteGuild(guild_id) ? "deleted" : "couldn't be deleted") << std::endl;
+		}
+	}
+
+	for (auto name : Strings::Split(cmd(2).str(), ',')) {
+		Strings::Trim(name);
+		if (name.empty()) {
+			continue;
+		}
+		const uint32 id = CharacterID(name);
+		if (!id) {
+			std::cout << fmt::format("[{}] no such character", name) << std::endl;
+			continue;
+		}
+		auto results = database.QueryDatabase(fmt::format(
+			"SELECT COUNT(*) FROM `headless_client_tokens` t JOIN `character_data` c ON c.`account_id` = t.`account_id` "
+			"WHERE c.`id` = {}", id));
+		if (!results.Success() || !Strings::ToUnsignedInt(results.begin()[0])) {
+			std::cout << fmt::format("[{}] isn't on a headless account: left alone", name) << std::endl;
+			continue;
+		}
+
+		int bots = 0;
+		results = database.QueryDatabase(fmt::format("SELECT `bot_id` FROM `bot_data` WHERE `owner_id` = {}", id));
+		for (auto row : results) {
+			DeleteBot(Strings::ToUnsignedInt(row[0]));
+			++bots;
+		}
+		database.QueryDatabase(fmt::format("DELETE FROM `bot_owner_options` WHERE `owner_id` = {}", id));
+
+		// Database::DeleteCharacter's hard delete (it only renames when Character:SoftDeletes is on)
+		database.QueryDatabase(fmt::format(
+			"DELETE FROM `character_corpse_items` WHERE `corpse_id` IN (SELECT `id` FROM `character_corpses` WHERE `charid` = {})", id));
+		for (const auto &t : DatabaseSchema::GetCharacterTables()) {
+			database.QueryDatabase(fmt::format("DELETE FROM `{}` WHERE `{}` = {}", t.first, t.second, id));
+		}
+		std::cout << fmt::format("[{}] ({}) deleted, with {} bot{}", name, id, bots, bots == 1 ? "" : "s") << std::endl;
 	}
 }

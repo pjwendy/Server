@@ -48,5 +48,6 @@ public:
 	static void HeadlessTokenRevoke(int argc, char **argv, argh::parser &cmd, std::string &description);
 	static void HeadlessCharacterCreate(int argc, char **argv, argh::parser &cmd, std::string &description);
 	static void HeadlessGuildCreate(int argc, char **argv, argh::parser &cmd, std::string &description);
+	static void HeadlessCharacterDelete(int argc, char **argv, argh::parser &cmd, std::string &description);
 #endif
 };

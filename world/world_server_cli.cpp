@@ -54,6 +54,7 @@ void WorldserverCLI::CommandHandler(int argc, char **argv)
 	function_map["headless:token-revoke"]       = &WorldserverCLI::HeadlessTokenRevoke;
 	function_map["headless:character-create"]   = &WorldserverCLI::HeadlessCharacterCreate;
 	function_map["headless:guild-create"]       = &WorldserverCLI::HeadlessGuildCreate;
+	function_map["headless:character-delete"]   = &WorldserverCLI::HeadlessCharacterDelete;
 #endif
 
 	EQEmuCommand::HandleMenu(function_map, cmd, argc, argv);
