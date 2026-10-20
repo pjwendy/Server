@@ -1190,6 +1190,7 @@ RULE_BOOL(HeadlessClients, AllowMercenaries, true, "Headless characters may hire
 RULE_BOOL(HeadlessClients, AllowGroupWithPlayers, true, "Headless characters may group and raid with real players")
 RULE_BOOL(HeadlessClients, AllowTradeWithPlayers, false, "Headless characters may trade, use the bazaar, parcels and mail with real players")
 RULE_BOOL(HeadlessClients, AllowTellsFromPlayers, true, "Real players may send tells to headless characters")
+RULE_BOOL(HeadlessClients, ShowDisplayTag, true, "Show DisplayTag as headless characters' suffix. When false the tag is left off (and removed from characters that still carry it); they stay flagged in the database either way")
 RULE_STRING(HeadlessClients, DisplayTag, "AI", "Tag shown on headless characters (title/suffix and /who) so players know they are AI-controlled. An empty value falls back to AI")
 RULE_INT(HeadlessClients, CommandRateLimit, 20, "Maximum commands per second accepted from each headless character")
 RULE_CATEGORY_END()

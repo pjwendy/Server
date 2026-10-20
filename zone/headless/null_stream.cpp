@@ -151,10 +151,16 @@ void NullStream::PrepareForSpawnBroadcast()
 		m_client->SetPosition(pos.x, pos.y, new_z);
 	}
 
-	// headless characters are always visibly tagged
+	// headless characters are visibly tagged unless the server turns the tag off; the suffix is
+	// saved with the character, so turning it off takes the tag back off
 	std::string tag = RuleS(HeadlessClients, DisplayTag);
 	if (tag.empty()) {
 		tag = "AI";
 	}
-	m_client->SetTitleSuffix(tag);
+	if (RuleB(HeadlessClients, ShowDisplayTag)) {
+		m_client->SetTitleSuffix(tag);
+	}
+	else if (std::string(m_client->GetPP().suffix) == tag) {
+		m_client->SetTitleSuffix("");
+	}
 }
