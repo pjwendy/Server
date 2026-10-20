@@ -384,6 +384,14 @@ bool Database::DeleteCharacter(const std::string& name)
 		return true;
 	}
 
+	// a corpse's items are keyed by the corpse, not the character
+	QueryDatabase(
+		fmt::format(
+			"DELETE FROM character_corpse_items WHERE corpse_id IN (SELECT id FROM character_corpses WHERE charid = {})",
+			e.id
+		)
+	);
+
 	for (const auto &t : DatabaseSchema::GetCharacterTables()) {
 		const std::string& table_name               = t.first;
 		const std::string& character_id_column_name = t.second;
@@ -1920,6 +1928,7 @@ bool Database::CopyCharacter(
 	};
 
 	std::vector<std::string> ignore_tables = {
+		"character_corpses", // corpses keep their own ids, and their items are keyed by those
 		"guilds",
 	};
 
