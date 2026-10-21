@@ -59,6 +59,8 @@ public:
 	// accept a server-side move within the zone (#goto, summon), as the client does
 	void Place(const glm::vec3 &pos, float heading);
 	bool Moving() const { return m_moving; }
+	// how fast a walk goes for this character now, in units per second (0 when rooted, stunned or mezzed)
+	static float RunSpeed(const Mob *me);
 
 private:
 	void Tick();

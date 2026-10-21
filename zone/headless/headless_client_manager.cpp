@@ -1233,6 +1233,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		self->set_aa_points(me->GetAAPoints());
 		self->set_aa_split(me->GetAAPercent());
 	}
+	self->set_run_speed(HeadlessMover::RunSpeed(me));
 	self->set_weight(me->CalcCurrentWeight() / 10);
 	self->set_capacity(me->GetSTR());
 	self->set_platinum(me->GetPP().platinum);

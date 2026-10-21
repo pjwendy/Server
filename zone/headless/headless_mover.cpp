@@ -357,7 +357,7 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 		route_length,
 		zone->pathing ? "yes" : "no",
 		me->GetRunspeed(),
-		me->GetRunspeed() * SPEED_TO_UNITS
+		RunSpeed(me)
 	);
 	return "";
 }
@@ -394,6 +394,11 @@ std::string HeadlessMover::Face(const glm::vec3 &point)
 	const glm::vec3 pos(me->GetX(), me->GetY(), me->GetZ());
 	SendUpdate(pos, me->CalculateHeadingToTarget(point.x, point.y), 0);
 	return "";
+}
+
+float HeadlessMover::RunSpeed(const Mob *me)
+{
+	return me->GetRunspeed() * SPEED_TO_UNITS;
 }
 
 void HeadlessMover::Place(const glm::vec3 &pos, float heading)
@@ -443,7 +448,7 @@ void HeadlessMover::Tick()
 		return; // HandleDoors gave up on a door
 	}
 
-	const float  speed = me->GetRunspeed() * SPEED_TO_UNITS; // units per second; 0 when rooted/stunned
+	const float  speed = RunSpeed(me); // units per second; 0 when rooted/stunned
 	float        step  = speed * (TICK_MS / 1000.0f);
 
 	glm::vec3 pos = m_pos;

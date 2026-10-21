@@ -329,6 +329,7 @@ message Self {
   float           aa_exp_pct = 32; // progress to the next AA point, 0-100
   uint32          aa_points  = 33; // unspent AA points
   uint32          aa_split   = 34; // share of experience going to AA, 0-100
+  float           run_speed  = 35; // how fast a move_to walks now, units per second (buffs, snares, GM speed; 0 rooted)
 }
 
 message Gem {
