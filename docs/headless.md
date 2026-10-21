@@ -50,7 +50,7 @@ Python SDK, `eqmq`, wraps it in MacroQuest-style names (`bot.Me.PctHPs`, `bot.Sp
   the floor, opens doors it has keys for, rides lifts, walks through zone lines, and reports
   positions the way the client does, so the server's own anti-cheat checks still apply.
 - **State goes out** four times a second: the character (HP, mana, endurance, position, target,
-  buffs, gems, coin, weight, experience, run speed), the zone and its exits, every spawn in the zone,
+  buffs, gems, coin, weight, experience, run speed, known disciplines), the zone and its exits, every spawn in the zone,
   the spell book, inventory and bank, and the character's EQEmu bots. The first frame is a full
   snapshot; after that only what changed. Chat, game messages, deaths, skill-ups, merchant windows,
   loot and moves arrive as events.
@@ -158,6 +158,9 @@ Category `HeadlessClients`:
 | `merchant`, `buy`, `sell` | Open a merchant's window, buy, sell. |
 | `move_item` | Move items between slots, bags and the bank: equip, unequip, or put something on the cursor to hand to one of the character's bots with `^inventorygive`. |
 | `ability` | A combat ability as the client's buttons send it: kick, bash, backstab, the monk strikes, frenzy, intimidation and taunt on the target; sneak, hide and feign death on yourself. |
+| `pet` | Command your pet, as `/pet`: attack your target, back off, follow, guard, taunt, sit, hold and the rest. |
+| `discipline` | Use a discipline the character knows (they're in its state), as the combat abilities window. |
+| `use_item` | Right-click an item: its click effect, a potion or food, or a tome (which teaches its discipline). |
 | `invite`, `disband` | Invite to the group (the character's own bots, or real players if allowed), leave it. |
 
 `CommandResult.ok` means the server accepted the command. What happens next (the spell lands, the
