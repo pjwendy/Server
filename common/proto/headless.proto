@@ -129,6 +129,12 @@ message PetCommand      { uint32 command = 1; }
 message DisciplineCommand { uint32 spell_id = 1; }
 // right-click the item in a slot: its click effect, a potion or food, or a tome (learns its discipline)
 message UseItemCommand  { int32 slot = 1; }
+// parcels, as the parcel tab of a parcel merchant's window (stand within ~20 units; opening the
+// window lists what's waiting for you, MerchantEvent.parcels). Send the item in a slot (not a no-drop
+// or attuned one: the client's window doesn't take those) to a character by name; the server allows
+// one parcel per Parcel:ParcelDeliveryDelay. Retrieve one of yours into your bags.
+message ParcelSendCommand     { uint32 npc_id = 1; int32 slot = 2; uint32 quantity = 3; string to = 4; string note = 5; }
+message ParcelRetrieveCommand { uint32 npc_id = 1; uint32 parcel_slot = 2; uint32 item_id = 3; }
 
 message Command {
   uint32 id = 1; // echoed in CommandResult
@@ -157,6 +163,8 @@ message Command {
     PetCommand      pet       = 23;
     DisciplineCommand discipline = 24;
     UseItemCommand  use_item  = 25;
+    ParcelSendCommand     parcel_send     = 26;
+    ParcelRetrieveCommand parcel_retrieve = 27;
   }
 }
 
@@ -238,9 +246,22 @@ message LootEvent {
 }
 
 message MerchantEvent {
-  uint32        npc_id = 1;
-  bool          open   = 2;
-  repeated Item items  = 3; // for sale: slot is the merchant slot, price what it costs us (copper)
+  uint32          npc_id  = 1;
+  bool            open    = 2;
+  repeated Item   items   = 3; // for sale: slot is the merchant slot, price what it costs us (copper)
+  bool            parcel_merchant = 4; // it takes and hands out parcels
+  repeated Parcel parcels = 5;         // a parcel merchant: the parcels waiting for us
+}
+
+// a parcel waiting at the parcel merchants (ParcelRetrieveCommand takes slot and item_id)
+message Parcel {
+  uint32 slot     = 1;
+  uint32 item_id  = 2; // 99990 is coin (quantity: copper)
+  string name     = 3;
+  uint32 quantity = 4;
+  string from     = 5;
+  string note     = 6;
+  int64  sent     = 7; // unix time
 }
 
 message DeathEvent {

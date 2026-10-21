@@ -29,6 +29,7 @@
 #include "common/strings.h"
 #include "common/timer.h"
 #include "common/zone_store.h"
+#include "common/repositories/character_parcels_repository.h"
 #include "zone/bot.h"
 #include "zone/client.h"
 #include "zone/corpse.h"
@@ -612,6 +613,58 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			}
 			return "";
 		}
+		case eqheadless::Command::kParcelSend: {
+			const auto &ps  = cmd.parcel_send();
+			NPC        *npc = entity_list.GetNPCByID(ps.npc_id());
+			if (!npc || !npc->GetParcelMerchant()) {
+				return "that's not a parcel merchant";
+			}
+			if (DistanceSquared(me->GetPosition(), npc->GetPosition()) > USE_NPC_RANGE2) {
+				return "too far from the parcel merchant";
+			}
+			const EQ::ItemInstance *inst = me->GetInv().GetItem(ps.slot());
+			if (!inst || !inst->GetItem()) {
+				return fmt::format("nothing in slot {}", ps.slot());
+			}
+			// the client's parcel window refuses these, and the server leaves that to it
+			if (!inst->GetItem()->NoDrop || inst->IsAttuned()) {
+				return fmt::format("{} can't be sent: it's no-drop", inst->GetItem()->Name);
+			}
+			if (ps.to().empty() || ps.to().size() >= sizeof(Parcel_Struct::send_to)) {
+				return "send it to whom?";
+			}
+			auto app = new EQApplicationPacket(OP_ShopSendParcel, sizeof(Parcel_Struct));
+			auto *p  = reinterpret_cast<Parcel_Struct *>(app->pBuffer);
+			p->npc_id     = npc->GetID();
+			p->item_slot  = ps.slot();
+			p->quantity   = ps.quantity() ? ps.quantity() : (inst->IsStackable() ? std::max<int16>(1, inst->GetCharges()) : 1);
+			p->money_flag = PARCEL_SEND_ITEMS;
+			strn0cpy(p->send_to, ps.to().c_str(), sizeof(p->send_to));
+			strn0cpy(p->note, ps.note().c_str(), sizeof(p->note));
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kParcelRetrieve: {
+			const auto &pr  = cmd.parcel_retrieve();
+			NPC        *npc = entity_list.GetNPCByID(pr.npc_id());
+			if (!npc || !npc->GetParcelMerchant()) {
+				return "that's not a parcel merchant";
+			}
+			if (DistanceSquared(me->GetPosition(), npc->GetPosition()) > USE_NPC_RANGE2) {
+				return "too far from the parcel merchant";
+			}
+			if (!me->GetEngagedWithParcelMerchant()) {
+				return "open the parcel merchant's window first";
+			}
+			auto app = new EQApplicationPacket(OP_ShopRetrieveParcel, sizeof(ParcelRetrieve_Struct));
+			auto *r  = reinterpret_cast<ParcelRetrieve_Struct *>(app->pBuffer);
+			r->merchant_entity_id = npc->GetID();
+			r->player_entity_id   = me->GetID();
+			r->parcel_slot_id     = pr.parcel_slot();
+			r->parcel_item_id     = pr.item_id();
+			stream->Inject(app);
+			return "";
+		}
 		case eqheadless::Command::kBuy: {
 			const auto &b = cmd.buy();
 			// the struct names are the server's point of view: a player buying sends Merchant_Sell_Struct
@@ -923,6 +976,23 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 						price *= mod;
 					}
 					out->set_price(static_cast<uint32>(std::max(0.0f, price)));
+				}
+				if (npc->CastToNPC()->GetParcelMerchant() && RuleB(Parcel, EnableParcelMerchants)) {
+					// what's waiting for us, from the database (the server loads its own copy after
+					// this packet, when it sends the client the parcel tab)
+					ev->set_parcel_merchant(true);
+					for (const auto &p : CharacterParcelsRepository::GetWhere(
+						database, fmt::format("`char_id` = {} ORDER BY `slot_id`", me->CharacterID()))) {
+						auto       *out  = ev->add_parcels();
+						const auto *item = database.GetItem(p.item_id);
+						out->set_slot(p.slot_id);
+						out->set_item_id(p.item_id);
+						out->set_name(p.item_id == PARCEL_MONEY_ITEM_ID ? "Money" : item ? item->Name : fmt::format("item {}", p.item_id));
+						out->set_quantity(p.quantity);
+						out->set_from(p.from_name);
+						out->set_note(p.note);
+						out->set_sent(static_cast<int64>(p.sent_date));
+					}
 				}
 			}
 			break;
