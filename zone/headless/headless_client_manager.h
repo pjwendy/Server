@@ -22,10 +22,12 @@
 #include "zone/headless/headless_mover.h"
 
 #include <array>
+#include <deque>
 #include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 class Client;
 namespace EQ { struct ItemData; }
@@ -95,6 +97,11 @@ private:
 		// looting: the corpse we asked to loot, and the coin it had
 		uint32                                   loot_corpse = 0;
 		uint32                                   loot_coin[4] = {};
+		// the corpse's items still to loot, one at a time: a corpse refuses a loot within 10ms of
+		// the last (m_loot_cooldown_timer), so a real client's Loot All spaces them out too
+		std::deque<std::pair<int16, std::string>> loot_queue; // (loot slot, item name)
+		std::vector<std::string>                 loot_names;  // what we looted, for the event
+		std::unique_ptr<EQ::Timer>               loot_timer;
 		std::string                              last_book;      // serialized SpellBook last sent
 		std::string                              last_inventory; // serialized Inventory last sent
 		std::string                              last_bots;      // serialized OwnedBots last sent

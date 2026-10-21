@@ -57,6 +57,7 @@ namespace {
 	constexpr float  MOVE_EPSILON        = 0.25f;
 	// the client takes a few seconds to memorise a spell (an approximation; it varies a little)
 	constexpr uint32 MEMORIZE_MS         = 3000;
+	constexpr uint32 LOOT_ITEM_MS        = 50;   // between a corpse's items (a corpse allows one per 10ms)
 
 	uint64 NowMs()
 	{
@@ -988,25 +989,55 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			loot->set_copper(session.loot_coin[3]);
 
 			Entity *e = entity_list.GetID(id);
+			session.loot_queue.clear();
+			session.loot_names.clear();
 			if (e && e->IsCorpse()) {
 				for (const auto *item : e->CastToCorpse()->GetLootItems()) {
 					if (!item || item->lootslot < EQ::invslot::CORPSE_BEGIN || item->lootslot > EQ::invslot::CORPSE_END) {
 						continue;
 					}
-					auto li = new EQApplicationPacket(OP_LootItem, sizeof(LootingItem_Struct));
-					auto *l = reinterpret_cast<LootingItem_Struct *>(li->pBuffer);
-					l->lootee    = id;
-					l->looter    = me->GetID();
-					l->slot_id   = item->lootslot;
-					l->auto_loot = 1;
-					session.stream->Inject(li);
 					const auto *data = database.GetItem(item->item_id);
-					loot->add_items(data ? data->Name : fmt::format("item {}", item->item_id));
+					session.loot_queue.emplace_back(item->lootslot, data ? data->Name : fmt::format("item {}", item->item_id));
 				}
 			}
-			session.stream->Inject(Uint32Packet(OP_EndLootRequest, id));
-			session.loot_corpse = 0;
-			break;
+			// one item every LOOT_ITEM_MS, then close the corpse and say what we got (the event
+			// waits for that, so the SDK sees the corpse as it is afterwards)
+			auto event = std::make_shared<eqheadless::ServerFrame>(frame);
+			frame.Clear();
+			session.loot_timer = std::make_unique<EQ::Timer>(
+				LOOT_ITEM_MS, true, [this, session_id, id, event](EQ::Timer *t) {
+					auto s = m_sessions.find(session_id);
+					if (s == m_sessions.end() || !s->second.stream || !s->second.stream->GetClient()) {
+						return;
+					}
+					Session &ss = s->second;
+					Client  *c  = ss.stream->GetClient();
+					if (!ss.loot_queue.empty() && ss.loot_corpse == id) {
+						auto [slot, name] = ss.loot_queue.front();
+						ss.loot_queue.pop_front();
+						auto li = new EQApplicationPacket(OP_LootItem, sizeof(LootingItem_Struct));
+						auto *l = reinterpret_cast<LootingItem_Struct *>(li->pBuffer);
+						l->lootee    = id;
+						l->looter    = c->GetID();
+						l->slot_id   = slot;
+						l->auto_loot = 1;
+						ss.stream->Inject(li);
+						ss.loot_names.push_back(name);
+						return;
+					}
+					ss.stream->Inject(Uint32Packet(OP_EndLootRequest, id));
+					auto *ev = event->mutable_event()->mutable_loot();
+					for (const auto &n : ss.loot_names) {
+						ev->add_items(n);
+					}
+					ss.loot_corpse = 0;
+					ss.loot_queue.clear();
+					ss.loot_names.clear();
+					t->Stop(); // (the next loot replaces it: deleting it here would delete what's running us)
+					SendFrame(session_id, *event);
+				}
+			);
+			return;
 		}
 		case OP_Death: {
 			Client *me = it->second.stream->GetClient();
