@@ -705,7 +705,7 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 					auto app = new EQApplicationPacket(OP_CombatAbility, sizeof(CombatAbility_Struct));
 					auto *ca = reinterpret_cast<CombatAbility_Struct *>(app->pBuffer);
 					ca->m_target = me->GetTarget()->GetID();
-					ca->m_atk    = 0;
+					ca->m_atk    = 100; // what the client sends for a melee ability (the handler checks it)
 					ca->m_skill  = skill;
 					stream->Inject(app);
 					return "";
