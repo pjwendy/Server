@@ -33,6 +33,7 @@
 #include "zone/dynamic_zone.h"
 #include "zone/event_codes.h"
 #include "zone/guild_mgr.h"
+#include "zone/headless/null_stream.h"
 #include "zone/map.h"
 #include "zone/petitions.h"
 #include "zone/queryserv.h"
@@ -580,7 +581,12 @@ bool Client::Process() {
 		return false;
 	}
 
-	if (client_state != CLIENT_LINKDEAD && !eqs->CheckState(ESTABLISHED)) {
+	// a headless character that zoned out closes its stream once the zone change succeeded: it
+	// isn't linkdead, it left the zone (the zoning case below keeps its group, and its data was
+	// saved by DoZoneSuccess). Going linkdead held it here for Zone:ClientLinkdeadMS, and only
+	// then could world spawn it in the new zone, out of its group.
+	const bool headless_zoned = bZoning && dynamic_cast<NullStream *>(eqs) != nullptr;
+	if (client_state != CLIENT_LINKDEAD && !headless_zoned && !eqs->CheckState(ESTABLISHED)) {
 		OnDisconnect(true);
 		LogInfo("Client linkdead: {}", name);
 
