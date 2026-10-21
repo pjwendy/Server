@@ -401,6 +401,7 @@ void WorldServer::HandleMessage(uint16 opcode, const EQ::Net::Packet &p)
 				entity->CastToMob()->SetZone(ztz->current_zone_id, ztz->current_instance_id);
 				entity->CastToClient()->SetZoning(false);
 				entity->CastToClient()->SetLockSavePosition(false);
+				entity->CastToClient()->RestoreZoneOutPosition();
 
 				LogZoning("ZoneToZone (ZoneNotReady) client [{}] guild_id [{}] requested_zone [{}] requested_zone_id [{}] requested_instance_id [{}] current_zone [{}] current_zone_id [{}] current_instance_id [{}] response [{}] admin [{}] ignorerestrictions [{}] ",
 					ztz->name,

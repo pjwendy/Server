@@ -2127,9 +2127,11 @@ private:
 
 	// https://github.com/EQEmu/Server/pull/2479
 	bool m_lock_save_position = false;
+	glm::vec4 m_zone_out_position{}; // where we were when DoZoneSuccess moved us to the destination's coordinates
 public:
 	bool IsLockSavePosition() const;
 	void SetLockSavePosition(bool lock_save_position);
+	void RestoreZoneOutPosition();
 private:
 
 	PlayerProfile_Struct m_pp;

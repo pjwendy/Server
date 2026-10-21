@@ -444,6 +444,20 @@ void Client::SendZoneCancel(ZoneChange_Struct *zc) {
 	m_lock_save_position = false;
 }
 
+// the zone change failed after DoZoneSuccess (world: the new zone wasn't ready): we're still in this
+// zone, so we're where we were, not at the destination's coordinates (as SendZoneCancel rewinds)
+void Client::RestoreZoneOutPosition()
+{
+	m_Position = m_zone_out_position;
+	m_pp.x       = m_Position.x;
+	m_pp.y       = m_Position.y;
+	m_pp.z       = m_Position.z;
+	m_pp.heading = m_Position.w;
+	m_pp.zone_id      = zone->GetZoneID();
+	m_pp.zoneInstance = zone->GetInstanceID();
+	SaveCharacterData();
+}
+
 void Client::SendZoneError(ZoneChange_Struct *zc, int8 err)
 {
 	LogError("Zone [{}] is not available because target wasn't found or character insufficent level", zc->zoneID);
@@ -516,6 +530,7 @@ void Client::DoZoneSuccess(ZoneChange_Struct *zc, uint16 zone_id, uint32 instanc
 
 	//set the player's coordinates in the new zone so they have them
 	//when they zone into it
+	m_zone_out_position = m_Position; // if the new zone isn't ready, we stay here (RestoreZoneOutPosition)
 	m_Position.x = dest_x; //these coordinates will now be saved when ~client is called
 	m_Position.y = dest_y;
 	m_Position.z = dest_z;
