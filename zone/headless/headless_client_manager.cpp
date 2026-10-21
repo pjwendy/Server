@@ -667,6 +667,53 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			stream->Inject(app);
 			return "";
 		}
+		case eqheadless::Command::kAbility: {
+			// the packets the client's ability buttons send; the handlers check skills and timers
+			const uint32 skill = cmd.ability().skill_id();
+			switch (skill) {
+				case EQ::skills::SkillSneak:
+					stream->Inject(new EQApplicationPacket(OP_Sneak, 0));
+					return "";
+				case EQ::skills::SkillHide:
+					stream->Inject(new EQApplicationPacket(OP_Hide, 0));
+					return "";
+				case EQ::skills::SkillFeignDeath:
+					stream->Inject(new EQApplicationPacket(OP_FeignDeath, 0));
+					return "";
+				case EQ::skills::SkillTaunt: {
+					if (!me->GetTarget()) {
+						return "no target to taunt";
+					}
+					auto app = new EQApplicationPacket(OP_Taunt, sizeof(ClientTarget_Struct));
+					reinterpret_cast<ClientTarget_Struct *>(app->pBuffer)->new_target = me->GetTarget()->GetID();
+					stream->Inject(app);
+					return "";
+				}
+				case EQ::skills::SkillBackstab:
+				case EQ::skills::SkillBash:
+				case EQ::skills::SkillKick:
+				case EQ::skills::SkillFlyingKick:
+				case EQ::skills::SkillRoundKick:
+				case EQ::skills::SkillTigerClaw:
+				case EQ::skills::SkillEagleStrike:
+				case EQ::skills::SkillDragonPunch:
+				case EQ::skills::SkillFrenzy:
+				case EQ::skills::SkillIntimidation: {
+					if (!me->GetTarget()) {
+						return "no target";
+					}
+					auto app = new EQApplicationPacket(OP_CombatAbility, sizeof(CombatAbility_Struct));
+					auto *ca = reinterpret_cast<CombatAbility_Struct *>(app->pBuffer);
+					ca->m_target = me->GetTarget()->GetID();
+					ca->m_atk    = 0;
+					ca->m_skill  = skill;
+					stream->Inject(app);
+					return "";
+				}
+				default:
+					return fmt::format("skill {} isn't an ability that can be used this way", skill);
+			}
+		}
 		case eqheadless::Command::kDisband: {
 			if (!me->GetGroup() && !me->GetRaid()) {
 				return "not in a group";

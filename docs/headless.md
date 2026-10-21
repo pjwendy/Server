@@ -157,6 +157,7 @@ Category `HeadlessClients`:
 | `loot` | Loot a corpse (everything the character may take). |
 | `merchant`, `buy`, `sell` | Open a merchant's window, buy, sell. |
 | `move_item` | Move items between slots, bags and the bank: equip, unequip, or put something on the cursor to hand to one of the character's bots with `^inventorygive`. |
+| `ability` | A combat ability as the client's buttons send it: kick, bash, backstab, the monk strikes, frenzy, intimidation and taunt on the target; sneak, hide and feign death on yourself. |
 | `invite`, `disband` | Invite to the group (the character's own bots, or real players if allowed), leave it. |
 
 `CommandResult.ok` means the server accepted the command. What happens next (the spell lands, the
