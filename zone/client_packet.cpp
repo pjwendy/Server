@@ -1283,6 +1283,7 @@ void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 	}
 
 	strcpy(name, cze->char_name);
+	clean_name[0] = 0; // anything that asked for our name before now cached "No name"
 	/* Check for Client Spoofing */
 	if (client != 0) {
 		struct in_addr ghost_addr;
