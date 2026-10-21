@@ -431,7 +431,7 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			}
 
 			// a player stops to cast, and standing up is part of casting
-			if (session.mover && session.mover->Moving()) {
+			if (session.mover && session.mover->Moving() && me->GetClass() != Class::Bard) { // bards sing on the move
 				session.mover->Stop(HeadlessMover::Result::Stopped);
 			}
 			if (me->IsSitting()) {
@@ -713,6 +713,56 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				default:
 					return fmt::format("skill {} isn't an ability that can be used this way", skill);
 			}
+		}
+		case eqheadless::Command::kPet: {
+			// as /pet and the pet window (attack goes for our target)
+			if (!me->GetPet()) {
+				return "you have no pet";
+			}
+			const uint32 command = cmd.pet().command();
+			if (command >= PetCommand::Max) {
+				return fmt::format("no pet command {}", command);
+			}
+			if ((command == PetCommand::Attack || command == PetCommand::QAttack) && !me->GetTarget()) {
+				return "no target for your pet";
+			}
+			auto app = new EQApplicationPacket(OP_PetCommands, sizeof(PetCommand_Struct));
+			auto *pc = reinterpret_cast<PetCommand_Struct *>(app->pBuffer);
+			pc->command = command;
+			pc->target  = me->GetTarget() ? me->GetTarget()->GetID() : 0;
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kDiscipline: {
+			// the combat abilities window casts a known discipline in its own slot
+			const uint32 spell_id = cmd.discipline().spell_id();
+			if (!me->HasDisciplineLearned(spell_id)) {
+				return fmt::format("you don't know {}", IsValidSpell(spell_id) ? SpellName(spell_id) : std::to_string(spell_id));
+			}
+			if (me->IsCasting()) {
+				return "already casting";
+			}
+			auto app = new EQApplicationPacket(OP_CastSpell, sizeof(CastSpell_Struct));
+			auto *cs = reinterpret_cast<CastSpell_Struct *>(app->pBuffer);
+			cs->slot          = static_cast<uint32>(EQ::spells::CastingSlot::Discipline);
+			cs->spell_id      = spell_id;
+			cs->inventoryslot = 0xFFFF;
+			cs->target_id     = me->GetTarget() ? me->GetTarget()->GetID() : me->GetID();
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kUseItem: {
+			// a right-click on an item, as the client sends it
+			const int32 slot = cmd.use_item().slot();
+			if (!me->GetInv().GetItem(slot)) {
+				return fmt::format("nothing in slot {}", slot);
+			}
+			auto app = new EQApplicationPacket(OP_ItemVerifyRequest, sizeof(ItemVerifyRequest_Struct));
+			auto *iv = reinterpret_cast<ItemVerifyRequest_Struct *>(app->pBuffer);
+			iv->slot   = slot;
+			iv->target = me->GetTarget() ? me->GetTarget()->GetID() : me->GetID();
+			stream->Inject(app);
+			return "";
 		}
 		case eqheadless::Command::kDisband: {
 			if (!me->GetGroup() && !me->GetRaid()) {
@@ -1281,6 +1331,11 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		self->set_aa_split(me->GetAAPercent());
 	}
 	self->set_run_speed(HeadlessMover::RunSpeed(me));
+	for (const uint32 disc : me->GetPP().disciplines.values) {
+		if (disc && IsValidSpell(disc)) {
+			self->add_disciplines(disc);
+		}
+	}
 	self->set_weight(me->CalcCurrentWeight() / 10);
 	self->set_capacity(me->GetSTR());
 	self->set_platinum(me->GetPP().platinum);

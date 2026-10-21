@@ -121,6 +121,14 @@ message ScribeCommand   { uint32 book_slot = 1; uint32 spell_id = 2; }          
 // claw 52, eagle strike 23, dragon punch / tail rake 21), frenzy (74), intimidation (71), taunt (73);
 // on yourself, sneak (42), hide (29), feign death (25). The server applies its own checks and timers.
 message AbilityCommand  { uint32 skill_id = 1; }
+// your pet, as /pet and the pet window. command is EQEmu's pet command number (common/emu_constants.h
+// PetCommand): 2 attack (your target), 3 queue attack, 4 follow, 5 guard here, 6 sit (toggle), 12 taunt
+// (toggle), 13/14 taunt on/off, 15 hold, 21 spell hold, 27 feign, 28 back off, 29 get lost, 31 regroup.
+message PetCommand      { uint32 command = 1; }
+// a discipline you know (Self.disciplines), as the combat abilities window: on your target (or you)
+message DisciplineCommand { uint32 spell_id = 1; }
+// right-click the item in a slot: its click effect, a potion or food, or a tome (learns its discipline)
+message UseItemCommand  { int32 slot = 1; }
 
 message Command {
   uint32 id = 1; // echoed in CommandResult
@@ -146,6 +154,9 @@ message Command {
     MoveItemCommand move_item = 20;
     ScribeCommand   scribe    = 21;
     AbilityCommand  ability   = 22;
+    PetCommand      pet       = 23;
+    DisciplineCommand discipline = 24;
+    UseItemCommand  use_item  = 25;
   }
 }
 
@@ -336,6 +347,7 @@ message Self {
   uint32          aa_points  = 33; // unspent AA points
   uint32          aa_split   = 34; // share of experience going to AA, 0-100
   float           run_speed  = 35; // how fast a move_to walks now, units per second (buffs, snares, GM speed; 0 rooted)
+  repeated uint32 disciplines = 36; // spell ids of the disciplines you know (DisciplineCommand)
 }
 
 message Gem {
