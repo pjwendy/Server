@@ -225,7 +225,21 @@ Connection refused outright (no `Refused` frame): the listener isn't on. Check
 `server.world.headless` and the port mapping.
 
 Walks that end `NO_PATH` or `STUCK` usually point at the zone's navmesh (`maps/nav/<zone>.nav`). The
-`HeadlessClient` log shows each route as it was planned.
+`HeadlessClient` log shows each route as it was planned. The `MoveEvent`'s `nav` notes say what the walk
+found, and where:
+
+| `kind` | Meaning |
+|---|---|
+| `no_mesh_here` | There is no navmesh where the character stood. |
+| `no_mesh_there` | There is no navmesh at the destination. |
+| `not_connected` | Both ends are on the navmesh, but it has no way between them. `closest` is where it gets nearest. |
+| `stuck` | The character walked into something the navmesh says isn't there. |
+| `door_gap` | The walk succeeded by stepping across a gap in the navmesh, usually a doorway. |
+| `off_mesh` | The walk succeeded by stepping from a hole onto the navmesh. |
+| `straight_walk` | The walk succeeded by walking straight to a zone line the navmesh doesn't reach. |
+
+The last three are workarounds for gaps the navmesh should cover. A zone line refused with `couldn't
+reach the zone line` names the failure in brackets.
 
 ## Using it from Python
 

@@ -59,6 +59,17 @@ public:
 	// accept a server-side move within the zone (#goto, summon), as the client does
 	void Place(const glm::vec3 &pos, float heading);
 	bool Moving() const { return m_moving; }
+	// where the last walk found the navmesh wanting: why it failed, or a gap it went round (for
+	// fixing the zone's navmesh: MoveEvent.nav). kind: "no_mesh_here", "no_mesh_there",
+	// "not_connected" (closest: where the navmesh gets closest), "stuck", "door_gap", "off_mesh",
+	// "straight_walk"
+	struct NavNote {
+		std::string kind;
+		glm::vec3   at{0.0f};
+		glm::vec3   to{0.0f};
+		glm::vec3   closest{0.0f};
+	};
+	const std::vector<NavNote> &Notes() const { return m_notes; }
 	// how fast a walk goes for this character now, in units per second (0 when rooted, stunned or mezzed)
 	static float RunSpeed(const Mob *me);
 
@@ -96,6 +107,9 @@ private:
 	// standing in a hole in the navmesh (a rock, a corner it left out): step straight to the nearest
 	// spot a route starts from; true if m_path now goes there and on
 	bool StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &destination);
+	void Note(const char *kind, const glm::vec3 &at, const glm::vec3 &to, const glm::vec3 &closest = glm::vec3(0.0f));
+	// no route from `from` to `to`: notes which of no_mesh_here, no_mesh_there, not_connected
+	void NoteNoRoute(const glm::vec3 &from, const glm::vec3 &to);
 	// a navmesh route, or {} with *length = -1 if there isn't one
 	static std::vector<glm::vec3> Route(const glm::vec3 &from, const glm::vec3 &to, float *length);
 
@@ -110,6 +124,7 @@ private:
 	bool                   m_stop_at_end = false; // the route ends at a zone line / teleport
 	bool                   m_through     = false; // walk into zone lines (ZoneTo)
 	uint16                 m_sequence    = 0;
+	std::vector<NavNote>   m_notes;
 
 	// stuck detection
 	glm::vec3 m_progress_pos{0.0f};

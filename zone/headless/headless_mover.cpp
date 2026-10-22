@@ -247,6 +247,7 @@ bool HeadlessMover::BridgeGap(const glm::vec3 &pos, const glm::vec3 &destination
 	}
 	LogHeadlessClient("[{}] stepping across a [{:.0f}]-unit gap in the navmesh (a doorway?) towards [{:.0f}, {:.0f}]",
 		m_stream->GetClient() ? m_stream->GetClient()->GetCleanName() : "?", Flat(edge, pos), destination.x, destination.y);
+	Note("door_gap", pos, edge);
 	m_path.insert(m_path.begin(), edge);
 	return true;
 }
@@ -268,11 +269,37 @@ bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &desti
 			}
 			LogHeadlessClient("[{}] off the navmesh at [{:.0f}, {:.0f}, {:.0f}]: stepping [{:.0f}] units onto it",
 				m_stream->GetClient() ? m_stream->GetClient()->GetCleanName() : "?", pos.x, pos.y, pos.z, r);
+			Note("off_mesh", pos, spot);
 			m_path.insert(m_path.begin(), spot);
 			return true;
 		}
 	}
 	return false;
+}
+
+void HeadlessMover::Note(const char *kind, const glm::vec3 &at, const glm::vec3 &to, const glm::vec3 &closest)
+{
+	m_notes.push_back({kind, at, to, closest});
+}
+
+void HeadlessMover::NoteNoRoute(const glm::vec3 &from, const glm::vec3 &to)
+{
+	if (!zone->pathing) {
+		return;
+	}
+	// FindRoute answers nothing at all when a point has no navmesh polygon under it
+	bool partial = false;
+	bool stuck   = false;
+	if (zone->pathing->FindRoute(from, from, partial, stuck).empty()) {
+		Note("no_mesh_here", from, to);
+	}
+	else if (zone->pathing->FindRoute(to, to, partial, stuck).empty()) {
+		Note("no_mesh_there", from, to);
+	}
+	else {
+		auto route = zone->pathing->FindRoute(from, to, partial, stuck);
+		Note("not_connected", from, to, route.empty() ? from : route.back().pos);
+	}
 }
 
 float HeadlessMover::Check(const glm::vec3 &destination)
@@ -330,6 +357,7 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 	if (m_moving) {
 		Stop(Result::Stopped);
 	}
+	m_notes.clear();
 
 	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
 	m_through = through_zone_lines;
@@ -346,10 +374,12 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 			StraightWalkable(start, destination)) {
 			LogHeadlessClient("[{}] no navmesh route to the zone line [{:.0f}] units away: walking straight",
 				me->GetCleanName(), Flat(start, destination));
+			Note("straight_walk", start, destination);
 			m_path = {destination};
 			m_partial = false;
 		}
 		else {
+			NoteNoRoute(start, destination);
 			m_on_done(Result::NoPath, start);
 			return "";
 		}
@@ -542,7 +572,8 @@ void HeadlessMover::Tick()
 			Stop(Result::Arrived);
 			return;
 		}
-		if (++m_legs > PARTIAL_LEGS || !PlanRoute(pos, m_final, m_through)) {
+		const bool too_many = ++m_legs > PARTIAL_LEGS; // (the search's limit, not the navmesh's)
+		if (too_many || !PlanRoute(pos, m_final, m_through)) {
 			if (BridgeGap(pos, m_final, m_through ? DOOR_GAP_ZONING : DOOR_GAP)) {
 				m_next = 0;
 				return;
@@ -551,6 +582,7 @@ void HeadlessMover::Tick()
 				StraightWalkable(pos, m_final)) {
 				LogHeadlessClient("[{}] the navmesh ends [{:.0f}] units short of the zone line: walking the rest",
 					me->GetCleanName(), Flat(pos, m_final));
+				Note("straight_walk", pos, m_final);
 				m_path = {m_final};
 				m_partial = false;
 				m_next = 0;
@@ -559,6 +591,9 @@ void HeadlessMover::Tick()
 			if (m_through) {
 				LogHeadlessClient("[{}] no way to the zone line from [{:.0f}, {:.0f}, {:.0f}]: [{:.0f}] units short, and the map shows no straight way",
 					me->GetCleanName(), pos.x, pos.y, pos.z, Flat(pos, m_final));
+			}
+			if (!too_many) {
+				NoteNoRoute(pos, m_final);
 			}
 			Stop(Result::NoPath);
 			return;
@@ -577,6 +612,9 @@ void HeadlessMover::Tick()
 		m_progress_ms  = now;
 	}
 	else if (now - m_progress_ms > STUCK_MS) {
+		if (RunSpeed(me) > 0.0f) {
+			Note("stuck", pos, m_path[m_next]); // walking into something the navmesh says isn't there
+		}
 		Stop(Result::Stuck);
 	}
 }

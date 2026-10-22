@@ -1269,16 +1269,36 @@ void HeadlessClientManager::ReportSpawned(const std::string &session_id, uint32 
 			move->set_x(where.x);
 			move->set_y(where.y);
 			move->set_z(where.z);
+			auto s = m_sessions.find(session_id);
+			std::string why;
+			if (s != m_sessions.end() && s->second.mover) {
+				for (const auto &n : s->second.mover->Notes()) {
+					auto *nav = move->add_nav();
+					nav->set_kind(n.kind);
+					nav->set_x(n.at.x);
+					nav->set_y(n.at.y);
+					nav->set_z(n.at.z);
+					nav->set_to_x(n.to.x);
+					nav->set_to_y(n.to.y);
+					nav->set_to_z(n.to.z);
+					nav->set_closest_x(n.closest.x);
+					nav->set_closest_y(n.closest.y);
+					nav->set_closest_z(n.closest.z);
+					if (n.kind == "no_mesh_here" || n.kind == "no_mesh_there" || n.kind == "not_connected" || n.kind == "stuck") {
+						why = n.kind; // (why it failed, not a gap it went round)
+					}
+				}
+			}
 			SendFrame(session_id, frame);
 
 			// ZoneTo: we're at (or in) the zone line; ask to go through it, as the client does
-			auto s = m_sessions.find(session_id);
 			if (s != m_sessions.end() && s->second.zone_line_to) {
 				if (result == HeadlessMover::Result::ZoneLine || result == HeadlessMover::Result::Arrived) {
 					RequestZoneLine(session_id, s->second, where);
 				}
 				else {
-					SendZoneEvent(session_id, eqheadless::ZONE_REFUSED, s->second.zone_line_to, "couldn't reach the zone line");
+					SendZoneEvent(session_id, eqheadless::ZONE_REFUSED, s->second.zone_line_to,
+						why.empty() ? "couldn't reach the zone line" : "couldn't reach the zone line (" + why + ")");
 				}
 				s->second.zone_line_to = 0;
 			}
