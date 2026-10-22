@@ -559,22 +559,35 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				return refusal;
 			}
 
+			// the zone line with the shortest walk from here (a zone can have several to one neighbour, and
+			// the nearest as the crow flies can be in another part of it), or the one asked for by number;
+			// with no walk to any, the nearest (the walk then says why not)
 			const glm::vec3 here(me->GetX(), me->GetY(), me->GetZ());
-			const ZonePoint *best = nullptr;
-			float best_dist       = 0.0f;
+			const uint32 number   = cmd.zone_to().number();
+			const ZonePoint *best = nullptr, *nearest = nullptr;
+			float best_walk = 0.0f, nearest_dist = 0.0f;
 			for (auto *zp : UsableZonePoints(me)) {
-				if (zp->target_zone_id != zone_id) {
+				if (zp->target_zone_id != zone_id || (number && zp->number != number)) {
 					continue;
 				}
 				const glm::vec3 spot = ZonePointSpot(zp, here);
 				const float dist     = glm::length(glm::vec2(spot.x - here.x, spot.y - here.y));
-				if (!best || dist < best_dist) {
+				if (!nearest || dist < nearest_dist) {
+					nearest      = zp;
+					nearest_dist = dist;
+				}
+				const float walk = session.mover->Check(spot);
+				if (walk >= 0.0f && (!best || walk < best_walk)) {
 					best      = zp;
-					best_dist = dist;
+					best_walk = walk;
 				}
 			}
 			if (!best) {
-				return fmt::format("{} has no zone line to {}", zone->GetShortName(), ShortName(zone_id));
+				best = nearest;
+			}
+			if (!best) {
+				return number ? fmt::format("{} has no zone line {} to {}", zone->GetShortName(), number, ShortName(zone_id))
+					: fmt::format("{} has no zone line to {}", zone->GetShortName(), ShortName(zone_id));
 			}
 
 			// end a walk that's under way first: its "stopped" must not be taken as this ZoneTo failing

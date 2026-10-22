@@ -105,7 +105,9 @@ message ConsiderCommand { uint32 spawn_id = 1; }                    // the answe
 message LootCommand     { uint32 corpse_id = 1; }                   // loot everything; answer: LootEvent
 // walk to this zone's zone line for `zone` (a short name from ZoneInfo.exits) and through it, as a
 // player does; a ZoneEvent follows. Plain MoveTo stops at zone lines instead.
-message ZoneToCommand   { string zone = 1; }
+// walk through a zone line to a neighbouring zone: the one with the shortest walk from here, or the
+// zone point `number` (zone_points.number: a zone with several entrances to another)
+message ZoneToCommand   { string zone = 1; uint32 number = 2; }
 // merchants, as the client's merchant window: open (stand within ~20 units), buy and sell, close.
 // Opening sends a MerchantEvent with what it sells.
 message MerchantCommand { uint32 npc_id = 1; bool open = 2; }
