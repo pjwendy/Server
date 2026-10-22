@@ -1487,6 +1487,11 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		self->set_aa_split(me->GetAAPercent());
 	}
 	self->set_run_speed(HeadlessMover::RunSpeed(me));
+	if (zone) {
+		TimeOfDay_Struct tod{};
+		zone->zone_time.GetCurrentEQTimeOfDay(time(nullptr), &tod);
+		self->set_game_hour(tod.hour);
+	}
 	for (const uint32 disc : me->GetPP().disciplines.values) {
 		if (disc && IsValidSpell(disc)) {
 			self->add_disciplines(disc);

@@ -370,6 +370,8 @@ message Self {
   uint32          aa_split   = 34; // share of experience going to AA, 0-100
   float           run_speed  = 35; // how fast a move_to walks now, units per second (buffs, snares, GM speed; 0 rooted)
   repeated uint32 disciplines = 36; // spell ids of the disciplines you know (DisciplineCommand)
+  uint32          game_hour  = 37; // the zone's EQ hour, 1-24 as the client shows it (an EQ hour is 3 real minutes;
+                                   // some zones spawn differently by night: spawn_events)
 }
 
 message Gem {
