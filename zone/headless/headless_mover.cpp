@@ -421,6 +421,15 @@ bool HeadlessMover::CanBreathe(Client *me)
 	return EffectTotal(me, SpellEffect::WaterBreathing) > 0;
 }
 
+int HeadlessMover::Air()
+{
+	if (m_air >= 0) {
+		return m_air;
+	}
+	Client *me = m_stream->GetClient();
+	return me ? MaxAir(me) : 0;
+}
+
 void HeadlessMover::Breathe()
 {
 	Client *me = m_stream->GetClient();

@@ -82,7 +82,7 @@ public:
 	// character breathe there (spell effect 14), and is back to full the moment it can breathe; at none
 	// left, drowning takes an eighth of the character's hit points a second, reported to the server as
 	// the client does (OP_EnvDamage, drowning). Air in seconds, now and at most
-	int Air() const { return m_air < 0 ? 0 : m_air; }
+	int Air(); // (not counted yet, just in: full)
 	static int MaxAir(Client *me);
 	static bool CanBreathe(Client *me);
 
