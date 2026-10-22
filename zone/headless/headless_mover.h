@@ -57,6 +57,8 @@ public:
 	// plan a route without walking (a walk under way carries on): its length, or -1 if there's
 	// no way there
 	float Check(const glm::vec3 &destination);
+	// under water: swim straight up to the surface (a client's player does when short of air); "" or why not
+	std::string Surface();
 	// turn on the spot to face a point, as the client's /face; returns "" or why it can't
 	std::string Face(const glm::vec3 &point);
 	// accept a server-side move within the zone (#goto, summon), as the client does
@@ -87,6 +89,7 @@ public:
 private:
 	void Tick();
 	void Breathe(); // once a second
+	void Go(Client *me, const glm::vec3 &start); // m_path planned: stand up and start walking it
 	// fills m_path (and the lift plan) for a walk from start; false if there's no way there
 	bool PlanRoute(const glm::vec3 &start, const glm::vec3 &destination, bool through_zone_lines);
 	void SendUpdate(const glm::vec3 &pos, float heading, uint32 animation);

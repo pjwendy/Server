@@ -87,6 +87,7 @@ namespace {
 	constexpr int    AIR_FLOOR           = 10;      // maximum air: (Stamina - 30) x lungs / 100, at least this ...
 	constexpr int    LUNGS_DEFAULT       = 100;     // ... and at most the lungs: spell effect 246, else this
 	constexpr float  HEAD_SHARE          = 0.75f;   // the head is this share of the character's size above it
+	constexpr float  SURFACE_UP          = 300.0f;  // a surface further up than this isn't one to swim to
 	// zones where being under water doesn't take air (the client's list: Erudin, the Southern Desert of Ro,
 	// Kerra Isle), and two with an air supply of their own (the Sleeper's Tomb, the Catacombs of Dranik)
 	constexpr uint32 BREATHE_ANYWAY[]    = {24, 35, 74};
@@ -535,22 +536,7 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 		}
 	}
 
-	// a real client stands up to walk
-	if (me->IsSitting()) {
-		auto app = new EQApplicationPacket(OP_SpawnAppearance, sizeof(SpawnAppearance_Struct));
-		auto *sa = reinterpret_cast<SpawnAppearance_Struct *>(app->pBuffer);
-		sa->spawn_id  = me->GetID();
-		sa->type      = AppearanceType::Animation;
-		sa->parameter = Animation::Standing;
-		m_stream->Inject(app);
-	}
-
-	m_next         = 0;
-	m_moving       = true;
-	m_pos          = start;
-	m_progress_pos = start;
-	m_progress_ms  = NowMs();
-	m_timer        = std::make_unique<EQ::Timer>(TICK_MS, true, [this](EQ::Timer *) { Tick(); });
+	Go(me, start);
 
 	float route_length = 0.0f;
 	glm::vec3 prev = start;
@@ -571,6 +557,71 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 		me->GetRunspeed(),
 		RunSpeed(me)
 	);
+	return "";
+}
+
+void HeadlessMover::Go(Client *me, const glm::vec3 &start)
+{
+	// a real client stands up to walk
+	if (me->IsSitting()) {
+		auto app = new EQApplicationPacket(OP_SpawnAppearance, sizeof(SpawnAppearance_Struct));
+		auto *sa = reinterpret_cast<SpawnAppearance_Struct *>(app->pBuffer);
+		sa->spawn_id  = me->GetID();
+		sa->type      = AppearanceType::Animation;
+		sa->parameter = Animation::Standing;
+		m_stream->Inject(app);
+	}
+
+	m_next         = 0;
+	m_moving       = true;
+	m_pos          = start;
+	m_progress_pos = start;
+	m_progress_ms  = NowMs();
+	m_timer        = std::make_unique<EQ::Timer>(TICK_MS, true, [this](EQ::Timer *) { Tick(); });
+}
+
+std::string HeadlessMover::Surface()
+{
+	Client *me = m_stream->GetClient();
+	if (!me) {
+		return "character is not in the zone";
+	}
+	if (!zone || !zone->HasWaterMap()) {
+		return "no water here";
+	}
+	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
+	const float     head = me->GetSize() * HEAD_SHARE;
+	if (!zone->watermap->InLiquid(start + glm::vec3(0.0f, 0.0f, head))) {
+		return "not under water";
+	}
+	// straight up to where the water ends, with the head just out of it
+	float top = -1.0f;
+	for (float up = 1.0f; up <= SURFACE_UP; up += 1.0f) {
+		if (!zone->watermap->InLiquid(start + glm::vec3(0.0f, 0.0f, up))) {
+			top = up;
+			break;
+		}
+	}
+	if (top < 0.0f) {
+		return "no surface above";
+	}
+	const glm::vec3 target(start.x, start.y, start.z + std::max(0.0f, top - head + 1.0f));
+	if (zone->zonemap && !zone->zonemap->CheckLoS(start + glm::vec3(0.0f, 0.0f, head), target + glm::vec3(0.0f, 0.0f, head))) {
+		return "something solid above";
+	}
+	if (m_moving) {
+		Stop(Result::Stopped);
+	}
+	m_notes.clear();
+	m_path        = {target};
+	m_through     = false;
+	m_final       = target;
+	m_legs        = 0;
+	m_partial     = false;
+	m_stop_at_end = false;
+	m_lift_phase  = LiftPhase::None;
+	Go(me, start);
+	LogHeadlessClient("[{}] surfacing: [{:.0f}] units up, [{}] seconds of air left", me->GetCleanName(), target.z - start.z, Air());
 	return "";
 }
 

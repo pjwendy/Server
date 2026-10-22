@@ -308,6 +308,9 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			}
 			return "";
 		}
+		case eqheadless::Command::kSurface: {
+			return session.mover ? session.mover->Surface() : "character is not ready to move";
+		}
 		case eqheadless::Command::kTarget: {
 			const uint32 id = cmd.target().spawn_id();
 			if (id != 0 && !entity_list.GetMob(id)) {
