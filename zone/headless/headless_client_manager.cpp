@@ -1732,6 +1732,8 @@ void HeadlessClientManager::FillItem(eqheadless::Item *out, const EQ::ItemData *
 	out->set_magic(item->Magic);
 	out->set_bag_slots(item->BagSlots);
 	out->set_bag_size(item->BagSize);
+	out->set_bag_wr(item->BagWR);
+	out->set_bag_type(item->BagType);
 	out->set_item_type(item->ItemType);
 	out->set_usable(me && item->IsEquipable(me->GetBaseRace(), me->GetClass()) && item->ReqLevel <= me->GetLevel());
 	out->set_classes(item->Classes);

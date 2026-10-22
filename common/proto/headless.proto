@@ -429,6 +429,8 @@ message Item {
   uint32 races     = 31; // bitmask of player races (EQ race bits: human 1, barbarian 2, ... dwarf 128 ...)
   uint32 scroll_spell = 32; // a spell scroll: the spell it teaches
   uint32 scroll_level = 33; // ... and the level our class can learn it at (0: not our class)
+  uint32 bag_wr    = 34; // containers: weight reduction, percent
+  uint32 bag_type  = 35; // containers: EQ bag type (0-8 storage: bag, chest, quiver...; 9 and up tradeskill: mixing bowl, kiln...)
 }
 
 // our EQEmu bots and what they wear; we equip them (^inventorygive)
