@@ -130,8 +130,9 @@ message DisciplineCommand { uint32 spell_id = 1; }
 // right-click the item in a slot: its click effect, a potion or food, or a tome (learns its discipline)
 message UseItemCommand  { int32 slot = 1; }
 // parcels, as the parcel tab of a parcel merchant's window (stand within ~20 units; opening the
-// window lists what's waiting for you, MerchantEvent.parcels). Send the item in a slot (not a no-drop
-// or attuned one: the client's window doesn't take those) to a character by name; the server allows
+// window lists what's waiting for you, MerchantEvent.parcels). Send the item in a slot (not an attuned
+// one, nor a no-drop one unless the server lets no-drop be traded: World:FVNoDropFlag) to a character
+// by name; the server allows
 // one parcel per Parcel:ParcelDeliveryDelay. Retrieve one of yours into your bags.
 message ParcelSendCommand     { uint32 npc_id = 1; int32 slot = 2; uint32 quantity = 3; string to = 4; string note = 5; }
 message ParcelRetrieveCommand { uint32 npc_id = 1; uint32 parcel_slot = 2; uint32 item_id = 3; }

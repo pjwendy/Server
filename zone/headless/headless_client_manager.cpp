@@ -626,8 +626,9 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			if (!inst || !inst->GetItem()) {
 				return fmt::format("nothing in slot {}", ps.slot());
 			}
-			// the client's parcel window refuses these, and the server leaves that to it
-			if (!inst->GetItem()->NoDrop || inst->IsAttuned()) {
+			// the client's parcel window refuses these (no-drop unless the server allows trading it,
+			// World:FVNoDropFlag), and the server leaves that to it
+			if (inst->IsAttuned() || (!inst->GetItem()->NoDrop && !me->CanTradeFVNoDropItem())) {
 				return fmt::format("{} can't be sent: it's no-drop", inst->GetItem()->Name);
 			}
 			if (ps.to().empty() || ps.to().size() >= sizeof(Parcel_Struct::send_to)) {
