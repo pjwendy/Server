@@ -628,7 +628,10 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			}
 			// the client's parcel window refuses these (no-drop unless the server allows trading it,
 			// World:FVNoDropFlag), and the server leaves that to it
-			if (inst->IsAttuned() || (!inst->GetItem()->NoDrop && !me->CanTradeFVNoDropItem())) {
+			// (Client::CanTradeFVNoDropItem's rule: 1 everyone, 2 status MinStatusForNoDropExemptions and up)
+			const int  fv         = RuleI(World, FVNoDropFlag);
+			const bool no_drop_ok = fv == 1 || (fv == 2 && me->Admin() >= RuleI(Character, MinStatusForNoDropExemptions));
+			if (inst->IsAttuned() || (!inst->GetItem()->NoDrop && !no_drop_ok)) {
 				return fmt::format("{} can't be sent: it's no-drop", inst->GetItem()->Name);
 			}
 			if (ps.to().empty() || ps.to().size() >= sizeof(Parcel_Struct::send_to)) {
