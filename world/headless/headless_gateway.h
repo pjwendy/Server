@@ -22,6 +22,8 @@
 
 #include "headless.pb.h"
 
+class ZoneServer;
+
 #include <map>
 #include <memory>
 #include <string>
@@ -77,6 +79,7 @@ private:
 		uint32      character_id   = 0;
 		std::string character;
 		uint32      zone_id        = 0;
+		uint32      instance_id    = 0; // a static, global instance a zone is routed to (City of Mist) or the character's own
 		uint32      zone_server_id = 0; // ZSList id once known
 		uint32      wid            = 0; // ClientListEntry id
 		uint32      spawn_id       = 0;
@@ -97,6 +100,7 @@ private:
 	void HandleHello(Session *s, const eqheadless::Hello &hello);
 	bool CheckZoneAllowed(Session *s);
 	void TrySpawn(Session *s);
+	ZoneServer *ZoneServerFor(const Session *s) const; // its zone (or instance), if it's up
 	void SendDespawn(Session *s);
 	void ForwardCommand(Session *s, const eqheadless::Command &cmd);
 	bool TakeRateToken(Session *s);

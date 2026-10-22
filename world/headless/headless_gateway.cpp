@@ -186,7 +186,7 @@ void HeadlessGateway::OnTick()
 
 		switch (s->phase) {
 			case Phase::WaitingForZone:
-				if (ZSList::Instance()->FindByZoneID(s->zone_id)) {
+				if (ZoneServerFor(s)) {
 					TrySpawn(s);
 				}
 				else if (now > s->deadline_ms) {
@@ -332,7 +332,7 @@ void HeadlessGateway::HandleHello(Session *s, const eqheadless::Hello &hello)
 	s->character_id = Strings::ToUnsignedInt(row[0]);
 	s->character    = row[1];
 	s->zone_id      = Strings::ToUnsignedInt(row[2]);
-	const uint32 instance_id = Strings::ToUnsignedInt(row[3]);
+	s->instance_id  = Strings::ToUnsignedInt(row[3]);
 	s->account_name = row[4] ? row[4] : "";
 	s->ls_id        = row[5] ? row[5] : "";
 	s->lsaccount_id = Strings::ToUnsignedInt(row[6]);
@@ -363,11 +363,6 @@ void HeadlessGateway::HandleHello(Session *s, const eqheadless::Hello &hello)
 		}
 	}
 
-	if (instance_id > 0) {
-		Refuse(s, eqheadless::REFUSED_NOT_IMPLEMENTED, "characters in instances are not supported yet");
-		return;
-	}
-
 	if (!CheckZoneAllowed(s)) {
 		return;
 	}
@@ -375,13 +370,13 @@ void HeadlessGateway::HandleHello(Session *s, const eqheadless::Hello &hello)
 	s->phase       = Phase::WaitingForZone;
 	s->deadline_ms = NowMs() + ZONE_BOOT_TIMEOUT_MS;
 
-	if (ZSList::Instance()->FindByZoneID(s->zone_id)) {
+	if (ZoneServerFor(s)) {
 		TrySpawn(s);
 		return;
 	}
 
-	LogHeadlessClient("Booting [{}] for headless character [{}]", ZoneName(s->zone_id, true), s->character);
-	if (ZSList::Instance()->TriggerBootup(s->zone_id, 0) == 0) {
+	LogHeadlessClient("Booting [{}] (instance {}) for headless character [{}]", ZoneName(s->zone_id, true), s->instance_id, s->character);
+	if (ZSList::Instance()->TriggerBootup(s->zone_id, s->instance_id) == 0) {
 		Refuse(s, eqheadless::REFUSED_ZONE_UNAVAILABLE, "no zone server available to boot the character's zone");
 	}
 	// otherwise OnTick() spawns once the zone is up
@@ -405,9 +400,15 @@ bool HeadlessGateway::CheckZoneAllowed(Session *s)
 	return true;
 }
 
+ZoneServer *HeadlessGateway::ZoneServerFor(const Session *s) const
+{
+	auto *zs = s->instance_id ? ZSList::Instance()->FindByInstanceID(s->instance_id) : ZSList::Instance()->FindByZoneID(s->zone_id);
+	return zs && zs->GetZoneID() == s->zone_id ? zs : nullptr;
+}
+
 void HeadlessGateway::TrySpawn(Session *s)
 {
-	auto *zs = ZSList::Instance()->FindByZoneID(s->zone_id);
+	auto *zs = ZoneServerFor(s);
 	if (!zs) {
 		return;
 	}
@@ -435,7 +436,7 @@ void HeadlessGateway::TrySpawn(Session *s)
 	auto inc = std::make_unique<ServerPacket>(ServerOP_ZoneIncClient, sizeof(ServerZoneIncomingClient_Struct));
 	auto *szic = reinterpret_cast<ServerZoneIncomingClient_Struct *>(inc->pBuffer);
 	szic->zoneid     = s->zone_id;
-	szic->instanceid = 0;
+	szic->instanceid = s->instance_id;
 	szic->ip         = LOOPBACK_IP;
 	szic->wid        = s->wid;
 	szic->accid      = s->account_id;
@@ -557,12 +558,8 @@ void HeadlessGateway::HandleZoning(ServerPacket *pack)
 
 	// the old zone has already let the character go: nothing to despawn from here on
 	s->phase = Phase::Handshake;
-	if (z->instance_id > 0) {
-		Refuse(s, eqheadless::REFUSED_NOT_IMPLEMENTED, "zoning into instances is not supported yet");
-		return;
-	}
-
-	s->zone_id = z->zone_id;
+	s->zone_id     = z->zone_id;
+	s->instance_id = z->instance_id;
 	s->zoning  = true;
 	if (!CheckZoneAllowed(s)) {
 		return;
@@ -572,10 +569,10 @@ void HeadlessGateway::HandleZoning(ServerPacket *pack)
 	s->phase       = Phase::WaitingForZone;
 	s->deadline_ms = NowMs() + ZONE_BOOT_TIMEOUT_MS;
 
-	if (ZSList::Instance()->FindByZoneID(s->zone_id)) {
+	if (ZoneServerFor(s)) {
 		TrySpawn(s);
 	}
-	else if (ZSList::Instance()->TriggerBootup(s->zone_id, 0) == 0) {
+	else if (ZSList::Instance()->TriggerBootup(s->zone_id, s->instance_id) == 0) {
 		Refuse(s, eqheadless::REFUSED_ZONE_UNAVAILABLE, "no zone server available for the new zone");
 	}
 }
