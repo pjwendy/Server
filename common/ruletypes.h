@@ -1185,6 +1185,7 @@ RULE_INT(HeadlessClients, MaxTotal, 0, "Maximum concurrent headless characters s
 RULE_INT(HeadlessClients, MaxPerAccount, 1, "Maximum concurrent headless characters per account")
 RULE_STRING(HeadlessClients, AllowedZones, "", "Comma-delimited zone short names headless characters may enter. Empty allows all zones")
 RULE_STRING(HeadlessClients, BlockedZones, "", "Comma-delimited zone short names headless characters may never enter")
+RULE_BOOL(HeadlessClients, Drowning, true, "Headless characters run out of air under water and drown, as the client works it out (it reports drowning itself with OP_EnvDamage, and the server trusts it)")
 RULE_BOOL(HeadlessClients, AllowBots, true, "Headless characters may spawn and command bots (also requires Bots:Enabled)")
 RULE_BOOL(HeadlessClients, AllowMercenaries, true, "Headless characters may hire mercenaries (also requires Mercs:AllowMercs)")
 RULE_BOOL(HeadlessClients, AllowGroupWithPlayers, true, "Headless characters may group and raid with real players")

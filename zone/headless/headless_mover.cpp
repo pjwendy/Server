@@ -80,6 +80,17 @@ namespace {
 	constexpr float  BODY_HEIGHT       = 4.0f;
 	// standing where the navmesh has a hole (FindRoute looks 5 units across for our polygon): look
 	// for it in rings OFF_MESH_STEP apart out to OFF_MESH_MAX
+	// breath (the client's, RoF2 eqgame.exe: its breath routine at 0x00584ac0, maximum air at 0x00581da0,
+	// "can I breathe" at 0x00448b00)
+	constexpr uint64 BREATH_MS           = 1000;    // it runs once a second (when over 1000 ms have passed)
+	constexpr double DROWN_SHARE         = 0.125;   // drowning: this share of maximum hit points a second
+	constexpr int    AIR_FLOOR           = 10;      // maximum air: (Stamina - 30) x lungs / 100, at least this ...
+	constexpr int    LUNGS_DEFAULT       = 100;     // ... and at most the lungs: spell effect 246, else this
+	constexpr float  HEAD_SHARE          = 0.75f;   // the head is this share of the character's size above it
+	// zones where being under water doesn't take air (the client's list: Erudin, the Southern Desert of Ro,
+	// Kerra Isle), and two with an air supply of their own (the Sleeper's Tomb, the Catacombs of Dranik)
+	constexpr uint32 BREATHE_ANYWAY[]    = {24, 35, 74};
+	constexpr uint32 SLEEPER_ZONE = 128, SLEEPER_AIR = 127, DRANIK_CATACOMBS_ZONE = 330, DRANIK_AIR = 256;
 	// a route's step is a swim link's when its ends are this near the link's
 	constexpr float  SWIM_MATCH          = 3.0f;
 	constexpr float  OFF_MESH_STEP       = 10.0f;
@@ -111,6 +122,7 @@ namespace {
 HeadlessMover::HeadlessMover(NullStream *stream, DoneCallback on_done)
 	: m_stream(stream), m_on_done(std::move(on_done))
 {
+	m_breath_timer = std::make_unique<EQ::Timer>(BREATH_MS, true, [this](EQ::Timer *) { Breathe(); });
 }
 
 HeadlessMover::~HeadlessMover() = default;
@@ -343,6 +355,104 @@ void HeadlessMover::NoteNoRoute(const glm::vec3 &from, const glm::vec3 &to)
 		auto route = zone->pathing->FindRoute(from, to, partial, stuck);
 		Note("not_connected", from, to, route.empty() ? from : route.back().pos);
 	}
+}
+
+// the sum of a spell effect's base values over the character's buffs and its worn items' worn effects (the
+// client sums spell effects this way; the server doesn't keep water breathing or air as bonuses)
+static int EffectTotal(Client *me, uint16 effect)
+{
+	int total = 0;
+	auto add = [&](uint16 spell_id) {
+		if (!IsValidSpell(spell_id)) {
+			return;
+		}
+		for (int i = 0; i < EFFECT_COUNT; ++i) {
+			if (spells[spell_id].effect_id[i] == effect) {
+				total += spells[spell_id].base_value[i];
+			}
+		}
+	};
+	Buffs_Struct *buffs = me->GetBuffs();
+	for (int i = 0; buffs && i < me->GetMaxBuffSlots(); ++i) {
+		if (buffs[i].spellid != SPELL_UNKNOWN) {
+			add(buffs[i].spellid);
+		}
+	}
+	for (int slot = EQ::invslot::EQUIPMENT_BEGIN; slot <= EQ::invslot::EQUIPMENT_END; ++slot) {
+		const EQ::ItemInstance *inst = me->GetInv().GetItem(slot);
+		if (inst && inst->GetItem() && inst->GetItem()->Worn.Effect > 0 && inst->GetItem()->Worn.Type == EQ::item::ItemEffectWorn) {
+			add(inst->GetItem()->Worn.Effect);
+		}
+	}
+	return total;
+}
+
+int HeadlessMover::MaxAir(Client *me)
+{
+	int lungs = EffectTotal(me, SpellEffect::SetBreathLevel);
+	if (lungs < 1) {
+		lungs = LUNGS_DEFAULT;
+	}
+	const int air = (me->GetSTA() - 30) * lungs / 100;
+	if (zone && zone->GetZoneID() == SLEEPER_ZONE) {
+		return SLEEPER_AIR;
+	}
+	if (zone && zone->GetZoneID() == DRANIK_CATACOMBS_ZONE) {
+		return DRANIK_AIR;
+	}
+	return air < AIR_FLOOR ? AIR_FLOOR : std::min(air, lungs);
+}
+
+bool HeadlessMover::CanBreathe(Client *me)
+{
+	if (!zone || !zone->HasWaterMap()) {
+		return true;
+	}
+	for (uint32 z : BREATHE_ANYWAY) {
+		if (zone->GetZoneID() == z) {
+			return true;
+		}
+	}
+	const glm::vec3 head(me->GetX(), me->GetY(), me->GetZ() + me->GetSize() * HEAD_SHARE);
+	if (!zone->watermap->InLiquid(head)) {
+		return true;
+	}
+	return EffectTotal(me, SpellEffect::WaterBreathing) > 0;
+}
+
+void HeadlessMover::Breathe()
+{
+	Client *me = m_stream->GetClient();
+	if (!me || me->GetHP() <= 0) {
+		return;
+	}
+	if (CanBreathe(me)) {
+		m_air = MaxAir(me);
+		return;
+	}
+	if (m_air < 0) {
+		m_air = MaxAir(me); // (came in under water: a full breath, as the server gives one on zoning in)
+	}
+	if (m_air > 0) {
+		--m_air;
+		return;
+	}
+	if (!RuleB(HeadlessClients, Drowning)) {
+		return;
+	}
+	const int damage = static_cast<int>(std::lround(me->GetMaxHP() * DROWN_SHARE));
+	if (damage <= 0) {
+		return;
+	}
+	// as the client reports it: the server takes it from there (GM status, invulnerability, the rules)
+	auto app = new EQApplicationPacket(OP_EnvDamage, sizeof(EnvDamage2_Struct));
+	auto *ed = reinterpret_cast<EnvDamage2_Struct *>(app->pBuffer);
+	ed->id       = me->GetID();
+	ed->damage   = damage;
+	ed->dmgtype  = EQ::constants::EnvironmentalDamage::Drowning;
+	ed->constant = 0xFFFF;
+	m_stream->Inject(app);
+	LogHeadlessClient("[{}] drowning: [{}] of [{}] hit points", me->GetCleanName(), damage, me->GetMaxHP());
 }
 
 float HeadlessMover::Check(const glm::vec3 &destination)

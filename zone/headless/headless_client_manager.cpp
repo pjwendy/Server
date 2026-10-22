@@ -1521,6 +1521,8 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		self->set_aa_split(me->GetAAPercent());
 	}
 	self->set_run_speed(HeadlessMover::RunSpeed(me));
+	self->set_max_air(HeadlessMover::MaxAir(me));
+	self->set_air(session.mover ? session.mover->Air() : HeadlessMover::MaxAir(me));
 	if (zone) {
 		TimeOfDay_Struct tod{};
 		zone->zone_time.GetCurrentEQTimeOfDay(time(nullptr), &tod);

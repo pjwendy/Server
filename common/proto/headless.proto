@@ -395,6 +395,8 @@ message Self {
   repeated uint32 disciplines = 36; // spell ids of the disciplines you know (DisciplineCommand)
   uint32          game_hour  = 37; // the zone's EQ hour, 1-24 as the client shows it (an EQ hour is 3 real minutes;
                                    // some zones spawn differently by night: spawn_events)
+  uint32          air        = 38; // seconds of air left under water (full whenever you can breathe)
+  uint32          max_air    = 39; // seconds of air at most (Stamina, Lung Capacity); at none, you drown
 }
 
 message Gem {

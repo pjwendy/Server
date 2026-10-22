@@ -75,9 +75,18 @@ public:
 	const std::vector<NavNote> &Notes() const { return m_notes; }
 	// how fast a walk goes for this character now, in units per second (0 when rooted, stunned or mezzed)
 	static float RunSpeed(const Mob *me);
+	// breath, as the client keeps it (RoF2's eqgame.exe, read with Ghidra: the breath routine runs once a
+	// second): air goes down a second at a time while the head is under water, unless something lets the
+	// character breathe there (spell effect 14), and is back to full the moment it can breathe; at none
+	// left, drowning takes an eighth of the character's hit points a second, reported to the server as
+	// the client does (OP_EnvDamage, drowning). Air in seconds, now and at most
+	int Air() const { return m_air < 0 ? 0 : m_air; }
+	static int MaxAir(Client *me);
+	static bool CanBreathe(Client *me);
 
 private:
 	void Tick();
+	void Breathe(); // once a second
 	// fills m_path (and the lift plan) for a walk from start; false if there's no way there
 	bool PlanRoute(const glm::vec3 &start, const glm::vec3 &destination, bool through_zone_lines);
 	void SendUpdate(const glm::vec3 &pos, float heading, uint32 animation);
@@ -134,6 +143,8 @@ private:
 	bool                   m_through     = false; // walk into zone lines (ZoneTo)
 	uint16                 m_sequence    = 0;
 	std::vector<NavNote>   m_notes;
+	std::unique_ptr<EQ::Timer> m_breath_timer;
+	int                    m_air = -1; // seconds of air left (-1: not counted yet, so full)
 
 	// stuck detection
 	glm::vec3 m_progress_pos{0.0f};
