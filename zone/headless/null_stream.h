@@ -83,4 +83,6 @@ private:
 	bool          m_yield   = false; // one handshake packet per Process() tick
 
 	std::deque<EQApplicationPacket *> m_inbound; // injected command packets
+	std::deque<EQApplicationPacket *> m_held;    // the server moving us on while we enter the zone (a
+	                                             // zone's event_enter_zone): passed on once we're in
 };

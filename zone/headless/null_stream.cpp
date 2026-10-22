@@ -36,6 +36,10 @@ NullStream::~NullStream()
 		delete app;
 	}
 	m_inbound.clear();
+	for (auto *app : m_held) {
+		delete app;
+	}
+	m_held.clear();
 
 	// the Client deletes its stream when it leaves the zone (or failed to enter it)
 	HeadlessClientManager::Instance()->OnStreamDestroyed(m_session_id, m_step == Step::Done);
@@ -50,9 +54,14 @@ void NullStream::Inject(EQApplicationPacket *app)
 
 void NullStream::QueuePacket(const EQApplicationPacket *p, bool ack_req)
 {
-	// before we're in the zone it's all zone-in traffic; nothing for the SDK
+	// before we're in the zone it's all zone-in traffic; nothing for the SDK. Except the server moving
+	// us on (the Commonlands' entry script sends everyone to East Commonlands): that's kept and passed
+	// on once we're in, or the character stays and the move is left pending
 	if (p && m_step == Step::Done) {
 		HeadlessClientManager::Instance()->OnOutgoing(m_session_id, p);
+	}
+	else if (p && p->GetOpcode() == OP_RequestClientZoneChange) {
+		m_held.push_back(p->Copy());
 	}
 }
 
@@ -117,6 +126,12 @@ EQApplicationPacket *NullStream::PopPacket()
 			if (m_client && m_client->Connected()) {
 				m_step = Step::Done;
 				HeadlessClientManager::Instance()->ReportSpawned(m_session_id, m_client->GetID());
+				while (!m_held.empty()) {
+					EQApplicationPacket *held = m_held.front();
+					m_held.pop_front();
+					HeadlessClientManager::Instance()->OnOutgoing(m_session_id, held);
+					delete held;
+				}
 			}
 			return nullptr;
 		case Step::Done:
