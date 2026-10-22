@@ -237,6 +237,8 @@ found, and where:
 | `door_gap` | The walk succeeded by stepping across a gap in the navmesh, usually a doorway. |
 | `off_mesh` | The walk succeeded by stepping from a hole onto the navmesh. |
 | `straight_walk` | The walk succeeded by walking straight to a zone line the navmesh doesn't reach. |
+| `locked` | A door on the way that this character can't open (no key, another guild's, a lock to pick). `to` is the door. |
+| `door_wont_open` | A door on the way didn't open when clicked (it needs a quest, a trigger or a lever). |
 
 The last three are workarounds for gaps the navmesh should cover. A zone line refused with `couldn't
 reach the zone line` names the failure in brackets.

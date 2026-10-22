@@ -1284,7 +1284,8 @@ void HeadlessClientManager::ReportSpawned(const std::string &session_id, uint32 
 					nav->set_closest_x(n.closest.x);
 					nav->set_closest_y(n.closest.y);
 					nav->set_closest_z(n.closest.z);
-					if (n.kind == "no_mesh_here" || n.kind == "no_mesh_there" || n.kind == "not_connected" || n.kind == "stuck") {
+					if (n.kind == "no_mesh_here" || n.kind == "no_mesh_there" || n.kind == "not_connected" || n.kind == "stuck" ||
+						n.kind == "locked" || n.kind == "door_wont_open") {
 						why = n.kind; // (why it failed, not a gap it went round)
 					}
 				}

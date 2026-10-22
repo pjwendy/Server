@@ -632,6 +632,7 @@ bool HeadlessMover::HandleDoors(uint64 now)
 		}
 		if (now > m_door_wait_ms) {
 			LogHeadlessClient("[{}] door [{}] didn't open; giving up", me->GetCleanName(), door->GetDoorID());
+			Note("door_wont_open", m_pos, glm::vec3(door->GetPosition())); // (a quest's, a trigger's, a lever's)
 			m_door_entity = 0;
 			Stop(Result::Stuck);
 		}
@@ -670,6 +671,7 @@ bool HeadlessMover::HandleDoors(uint64 now)
 
 		if (!CanOpen(me, door)) {
 			LogHeadlessClient("[{}] door [{}] ({}) is locked and we can't open it", me->GetCleanName(), door->GetDoorID(), door->GetDoorName());
+			Note("locked", m_pos, glm::vec3(dp)); // (not the navmesh's fault: this character has no key)
 			Stop(Result::Locked);
 			return true;
 		}

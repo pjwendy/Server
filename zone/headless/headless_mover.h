@@ -62,7 +62,7 @@ public:
 	// where the last walk found the navmesh wanting: why it failed, or a gap it went round (for
 	// fixing the zone's navmesh: MoveEvent.nav). kind: "no_mesh_here", "no_mesh_there",
 	// "not_connected" (closest: where the navmesh gets closest), "stuck", "door_gap", "off_mesh",
-	// "straight_walk"
+	// "straight_walk"; and doors: "locked" (to: the door; this character can't open it), "door_wont_open"
 	struct NavNote {
 		std::string kind;
 		glm::vec3   at{0.0f};
