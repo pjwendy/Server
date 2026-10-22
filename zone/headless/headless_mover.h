@@ -37,7 +37,10 @@ class NullStream;
 // follows a navmesh route at the character's run speed, keeps to the floor, and injects the
 // same OP_ClientUpdate packets a real client sends. It opens doors on the way (when it has the
 // key), and rides lifts when that's much shorter than walking round: click the call button, wait
-// for the platform, step on, ride it up or down, step off.
+// for the platform, step on, ride it up or down, step off. In water it swims, as the client does: in any
+// direction, up and down too; a route that takes a swim link (the navmesh's way through water its
+// polygons don't cover, from puppeteer's tools/navsweep.py) follows the way through the water written
+// beside the zone's navmesh (maps/nav/<zone>.swims.json).
 class HeadlessMover {
 public:
 	enum class Result { Arrived, Stopped, Stuck, NoPath, ZoneLine, Locked };
@@ -94,6 +97,15 @@ private:
 		glm::vec3 top_landing{0.0f};
 	};
 	static std::vector<Lift> FindLifts();
+	// the zone's swims: a navmesh link through water, and the way through the water between its ends
+	struct Swim {
+		glm::vec3              from{0.0f};
+		glm::vec3              to{0.0f};
+		std::vector<glm::vec3> points; // from and to included
+	};
+	static const std::vector<Swim> &Swims();
+	// m_path (planned from start) takes a swim link: its ends become the way through the water
+	void FollowSwims(const glm::vec3 &start);
 	// replaces m_path with a route through a lift when that's much shorter; true if it did
 	bool PlanWithLift(const glm::vec3 &start, const glm::vec3 &destination, float direct_length);
 	// the lift part of a walk; returns true while the lift has us (calling it, riding it)

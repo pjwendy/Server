@@ -33,8 +33,12 @@
 
 #include "glm/geometric.hpp"
 
+#include "common/json/json.hpp"
+#include "common/path_manager.h"
+
 #include <algorithm>
 #include <chrono>
+#include <fstream>
 #include <map>
 
 extern Zone       *zone;
@@ -76,6 +80,8 @@ namespace {
 	constexpr float  BODY_HEIGHT       = 4.0f;
 	// standing where the navmesh has a hole (FindRoute looks 5 units across for our polygon): look
 	// for it in rings OFF_MESH_STEP apart out to OFF_MESH_MAX
+	// a route's step is a swim link's when its ends are this near the link's
+	constexpr float  SWIM_MATCH          = 3.0f;
 	constexpr float  OFF_MESH_STEP       = 10.0f;
 	constexpr float  OFF_MESH_MAX        = 60.0f;
 	constexpr int    OFF_MESH_DIRECTIONS = 12;
@@ -165,6 +171,7 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 			const bool       cliff    = left < CLIFF_NEAR && std::fabs(end.z - destination.z) > CLIFF_DZ;
 			if (progress && !cliff) {
 				m_partial = true; // walk it, then plan again from its end
+				FollowSwims(start);
 				return true;
 			}
 		}
@@ -179,11 +186,80 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 			m_path.clear();
 			return false;
 		}
+		if (!via_lift) {
+			FollowSwims(start);
+		}
 	}
 	else {
 		m_path.push_back(destination); // no navmesh: walk straight, following the floor
 	}
 	return true;
+}
+
+const std::vector<HeadlessMover::Swim> &HeadlessMover::Swims()
+{
+	// the file doesn't change while a zone is up: read it once per zone
+	static std::vector<Swim> cached;
+	static std::string       cached_zone;
+	const std::string name = zone->GetShortName();
+	if (name == cached_zone) {
+		return cached;
+	}
+	cached.clear();
+	cached_zone = name;
+	std::ifstream in(fmt::format("{}/maps/nav/{}.swims.json", PathManager::Instance()->GetServerPath(), name));
+	if (!in) {
+		return cached;
+	}
+	try {
+		const auto j  = nlohmann::json::parse(in);
+		auto       eq = [](const nlohmann::json &p) {
+			return glm::vec3(p.at(0).get<float>(), p.at(1).get<float>(), p.at(2).get<float>());
+		};
+		for (const auto &s : j.value("swims", nlohmann::json::array())) {
+			Swim sw;
+			sw.from = eq(s.at("from"));
+			sw.to   = eq(s.at("to"));
+			for (const auto &p : s.at("points")) {
+				sw.points.push_back(eq(p));
+			}
+			cached.push_back(std::move(sw));
+		}
+		LogHeadlessClient("[{}] [{}] swims through water", name, cached.size());
+	}
+	catch (const std::exception &e) {
+		LogError("[{}] can't read its swims: {}", name, e.what());
+	}
+	return cached;
+}
+
+void HeadlessMover::FollowSwims(const glm::vec3 &start)
+{
+	const auto &swims = Swims();
+	if (swims.empty() || m_path.empty()) {
+		return;
+	}
+	auto same = [](const glm::vec3 &a, const glm::vec3 &b) { return glm::length(a - b) < SWIM_MATCH; };
+	std::vector<glm::vec3> out;
+	glm::vec3              prev = start;
+	for (const auto &p : m_path) {
+		for (const auto &s : swims) {
+			if (s.points.size() < 3) {
+				continue; // (nothing between the ends)
+			}
+			if (same(prev, s.from) && same(p, s.to)) {
+				out.insert(out.end(), s.points.begin() + 1, s.points.end() - 1);
+				break;
+			}
+			if (same(prev, s.to) && same(p, s.from)) {
+				out.insert(out.end(), s.points.rbegin() + 1, s.points.rend() - 1);
+				break;
+			}
+		}
+		out.push_back(p);
+		prev = p;
+	}
+	m_path = std::move(out);
 }
 
 bool HeadlessMover::StraightWalkable(const glm::vec3 &from, const glm::vec3 &to)
@@ -484,7 +560,9 @@ void HeadlessMover::Tick()
 			break; // at the button, or on the platform: HandleLift takes over
 		}
 		const glm::vec3 &target = m_path[m_next];
-		glm::vec3 to(target.x - pos.x, target.y - pos.y, 0.0f);
+		// on land the floor gives our height; in water we swim, up and down as well as across
+		const bool swimming = zone->HasWaterMap() && zone->watermap->InLiquid(pos);
+		glm::vec3  to(target.x - pos.x, target.y - pos.y, swimming ? target.z - pos.z : 0.0f);
 		const float dist = glm::length(to);
 
 		if (dist <= step || dist < ARRIVE_EPSILON) {
