@@ -24,6 +24,10 @@
 #include "common/strings.h"
 #include "zone/client.h"
 #include "zone/headless/headless_client_manager.h"
+#include "zone/map.h"
+#include "zone/zone.h"
+
+extern Zone *zone;
 
 NullStream::NullStream(const std::string &session_id, const std::string &character)
 	: m_session_id(session_id), m_character(character)
@@ -153,8 +157,23 @@ void NullStream::PrepareForSpawnBroadcast()
 
 	// client parity: a real client settles onto the floor itself; we do it before others see us
 	const auto &pos   = m_client->GetPosition();
-	const float new_z = m_client->GetFixedZ(glm::vec3(pos.x, pos.y, pos.z));
-	if (new_z != pos.z) {
+	float       new_z = m_client->GetFixedZ(glm::vec3(pos.x, pos.y, pos.z));
+	if (new_z <= BEST_Z_INVALID && zone && zone->zonemap) {
+		// nothing under us: we may have come in below the floor (a zone point that keeps our own
+		// height from the zone we left, 999999: Neriak's first gate into the second). Look from above
+		glm::vec3 above(pos.x, pos.y, pos.z + 300.0f);
+		new_z = zone->zonemap->FindBestZ(above, nullptr);
+	}
+	if (new_z <= BEST_Z_INVALID) {
+		// still nowhere to stand: the zone's safe point, never off the map (where a character can't
+		// walk anywhere, and is saved there)
+		const glm::vec4 safe = zone ? zone->GetSafePoint() : glm::vec4(0.0f);
+		LogHeadlessClient("[{}] no floor at [{:.2f}, {:.2f}, {:.2f}]: to the safe point [{:.2f}, {:.2f}, {:.2f}]",
+			m_client->GetCleanName(), pos.x, pos.y, pos.z, safe.x, safe.y, safe.z);
+		m_client->SetPosition(safe.x, safe.y, safe.z);
+		new_z = safe.z;
+	}
+	else if (new_z != pos.z) {
 		LogHeadlessClient(
 			"[{}] floor fix z [{:.2f}] -> [{:.2f}] at [{:.2f}, {:.2f}]",
 			m_client->GetCleanName(),
