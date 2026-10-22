@@ -93,6 +93,9 @@ private:
 	// a route that ends at a doorway (doors were solid when the navmesh was built): step across onto
 	// the destination's piece of navmesh if it comes within max_gap; true if m_path now goes there
 	bool BridgeGap(const glm::vec3 &pos, const glm::vec3 &destination, float max_gap);
+	// standing in a hole in the navmesh (a rock, a corner it left out): step straight to the nearest
+	// spot a route starts from; true if m_path now goes there and on
+	bool StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &destination);
 	// a navmesh route, or {} with *length = -1 if there isn't one
 	static std::vector<glm::vec3> Route(const glm::vec3 &from, const glm::vec3 &to, float *length);
 

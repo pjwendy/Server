@@ -80,6 +80,11 @@ namespace {
 	constexpr float  STRAIGHT_RISE     = 8.0f;   // up: a stair
 	constexpr float  STRAIGHT_DROP     = 40.0f;  // down: a ledge a player just steps off
 	constexpr float  BODY_HEIGHT       = 4.0f;
+	// standing where the navmesh has a hole (FindRoute looks 5 units across for our polygon): look
+	// for it in rings OFF_MESH_STEP apart out to OFF_MESH_MAX
+	constexpr float  OFF_MESH_STEP       = 10.0f;
+	constexpr float  OFF_MESH_MAX        = 60.0f;
+	constexpr int    OFF_MESH_DIRECTIONS = 12;
 
 	float Flat(const glm::vec3 &a, const glm::vec3 &b)
 	{
@@ -246,6 +251,30 @@ bool HeadlessMover::BridgeGap(const glm::vec3 &pos, const glm::vec3 &destination
 	return true;
 }
 
+bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &destination)
+{
+	if (!zone->pathing) {
+		return false;
+	}
+	// FindRoute looks only 5 units across for the polygon we stand on: try rings around us,
+	// nearest first, each spot one we can walk straight to and a route starts from
+	for (float r = OFF_MESH_STEP; r <= OFF_MESH_MAX; r += OFF_MESH_STEP) {
+		for (int i = 0; i < OFF_MESH_DIRECTIONS; ++i) {
+			const float a = i * 6.2831853f / OFF_MESH_DIRECTIONS;
+			glm::vec3 spot(pos.x + r * std::cos(a), pos.y + r * std::sin(a), pos.z + STRAIGHT_RISE);
+			spot.z = FloorBelow(spot);
+			if (spot.z == pos.z + STRAIGHT_RISE || !StraightWalkable(pos, spot) || !PlanRoute(spot, destination, m_through)) {
+				continue;
+			}
+			LogHeadlessClient("[{}] off the navmesh at [{:.0f}, {:.0f}, {:.0f}]: stepping [{:.0f}] units onto it",
+				m_stream->GetClient() ? m_stream->GetClient()->GetCleanName() : "?", pos.x, pos.y, pos.z, r);
+			m_path.insert(m_path.begin(), spot);
+			return true;
+		}
+	}
+	return false;
+}
+
 float HeadlessMover::Check(const glm::vec3 &destination)
 {
 	Client *me = m_stream->GetClient();
@@ -309,6 +338,9 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 	if (!PlanRoute(start, destination, through_zone_lines)) {
 		if (BridgeGap(start, destination, through_zone_lines ? DOOR_GAP_ZONING : DOOR_GAP)) {
 			// stepping across a doorway onto the rest of the way
+		}
+		else if (StepOntoNavmesh(start, destination)) {
+			// a few steps onto the navmesh, then the way from there
 		}
 		else if (through_zone_lines && Flat(start, destination) <= ZONE_GAP && std::fabs(start.z - destination.z) <= ZONE_GAP_DZ &&
 			StraightWalkable(start, destination)) {
