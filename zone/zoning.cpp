@@ -70,6 +70,21 @@ void Client::Handle_OP_ZoneChange(const EQApplicationPacket *app) {
 
 	WorldContentService::Instance()->HandleZoneRoutingMiddleware(zc);
 
+	// a zone change the server asked for and the client never made (it zoned somewhere else, e.g.
+	// through a zone line) mustn't take this one to that summon's coordinates in another zone
+	if (zone_mode == ZoneSolicited && zc->zoneID != 0 && zonesummon_id != 0 && zc->zoneID != zonesummon_id) {
+		LogZoning(
+			"Client [{}] zoning to [{}]: dropping the pending zone change to [{}] it didn't make",
+			GetCleanName(),
+			ZoneName(zc->zoneID) ? ZoneName(zc->zoneID) : "Unknown",
+			ZoneName(zonesummon_id) ? ZoneName(zonesummon_id) : "Unknown"
+		);
+		zone_mode                     = ZoneUnsolicited;
+		m_ZoneSummonLocation          = glm::vec4();
+		zonesummon_id                 = 0;
+		zonesummon_ignorerestrictions = 0;
+	}
+
 	uint16 target_zone_id = 0;
 	auto target_instance_id = zc->instanceID;
 	ZonePoint* zone_point = nullptr;
