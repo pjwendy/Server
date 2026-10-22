@@ -65,13 +65,7 @@ namespace {
 	constexpr float  CLIFF_NEAR        = 120.0f;
 	constexpr float  CLIFF_DZ          = 40.0f;
 	constexpr int    PARTIAL_LEGS      = 12;
-	// doors and gates were solid when a zone's navmesh was built, so a route can end at a doorway
-	// with the rest of the way on a separate piece of navmesh beyond it: step across the doorway
-	// (the mover opens the door) when the two pieces come this close
-	constexpr float  DOOR_GAP          = 40.0f;
-	constexpr float  DOOR_GAP_ZONING   = 60.0f;
-	constexpr float  DOOR_GAP_DZ       = 20.0f;
-	// and when zoning, walk straight the rest of the way if the zone's map shows a way: floor all
+	// when zoning, walk straight the rest of the way if the zone's map shows a way: floor all
 	// along, no steps steeper than a stair, nothing in the way at body height (a tunnel or gateway
 	// the navmesh left out)
 	constexpr float  ZONE_GAP          = 800.0f;
@@ -225,33 +219,6 @@ bool HeadlessMover::StraightWalkable(const glm::vec3 &from, const glm::vec3 &to)
 	return true;
 }
 
-bool HeadlessMover::BridgeGap(const glm::vec3 &pos, const glm::vec3 &destination, float max_gap)
-{
-	if (!zone->pathing) {
-		return false;
-	}
-	// from the destination back towards us: where its piece of navmesh gets closest to where we are
-	bool partial = false;
-	bool stuck   = false;
-	auto back    = zone->pathing->FindRoute(destination, pos, partial, stuck);
-	if (back.size() < 2) {
-		return false;
-	}
-	const glm::vec3 edge = back.back().pos;
-	if (Flat(edge, pos) > max_gap || std::fabs(edge.z - pos.z) > DOOR_GAP_DZ) {
-		return false;
-	}
-	// the rest of the way from there, as any walk is planned (zone lines, partial legs)
-	if (!PlanRoute(edge, destination, m_through)) {
-		return false;
-	}
-	LogHeadlessClient("[{}] stepping across a [{:.0f}]-unit gap in the navmesh (a doorway?) towards [{:.0f}, {:.0f}]",
-		m_stream->GetClient() ? m_stream->GetClient()->GetCleanName() : "?", Flat(edge, pos), destination.x, destination.y);
-	Note("door_gap", pos, edge);
-	m_path.insert(m_path.begin(), edge);
-	return true;
-}
-
 bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &destination)
 {
 	if (!zone->pathing) {
@@ -364,10 +331,7 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 	m_final   = destination;
 	m_legs    = 0;
 	if (!PlanRoute(start, destination, through_zone_lines)) {
-		if (BridgeGap(start, destination, through_zone_lines ? DOOR_GAP_ZONING : DOOR_GAP)) {
-			// stepping across a doorway onto the rest of the way
-		}
-		else if (StepOntoNavmesh(start, destination)) {
+		if (StepOntoNavmesh(start, destination)) {
 			// a few steps onto the navmesh, then the way from there
 		}
 		else if (through_zone_lines && Flat(start, destination) <= ZONE_GAP && std::fabs(start.z - destination.z) <= ZONE_GAP_DZ &&
@@ -574,10 +538,6 @@ void HeadlessMover::Tick()
 		}
 		const bool too_many = ++m_legs > PARTIAL_LEGS; // (the search's limit, not the navmesh's)
 		if (too_many || !PlanRoute(pos, m_final, m_through)) {
-			if (BridgeGap(pos, m_final, m_through ? DOOR_GAP_ZONING : DOOR_GAP)) {
-				m_next = 0;
-				return;
-			}
 			if (m_through && Flat(pos, m_final) <= ZONE_GAP && std::fabs(pos.z - m_final.z) <= ZONE_GAP_DZ &&
 				StraightWalkable(pos, m_final)) {
 				LogHeadlessClient("[{}] the navmesh ends [{:.0f}] units short of the zone line: walking the rest",

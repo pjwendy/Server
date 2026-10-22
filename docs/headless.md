@@ -234,13 +234,14 @@ found, and where:
 | `no_mesh_there` | There is no navmesh at the destination. |
 | `not_connected` | Both ends are on the navmesh, but it has no way between them. `closest` is where it gets nearest. |
 | `stuck` | The character walked into something the navmesh says isn't there. |
-| `door_gap` | The walk succeeded by stepping across a gap in the navmesh, usually a doorway. |
 | `off_mesh` | The walk succeeded by stepping from a hole onto the navmesh. |
 | `straight_walk` | The walk succeeded by walking straight to a zone line the navmesh doesn't reach. |
 | `locked` | A door on the way that this character can't open (no key, another guild's, a lock to pick). `to` is the door. |
 | `door_wont_open` | A door on the way didn't open when clicked (it needs a quest, a trigger or a lever). |
 
-The last three are workarounds for gaps the navmesh should cover. A zone line refused with `couldn't
+`off_mesh` and `straight_walk` are workarounds for gaps the navmesh should cover: each one reported is a
+place to patch it (puppeteer's tools/nav_notes.py), and the workaround goes once none are left. Doorways
+are covered by the navmesh's own links now (tools/door_links.py). A zone line refused with `couldn't
 reach the zone line` names the failure in brackets.
 
 ## Using it from Python

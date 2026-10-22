@@ -61,7 +61,7 @@ public:
 	bool Moving() const { return m_moving; }
 	// where the last walk found the navmesh wanting: why it failed, or a gap it went round (for
 	// fixing the zone's navmesh: MoveEvent.nav). kind: "no_mesh_here", "no_mesh_there",
-	// "not_connected" (closest: where the navmesh gets closest), "stuck", "door_gap", "off_mesh",
+	// "not_connected" (closest: where the navmesh gets closest), "stuck", "off_mesh",
 	// "straight_walk"; and doors: "locked" (to: the door; this character can't open it), "door_wont_open"
 	struct NavNote {
 		std::string kind;
@@ -101,9 +101,6 @@ private:
 	// the zone's map shows a way straight there: floor all along, no step higher than a stair, and
 	// nothing in the way at body height
 	static bool StraightWalkable(const glm::vec3 &from, const glm::vec3 &to);
-	// a route that ends at a doorway (doors were solid when the navmesh was built): step across onto
-	// the destination's piece of navmesh if it comes within max_gap; true if m_path now goes there
-	bool BridgeGap(const glm::vec3 &pos, const glm::vec3 &destination, float max_gap);
 	// standing in a hole in the navmesh (a rock, a corner it left out): step straight to the nearest
 	// spot a route starts from; true if m_path now goes there and on
 	bool StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &destination);

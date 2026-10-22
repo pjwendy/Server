@@ -221,15 +221,15 @@ message MoveEvent {
 message NavNote {
   // no_mesh_here (no navmesh where we stood), no_mesh_there (none at the destination),
   // not_connected (both on the navmesh, no way between: closest is where it gets nearest),
-  // stuck (walked into something the navmesh says isn't there), door_gap (stepped across a gap,
-  // to), off_mesh (stepped from a hole onto it, to), straight_walk (walked straight to a zone
+  // stuck (walked into something the navmesh says isn't there), off_mesh (stepped from a hole onto
+  // it, to), straight_walk (walked straight to a zone
   // line the navmesh doesn't reach); doors, not the navmesh's: locked (this character can't open it;
   // to: the door), door_wont_open (clicked, and it didn't: a quest's, a trigger's)
   string kind      = 1;
   float  x         = 2; // where it happened
   float  y         = 3;
   float  z         = 4;
-  float  to_x      = 5; // where we were going (door_gap, off_mesh: where we stepped to)
+  float  to_x      = 5; // where we were going (off_mesh: where we stepped to)
   float  to_y      = 6;
   float  to_z      = 7;
   float  closest_x = 8;
