@@ -881,17 +881,43 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 				it->second.mover->Stop(HeadlessMover::Result::Stopped);
 			}
 
-			auto zc_app = new EQApplicationPacket(OP_ZoneChange, sizeof(ZoneChange_Struct));
-			auto *zc    = reinterpret_cast<ZoneChange_Struct *>(zc_app->pBuffer);
-			strn0cpy(zc->char_name, me->GetName(), sizeof(zc->char_name));
-			zc->zoneID      = rq->zone_id;
-			zc->instanceID  = rq->instance_id;
-			zc->x           = rq->x;
-			zc->y           = rq->y;
-			zc->z           = rq->z;
-			zc->zone_reason = rq->type; // the client echoes `type` back
-			zc->success     = 0;
-			it->second.stream->Inject(zc_app);
+			// the client's answer. Asked while we're still entering the zone (a zone's
+			// event_enter_zone moving us on, e.g. the Commonlands to East Commonlands), the server
+			// would drop it, leaving its summon pending: wait until we're in, as a client finishes
+			// loading the zone before it can zone again
+			const RequestClientZoneChange_Struct req = *rq;
+			auto answer = [this, session_id, req]() -> bool {
+				auto s = m_sessions.find(session_id);
+				if (s == m_sessions.end() || !s->second.stream || !s->second.stream->GetClient()) {
+					return true; // gone: nothing to do
+				}
+				Client *c = s->second.stream->GetClient();
+				if (!c->Connected()) {
+					return false;
+				}
+				auto zc_app = new EQApplicationPacket(OP_ZoneChange, sizeof(ZoneChange_Struct));
+				auto *zc    = reinterpret_cast<ZoneChange_Struct *>(zc_app->pBuffer);
+				strn0cpy(zc->char_name, c->GetName(), sizeof(zc->char_name));
+				zc->zoneID      = req.zone_id;
+				zc->instanceID  = req.instance_id;
+				zc->x           = req.x;
+				zc->y           = req.y;
+				zc->z           = req.z;
+				zc->zone_reason = req.type; // the client echoes `type` back
+				zc->success     = 0;
+				s->second.stream->Inject(zc_app);
+				return true;
+			};
+			if (!answer()) {
+				auto tries = std::make_shared<int>(0);
+				it->second.zone_request_timer = std::make_unique<EQ::Timer>(
+					250, true, [answer, tries](EQ::Timer *t) {
+						if (answer() || ++*tries > 120) { // 30 seconds at most
+							t->Stop();
+						}
+					}
+				);
+			}
 			return;
 		}
 		case OP_ZonePlayerToBind: {

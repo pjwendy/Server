@@ -102,6 +102,9 @@ private:
 		std::deque<std::pair<int16, std::string>> loot_queue; // (loot slot, item name)
 		std::vector<std::string>                 loot_names;  // what we looted, for the event
 		std::unique_ptr<EQ::Timer>               loot_timer;
+		// a zone change the server asked for (OP_RequestClientZoneChange) while we were still
+		// entering the zone: the server takes OP_ZoneChange only once we're in, so it waits
+		std::unique_ptr<EQ::Timer>               zone_request_timer;
 		std::string                              last_book;      // serialized SpellBook last sent
 		std::string                              last_inventory; // serialized Inventory last sent
 		std::string                              last_bots;      // serialized OwnedBots last sent
