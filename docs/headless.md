@@ -161,7 +161,7 @@ Category `HeadlessClients`:
 | `pet` | Command your pet, as `/pet`: attack your target, back off, follow, guard, taunt, sit, hold and the rest. |
 | `discipline` | Use a discipline the character knows (they're in its state), as the combat abilities window. |
 | `use_item` | Right-click an item: its click effect, a potion or food, or a tome (which teaches its discipline). |
-| `parcel_send`, `parcel_retrieve` | Parcels, as a parcel merchant's parcel tab (open the window first, within reach). Send an item to a character by name, with a note; not no-drop or attuned items, and one parcel per `Parcel:ParcelDeliveryDelay`. Opening a parcel merchant lists the parcels waiting for the character (`MerchantEvent.parcels`); retrieve takes one into the bags. Needs `Parcel:EnableParcelMerchants`. |
+| `parcel_send`, `parcel_retrieve` | Parcels, as a parcel merchant's parcel tab (open the window first, within reach). Send an item to a character by name, with a note; not attuned items, nor no-drop ones unless `World:FVNoDropFlag` lets players trade them; one parcel per `Parcel:ParcelDeliveryDelay`. Opening a parcel merchant lists the parcels waiting for the character (`MerchantEvent.parcels`); retrieve takes one into the bags. Needs `Parcel:EnableParcelMerchants`. |
 | `invite`, `disband` | Invite to the group (the character's own bots, or real players if allowed), leave it. |
 
 `CommandResult.ok` means the server accepted the command. What happens next (the spell lands, the
