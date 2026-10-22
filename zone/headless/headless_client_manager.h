@@ -17,6 +17,7 @@
 */
 #pragma once
 
+#include "common/eq_packet_structs.h"
 #include "common/event/timer.h"
 #include "common/types.h"
 #include "zone/headless/headless_mover.h"
@@ -105,6 +106,9 @@ private:
 		// a zone change the server asked for (OP_RequestClientZoneChange) while we were still
 		// entering the zone: the server takes OP_ZoneChange only once we're in, so it waits
 		std::unique_ptr<EQ::Timer>               zone_request_timer;
+		RequestClientZoneChange_Struct           zone_request{};        // the server's last such request
+		bool                                     zone_request_pending = false;
+		int                                      zone_request_tries   = 0;  // retries after ZoneNotReady
 		std::string                              last_book;      // serialized SpellBook last sent
 		std::string                              last_inventory; // serialized Inventory last sent
 		std::string                              last_bots;      // serialized OwnedBots last sent
@@ -121,6 +125,8 @@ private:
 	void SendSpawned(const std::string &session_id, uint32 spawn_id, const std::string &error);
 	void SendZoneEvent(const std::string &session_id, int status, uint32 zone_id, const std::string &detail);
 	void RequestZoneLine(const std::string &session_id, Session &session, const glm::vec3 &where);
+	bool AnswerZoneRequest(const std::string &session_id); // false: not in the zone yet
+	void AnswerZoneRequestSoon(const std::string &session_id, uint32 every_ms, int max_tries);
 	static void FillItem(eqheadless::Item *out, const EQ::ItemData *item, Mob *holder);
 
 	std::map<std::string, Session> m_sessions; // session id -> session

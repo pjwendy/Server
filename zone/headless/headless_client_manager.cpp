@@ -885,38 +885,11 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			// event_enter_zone moving us on, e.g. the Commonlands to East Commonlands), the server
 			// would drop it, leaving its summon pending: wait until we're in, as a client finishes
 			// loading the zone before it can zone again
-			const RequestClientZoneChange_Struct req = *rq;
-			auto answer = [this, session_id, req]() -> bool {
-				auto s = m_sessions.find(session_id);
-				if (s == m_sessions.end() || !s->second.stream || !s->second.stream->GetClient()) {
-					return true; // gone: nothing to do
-				}
-				Client *c = s->second.stream->GetClient();
-				if (!c->Connected()) {
-					return false;
-				}
-				auto zc_app = new EQApplicationPacket(OP_ZoneChange, sizeof(ZoneChange_Struct));
-				auto *zc    = reinterpret_cast<ZoneChange_Struct *>(zc_app->pBuffer);
-				strn0cpy(zc->char_name, c->GetName(), sizeof(zc->char_name));
-				zc->zoneID      = req.zone_id;
-				zc->instanceID  = req.instance_id;
-				zc->x           = req.x;
-				zc->y           = req.y;
-				zc->z           = req.z;
-				zc->zone_reason = req.type; // the client echoes `type` back
-				zc->success     = 0;
-				s->second.stream->Inject(zc_app);
-				return true;
-			};
-			if (!answer()) {
-				auto tries = std::make_shared<int>(0);
-				it->second.zone_request_timer = std::make_unique<EQ::Timer>(
-					250, true, [answer, tries](EQ::Timer *t) {
-						if (answer() || ++*tries > 120) { // 30 seconds at most
-							t->Stop();
-						}
-					}
-				);
+			it->second.zone_request         = *rq;
+			it->second.zone_request_pending = true;
+			it->second.zone_request_tries   = 0;
+			if (!AnswerZoneRequest(session_id)) {
+				AnswerZoneRequestSoon(session_id, 250, 120); // once we're in (30 seconds at most)
 			}
 			return;
 		}
@@ -962,6 +935,15 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			}
 			auto *zc = reinterpret_cast<const ZoneChange_Struct *>(app->pBuffer);
 			if (zc->success != 1) {
+				Session &s = it->second;
+				if (s.zone_request_pending && zc->success == ZoningMessage::ZoneNotReady && s.zone_request_tries < 6) {
+					// the zone the server sent us to isn't up yet (it's booting): a client is moved
+					// again later; try again in 10 seconds, six times
+					s.zone_request_tries++;
+					AnswerZoneRequestSoon(session_id, 10000, 1);
+					return;
+				}
+				s.zone_request_pending = false;
 				SendZoneEvent(session_id, eqheadless::ZONE_REFUSED, zc->zoneID, fmt::format("the server refused the zone change ({})", zc->success));
 				return;
 			}
@@ -1326,6 +1308,49 @@ void HeadlessClientManager::SendMovementHistory(Session &session)
 	e->type      = 0; // ordinary movement
 	e->timestamp = Timer::GetCurrentTime();
 	session.stream->Inject(app);
+}
+
+// the client's answer to OP_RequestClientZoneChange (the session's zone_request): OP_ZoneChange. The
+// server takes it only once we're in the zone, so false (and nothing sent) until then
+bool HeadlessClientManager::AnswerZoneRequest(const std::string &session_id)
+{
+	auto s = m_sessions.find(session_id);
+	if (s == m_sessions.end() || !s->second.stream || !s->second.stream->GetClient()) {
+		return true; // gone: nothing to do
+	}
+	Client *c = s->second.stream->GetClient();
+	if (!c->Connected()) {
+		return false;
+	}
+	const RequestClientZoneChange_Struct &req = s->second.zone_request;
+	auto zc_app = new EQApplicationPacket(OP_ZoneChange, sizeof(ZoneChange_Struct));
+	auto *zc    = reinterpret_cast<ZoneChange_Struct *>(zc_app->pBuffer);
+	strn0cpy(zc->char_name, c->GetName(), sizeof(zc->char_name));
+	zc->zoneID      = req.zone_id;
+	zc->instanceID  = req.instance_id;
+	zc->x           = req.x;
+	zc->y           = req.y;
+	zc->z           = req.z;
+	zc->zone_reason = req.type; // the client echoes `type` back
+	zc->success     = 0;
+	s->second.stream->Inject(zc_app);
+	return true;
+}
+
+void HeadlessClientManager::AnswerZoneRequestSoon(const std::string &session_id, uint32 every_ms, int max_tries)
+{
+	auto it = m_sessions.find(session_id);
+	if (it == m_sessions.end()) {
+		return;
+	}
+	auto tries = std::make_shared<int>(0);
+	it->second.zone_request_timer = std::make_unique<EQ::Timer>(
+		every_ms, true, [this, session_id, tries, max_tries](EQ::Timer *t) {
+			if (AnswerZoneRequest(session_id) || ++*tries >= max_tries) {
+				t->Stop(); // (the next request replaces the timer: deleting it here would delete what's running us)
+			}
+		}
+	);
 }
 
 void HeadlessClientManager::OnStreamDestroyed(const std::string &session_id, bool was_spawned)
