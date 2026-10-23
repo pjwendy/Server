@@ -92,6 +92,8 @@ namespace {
 	// Kerra Isle), and two with an air supply of their own (the Sleeper's Tomb, the Catacombs of Dranik)
 	constexpr uint32 BREATHE_ANYWAY[]    = {24, 35, 74};
 	constexpr uint32 SLEEPER_ZONE = 128, SLEEPER_AIR = 127, DRANIK_CATACOMBS_ZONE = 330, DRANIK_AIR = 256;
+	// the mover takes the links added for headless characters (PathingHeadless) as well as the zone's own
+	constexpr int    MOVER_FLAGS         = PathingNotDisabled | PathingHeadless;
 	// a route's step is a swim link's when its ends are this near the link's
 	constexpr float  SWIM_MATCH          = 3.0f;
 	constexpr float  OFF_MESH_STEP       = 10.0f;
@@ -136,7 +138,7 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 	if (zone->pathing) {
 		bool partial = false;
 		bool stuck   = false;
-		auto route   = zone->pathing->FindRoute(start, destination, partial, stuck);
+		auto route   = zone->pathing->FindRoute(start, destination, partial, stuck, MOVER_FLAGS);
 		float direct = 0.0f;
 		const glm::vec3 *last = nullptr;
 		for (auto &node : route) {
@@ -346,14 +348,14 @@ void HeadlessMover::NoteNoRoute(const glm::vec3 &from, const glm::vec3 &to)
 	// FindRoute answers nothing at all when a point has no navmesh polygon under it
 	bool partial = false;
 	bool stuck   = false;
-	if (zone->pathing->FindRoute(from, from, partial, stuck).empty()) {
+	if (zone->pathing->FindRoute(from, from, partial, stuck, MOVER_FLAGS).empty()) {
 		Note("no_mesh_here", from, to);
 	}
-	else if (zone->pathing->FindRoute(to, to, partial, stuck).empty()) {
+	else if (zone->pathing->FindRoute(to, to, partial, stuck, MOVER_FLAGS).empty()) {
 		Note("no_mesh_there", from, to);
 	}
 	else {
-		auto route = zone->pathing->FindRoute(from, to, partial, stuck);
+		auto route = zone->pathing->FindRoute(from, to, partial, stuck, MOVER_FLAGS);
 		Note("not_connected", from, to, route.empty() ? from : route.back().pos);
 	}
 }
@@ -1017,7 +1019,7 @@ std::vector<glm::vec3> HeadlessMover::Route(const glm::vec3 &from, const glm::ve
 	}
 	bool partial = false;
 	bool stuck   = false;
-	auto route   = zone->pathing->FindRoute(from, to, partial, stuck);
+	auto route   = zone->pathing->FindRoute(from, to, partial, stuck, MOVER_FLAGS);
 	if (route.empty() || stuck || partial || (route.size() == 1 && glm::length(from - to) > PARTIAL_OK)) {
 		return out; // (one node: FindRoute's straight-line answer when there's no path)
 	}

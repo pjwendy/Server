@@ -67,6 +67,7 @@ IPathfinder::IPath PathfinderNavmesh::FindRoute(const glm::vec3 &start, const gl
 
 	dtQueryFilter filter;
 	filter.setIncludeFlags(flags);
+	filter.setExcludeFlags((flags & PathingHeadless) ? 0 : PathingHeadless); // (a headless link also carries Normal or Water)
 	filter.setAreaCost(0, 1.0f); //Normal
 	filter.setAreaCost(1, 3.0f); //Water
 	filter.setAreaCost(2, 5.0f); //Lava
@@ -165,6 +166,7 @@ IPathfinder::IPath PathfinderNavmesh::FindPath(const glm::vec3 &start, const glm
 
 	dtQueryFilter filter;
 	filter.setIncludeFlags(opts.flags);
+	filter.setExcludeFlags((opts.flags & PathingHeadless) ? 0 : PathingHeadless);
 	filter.setAreaCost(0, opts.flag_cost[0]); //Normal
 	filter.setAreaCost(1, opts.flag_cost[1]); //Water
 	filter.setAreaCost(2, opts.flag_cost[2]); //Lava
@@ -334,6 +336,7 @@ glm::vec3 PathfinderNavmesh::GetRandomLocation(const glm::vec3 &start, int flags
 
 	dtQueryFilter filter;
 	filter.setIncludeFlags(flags);
+	filter.setExcludeFlags((flags & PathingHeadless) ? 0 : PathingHeadless); // (a headless link also carries Normal or Water)
 	filter.setAreaCost(0, 1.0f); //Normal
 	filter.setAreaCost(1, 3.0f); //Water
 	filter.setAreaCost(2, 5.0f); //Lava

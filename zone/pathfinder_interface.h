@@ -38,8 +38,11 @@ enum PathingPolyFlags
 	PathingPortal = 512,
 	PathingPrefer = 1024,
 	PathingDisabled = 2048,
+	// links added for headless (scripted) characters (puppeteer's navmesh patches: a step across a gap,
+	// a swim): their mover takes them, NPCs never do, so the mobs path as the zone's own navmesh has them
+	PathingHeadless = 8192,
 	PathingAll = 65535,
-	PathingNotDisabled = PathingAll ^ PathingDisabled
+	PathingNotDisabled = PathingAll ^ PathingDisabled ^ PathingHeadless
 };
 
 struct PathfinderOptions
