@@ -83,6 +83,9 @@ public:
 	// left, drowning takes an eighth of the character's hit points a second, reported to the server as
 	// the client does (OP_EnvDamage, drowning). Air in seconds, now and at most
 	int Air(); // (not counted yet, just in: full)
+	// what last hurt us that wasn't a mob (drowning), if it was within the last few seconds: a death
+	// with no killer names it
+	std::string RecentEnvironmentDamage(uint64 within_ms = 3000) const;
 	static int MaxAir(Client *me);
 	static bool CanBreathe(Client *me);
 
@@ -148,6 +151,8 @@ private:
 	std::vector<NavNote>   m_notes;
 	std::unique_ptr<EQ::Timer> m_breath_timer;
 	int                    m_air = -1; // seconds of air left (-1: not counted yet, so full)
+	uint64                 m_env_damage_at = 0; // when something not a mob last hurt us (RecentEnvironmentDamage)
+	std::string            m_env_damage;        // ... what it was
 
 	// stuck detection
 	glm::vec3 m_progress_pos{0.0f};

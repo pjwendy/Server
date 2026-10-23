@@ -464,7 +464,14 @@ void HeadlessMover::Breathe()
 	ed->dmgtype  = EQ::constants::EnvironmentalDamage::Drowning;
 	ed->constant = 0xFFFF;
 	m_stream->Inject(app);
+	m_env_damage    = EQ::constants::GetEnvironmentalDamageName(EQ::constants::EnvironmentalDamage::Drowning);
+	m_env_damage_at = Timer::GetCurrentTime();
 	LogHeadlessClient("[{}] drowning: [{}] of [{}] hit points", me->GetCleanName(), damage, me->GetMaxHP());
+}
+
+std::string HeadlessMover::RecentEnvironmentDamage(uint64 within_ms) const
+{
+	return m_env_damage_at && Timer::GetCurrentTime() - m_env_damage_at <= within_ms ? m_env_damage : std::string();
 }
 
 float HeadlessMover::Check(const glm::vec3 &destination)

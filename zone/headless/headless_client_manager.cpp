@@ -1221,7 +1221,9 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			}
 			auto *death = frame.mutable_event()->mutable_death();
 			Mob  *killer = entity_list.GetMob(d->killer_id);
-			death->set_killer(killer ? killer->GetCleanName() : "");
+			// no killer: what hurt us that wasn't a mob ("Drowning"), if something did just now
+			death->set_killer(killer ? std::string(killer->GetCleanName())
+			                         : (it->second.mover ? it->second.mover->RecentEnvironmentDamage() : std::string()));
 			death->set_corpse_id(d->corpseid);
 			death->set_spell_id(IsValidSpell(d->spell_id) ? d->spell_id : 0);
 			death->set_damage(d->damage);
