@@ -1123,10 +1123,29 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 						ss.loot_names.push_back(name);
 						return;
 					}
+					// what's still on it: a loot with no room for it leaves it there (and says so only
+					// in a message), so what we asked for isn't what we got
+					std::vector<std::string> left;
+					Entity *ce = entity_list.GetID(id);
+					if (ce && ce->IsCorpse()) {
+						for (const auto *item : ce->CastToCorpse()->GetLootItems()) {
+							if (item && item->lootslot >= EQ::invslot::CORPSE_BEGIN && item->lootslot <= EQ::invslot::CORPSE_END) {
+								const auto *data = database.GetItem(item->item_id);
+								left.push_back(data ? data->Name : fmt::format("item {}", item->item_id));
+							}
+						}
+					}
 					ss.stream->Inject(Uint32Packet(OP_EndLootRequest, id));
 					auto *ev = event->mutable_event()->mutable_loot();
 					for (const auto &n : ss.loot_names) {
-						ev->add_items(n);
+						auto still = std::find(left.begin(), left.end(), n);
+						if (still != left.end()) {
+							ev->add_left(n);
+							left.erase(still);
+						}
+						else {
+							ev->add_items(n);
+						}
 					}
 					ss.loot_corpse = 0;
 					ss.loot_queue.clear();

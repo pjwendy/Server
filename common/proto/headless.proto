@@ -265,11 +265,12 @@ message LootEvent {
   uint32          corpse_id = 1;
   bool            ok        = 2;
   string          error     = 3; // why not, when !ok
-  repeated string items     = 4; // what we tried to loot; game messages say what we got
+  repeated string items     = 4; // what came off the corpse
   uint32          platinum  = 5; // coin on the corpse (looted automatically)
   uint32          gold      = 6;
   uint32          silver    = 7;
   uint32          copper    = 8;
+  repeated string left      = 9; // what's still on it (no room for it, or it wouldn't come)
 }
 
 message MerchantEvent {
