@@ -1724,6 +1724,46 @@ void Mob::CastedSpellFinished(uint16 spell_id, uint32 target_id, CastingSlot slo
 				} // end missingreags/consumption
 			} // end `focus did not help us`
 	} // end IsClient() for reagents
+	else if (IsBot() && RuleB(Bots, UseOwnerReagents) && !IsBardSong(spell_id)) {
+		// a bot has no bags of its own: what its spells use comes out of its owner's, as a player's
+		// would (Summon Corpse's coffin, a necromancer's bone chips)
+		Mob    *owner_mob = CastToBot()->GetBotOwner();
+		Client *owner     = owner_mob && owner_mob->IsClient() ? owner_mob->CastToClient() : nullptr;
+		const bool pet    = IsEffectInSpell(spell_id, SpellEffect::SummonPet) || IsEffectInSpell(spell_id, SpellEffect::NecPet);
+		if (owner && !(pet && !RuleB(Character, PetsUseReagents))) {
+			bool missing = false;
+			for (int t = 0; t < 4; t++) {
+				const int component = spells[spell_id].component[t];
+				const int count     = spells[spell_id].component_count[t];
+				if (component == -1) {
+					continue;
+				}
+				if (owner->GetInv().HasItem(component, count, invWhereWorn | invWherePersonal) == -1) {
+					const EQ::ItemData *item = database.GetItem(component);
+					owner->Message(Chat::Red, fmt::format("{} needs {} {} for {}.", GetCleanName(), count,
+						item ? item->Name : "UNKNOWN", spells[spell_id].name).c_str());
+					LogSpells("Spell [{}]: [{}] canceled. Its owner is missing reagent [{}]", spell_id, GetCleanName(), component);
+					missing = true;
+				}
+			}
+			if (missing) {
+				InterruptSpell();
+				return;
+			}
+			for (int t = 0; t < 4; t++) {
+				const int component = spells[spell_id].component[t];
+				if (component == -1 || spells[spell_id].no_expend_reagent[t] == component) {
+					continue;
+				}
+				for (int n = 0; n < spells[spell_id].component_count[t]; n++) {
+					const int16 slot = owner->GetInv().HasItem(component, 1, invWhereWorn | invWherePersonal);
+					if (slot != -1) {
+						owner->DeleteItemInInventory(slot, 1, true);
+					}
+				}
+			}
+		}
+	}
 
 	// this is common to both bard and non bard
 

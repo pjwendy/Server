@@ -896,6 +896,7 @@ RULE_BOOL(Bots, AllowCommandedCharm, true, "If enabled bots can be commanded to 
 RULE_BOOL(Bots, AllowCommandedMez, true, "If enabled bots can be commanded to mez NPCs.")
 RULE_BOOL(Bots, AllowCommandedResurrect, true, "If enabled bots can be commanded to resurrect players.")
 RULE_BOOL(Bots, AllowCommandedSummonCorpse, true, "If enabled bots can be commanded to summon other's corpses.")
+RULE_BOOL(Bots, UseOwnerReagents, false, "If enabled a bot's spells need their components, as a player's do, and take them from its owner's inventory (a bot has none of its own). Pets follow Character:PetsUseReagents")
 RULE_BOOL(Bots, AllowCommandedLull, true, "If enabled bots can be commanded to lull targets.")
 RULE_INT(Bots, CampTimer, 25, "Number of seconds after /camp has begun before bots camp out.")
 RULE_BOOL(Bots, SendClassRaceOnHelp, true, "If enabled a reminder of how to check class/race IDs will be sent when using compatible commands.")
