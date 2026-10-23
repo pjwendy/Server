@@ -10616,6 +10616,37 @@ void Bot::LoadDefaultBotSettings() {
 		LogBotSettingsDetail("{} says, 'IdlePriority = [{}] | EngagedPriority = [{}] | PursuePriority = [{}]'", GetCleanName(), GetDefaultSpellTypeIdlePriority(i, GetClass(), bot_stance), GetDefaultSpellTypeEngagedPriority(i, GetClass(), bot_stance), GetDefaultSpellTypePursuePriority(i, GetClass(), bot_stance));
 		LogBotSettingsDetail("{} says, 'TargetCount = [{}] | AnnounceCast = [{}]'", GetCleanName(), GetDefaultSpellTypeAEOrGroupTargetCount(i, bot_stance), GetDefaultSpellTypeAnnounceCast(i, bot_stance));
 	}
+
+	// The commanded types (^cast: summon corpse, bind affinity, levitate, ...) are looked up in the same
+	// table (IsValidBotSpellType counts them), but had no entries: GetSpellTypeHold(SummonCorpse) read
+	// past its end, and a commanded summon corpse was refused as "held". They're cast only when
+	// commanded: not held, no limits.
+	for (uint16 i = BotSpellTypes::END + 1; i <= BotSpellTypes::COMMANDED_END; ++i) {
+		BotSpellSettings t;
+
+		t.spell_type               = i;
+		t.short_name               = GetSpellTypeShortNameByID(i);
+		t.name                     = GetSpellTypeNameByID(i);
+		t.hold                     = false;
+		t.delay                    = 0;
+		t.min_threshold            = 0;
+		t.max_threshold            = 100;
+		t.resist_limit             = 0;
+		t.aggro_check              = false;
+		t.min_mana_pct             = 0;
+		t.max_mana_pct             = 100;
+		t.min_hp_pct               = 0;
+		t.max_hp_pct               = 100;
+		t.idle_priority            = 0;
+		t.engaged_priority         = 0;
+		t.pursue_priority          = 0;
+		t.ae_or_group_target_count = 0;
+		t.announce_cast            = false;
+		t.recast_timer.Start();
+		t.ai_delay.Start();
+
+		m_bot_spell_settings.push_back(t);
+	}
 }
 
 void Bot::SetBotSpellRecastTimer(uint16 spell_type, Mob* tar, bool precast) {
