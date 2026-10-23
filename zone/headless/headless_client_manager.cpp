@@ -40,10 +40,13 @@
 #include "zone/zone.h"
 #include "zone/zonedb.h"
 #include "zone/water_map.h"
+#include "common/json/json.hpp"
+#include "common/path_manager.h"
 
 #include "headless.pb.h"
 
 #include <algorithm>
+#include <fstream>
 #include <cmath>
 #include <unordered_set>
 
@@ -165,8 +168,46 @@ namespace {
 	}
 
 	// where to walk for a zone point: its position, with "anywhere" axes taken from ours
+	// where a headless character walks to use a zone line, by its number, where that isn't the zone
+	// point's own place: a zone point a little off the navmesh (Nektulos's to the East Commonlands, 8
+	// units past the tunnel's), where the water map's zone-line region reaches the navmesh. From the
+	// zone's patch (puppeteer nav/<zone>.json "zone_line_spots"), installed as maps/nav/<zone>.zonelines.json
+	// beside its swims; zoning itself is the server's as ever (the region, the nearest zone point)
+	const std::map<uint32, glm::vec3> &ZoneLineSpots()
+	{
+		static std::map<uint32, glm::vec3> cached;
+		static std::string                 cached_zone;
+		const std::string name = zone->GetShortName();
+		if (name == cached_zone) {
+			return cached;
+		}
+		cached.clear();
+		cached_zone = name;
+		std::ifstream in(fmt::format("{}/maps/nav/{}.zonelines.json", PathManager::Instance()->GetServerPath(), name));
+		if (!in) {
+			return cached;
+		}
+		try {
+			const auto j = nlohmann::json::parse(in);
+			for (const auto &z : j.value("spots", nlohmann::json::array())) {
+				const auto &a = z.at("at");
+				cached[z.at("number").get<uint32>()] = glm::vec3(a.at(0).get<float>(), a.at(1).get<float>(), a.at(2).get<float>());
+			}
+			LogHeadlessClient("[{}] [{}] zone lines walked to elsewhere", name, cached.size());
+		}
+		catch (const std::exception &e) {
+			LogError("[{}] can't read its zone line spots: {}", name, e.what());
+		}
+		return cached;
+	}
+
 	glm::vec3 ZonePointSpot(const ZonePoint *zp, const glm::vec3 &from)
 	{
+		const auto &spots = ZoneLineSpots();
+		auto it = spots.find(zp->number);
+		if (it != spots.end()) {
+			return it->second;
+		}
 		return glm::vec3(Wild(zp->x) ? from.x : zp->x, Wild(zp->y) ? from.y : zp->y, Wild(zp->z) ? from.z : zp->z);
 	}
 
