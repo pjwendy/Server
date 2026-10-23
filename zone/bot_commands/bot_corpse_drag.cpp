@@ -34,7 +34,7 @@ void bot_command_corpse_drag(Client* c, const Seperator* sep)
 			"- A rogue goes hidden and sneaking; a monk, necromancer or shadowknight feigns death when something comes for it, and gets up once nothing near hates it.",
 			"- It gives up after four minutes."
 		};
-		p.example_format = { fmt::format("{} [stop] [actionable]", sep->arg[0]) };
+		p.example_format = { fmt::format("{} [stop | id <corpse spawn id>] [actionable]", sep->arg[0]) };
 		p.examples_one = { "To send a bot named Sneaky for your targeted corpse:", fmt::format("{} byname Sneaky", sep->arg[0]) };
 		p.examples_two = { "To call it off:", fmt::format("{} stop byname Sneaky", sep->arg[0]) };
 		p.actionables = { "byname, byclass, spawned" };
@@ -51,14 +51,20 @@ void bot_command_corpse_drag(Client* c, const Seperator* sep)
 	int ab_arg = 1;
 	bool stop = false;
 
+	uint16 corpse_id = 0;
 	if (!std::string(sep->arg[1]).compare("stop")) {
 		stop = true;
 		++ab_arg;
 	}
+	else if (!std::string(sep->arg[1]).compare("id") && sep->IsNumber(2)) {
+		// by spawn id: a corpse too far off to target (the client targets within its range only)
+		corpse_id = static_cast<uint16>(Strings::ToInt(sep->arg[2]));
+		ab_arg += 2;
+	}
 
 	Corpse* corpse = nullptr;
 	if (!stop) {
-		Mob* t = c->GetTarget();
+		Mob* t = corpse_id ? entity_list.GetMob(corpse_id) : c->GetTarget();
 		if (!t || !t->IsPlayerCorpse()) {
 			c->Message(Chat::Yellow, "You must <target> a player's corpse to use this command.");
 			return;
