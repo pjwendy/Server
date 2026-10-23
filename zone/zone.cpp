@@ -1113,6 +1113,7 @@ Zone::~Zone() {
 	safe_delete(zonemap);
 	safe_delete(watermap);
 	safe_delete(pathing);
+	safe_delete(headless_pathing);
 	safe_delete(Instance_Timer);
 	safe_delete(Instance_Shutdown_Timer);
 	safe_delete(Instance_Warning_timer);
@@ -1149,6 +1150,7 @@ bool Zone::Init(bool is_static) {
 	zonemap  = Map::LoadMapFile(map_name);
 	watermap = WaterMap::LoadWaterMapfile(map_name);
 	pathing  = IPathfinder::Load(map_name);
+	headless_pathing = IPathfinder::LoadHeadless(map_name);
 
 	LogInfo("Loading timezone data");
 	zone_time.setEQTimeZone(content_db.GetZoneTimezone(zoneid, GetInstanceVersion()));
@@ -3303,6 +3305,8 @@ void Zone::ReloadMaps()
 	zonemap  = Map::LoadMapFile(map_name);
 	watermap = WaterMap::LoadWaterMapfile(map_name);
 	pathing  = IPathfinder::Load(map_name);
+	safe_delete(headless_pathing);
+	headless_pathing = IPathfinder::LoadHeadless(map_name);
 }
 
 uint32 Zone::GetTimerDuration(std::string name)

@@ -205,6 +205,9 @@ public:
 	bool VariableExists(const std::string& variable_name);
 
 	IPathfinder                                   *pathing;
+	IPathfinder                                   *headless_pathing = nullptr; // (IPathfinder::LoadHeadless)
+	// where headless characters find their way: their own navmesh if the zone has one, else the zone's
+	IPathfinder *HeadlessPathing() { return headless_pathing ? headless_pathing : pathing; }
 	std::vector<NPC_Emote_Struct *>               npc_emote_list;
 	LinkedList<Spawn2 *>                          spawn2_list;
 	LinkedList<ZonePoint *>                       zone_point_list;

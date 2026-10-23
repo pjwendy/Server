@@ -135,10 +135,10 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 	m_path.clear();
 	m_stop_at_end = false;
 	m_lift_phase = LiftPhase::None;
-	if (zone->pathing) {
+	if (zone->HeadlessPathing()) {
 		bool partial = false;
 		bool stuck   = false;
-		auto route   = zone->pathing->FindRoute(start, destination, partial, stuck, MOVER_FLAGS);
+		auto route   = zone->HeadlessPathing()->FindRoute(start, destination, partial, stuck, MOVER_FLAGS);
 		float direct = 0.0f;
 		const glm::vec3 *last = nullptr;
 		for (auto &node : route) {
@@ -312,7 +312,7 @@ bool HeadlessMover::StraightWalkable(const glm::vec3 &from, const glm::vec3 &to)
 
 bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &destination)
 {
-	if (!zone->pathing) {
+	if (!zone->HeadlessPathing()) {
 		return false;
 	}
 	// FindRoute looks only 5 units across for the polygon we stand on: try rings around us,
@@ -342,20 +342,20 @@ void HeadlessMover::Note(const char *kind, const glm::vec3 &at, const glm::vec3 
 
 void HeadlessMover::NoteNoRoute(const glm::vec3 &from, const glm::vec3 &to)
 {
-	if (!zone->pathing) {
+	if (!zone->HeadlessPathing()) {
 		return;
 	}
 	// FindRoute answers nothing at all when a point has no navmesh polygon under it
 	bool partial = false;
 	bool stuck   = false;
-	if (zone->pathing->FindRoute(from, from, partial, stuck, MOVER_FLAGS).empty()) {
+	if (zone->HeadlessPathing()->FindRoute(from, from, partial, stuck, MOVER_FLAGS).empty()) {
 		Note("no_mesh_here", from, to);
 	}
-	else if (zone->pathing->FindRoute(to, to, partial, stuck, MOVER_FLAGS).empty()) {
+	else if (zone->HeadlessPathing()->FindRoute(to, to, partial, stuck, MOVER_FLAGS).empty()) {
 		Note("no_mesh_there", from, to);
 	}
 	else {
-		auto route = zone->pathing->FindRoute(from, to, partial, stuck, MOVER_FLAGS);
+		auto route = zone->HeadlessPathing()->FindRoute(from, to, partial, stuck, MOVER_FLAGS);
 		Note("not_connected", from, to, route.empty() ? from : route.back().pos);
 	}
 }
@@ -564,7 +564,7 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 		destination.z,
 		m_path.size(),
 		route_length,
-		zone->pathing ? "yes" : "no",
+		zone->HeadlessPathing() ? "yes" : "no",
 		me->GetRunspeed(),
 		RunSpeed(me)
 	);
@@ -1014,12 +1014,12 @@ std::vector<glm::vec3> HeadlessMover::Route(const glm::vec3 &from, const glm::ve
 {
 	std::vector<glm::vec3> out;
 	*length = -1.0f;
-	if (!zone->pathing) {
+	if (!zone->HeadlessPathing()) {
 		return out;
 	}
 	bool partial = false;
 	bool stuck   = false;
-	auto route   = zone->pathing->FindRoute(from, to, partial, stuck, MOVER_FLAGS);
+	auto route   = zone->HeadlessPathing()->FindRoute(from, to, partial, stuck, MOVER_FLAGS);
 	if (route.empty() || stuck || partial || (route.size() == 1 && glm::length(from - to) > PARTIAL_OK)) {
 		return out; // (one node: FindRoute's straight-line answer when there's no path)
 	}

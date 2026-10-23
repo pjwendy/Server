@@ -100,4 +100,8 @@ public:
 	virtual void DebugCommand(Client *c, const Seperator *sep) = 0;
 
 	static IPathfinder *Load(const std::string &zone);
+	// a navmesh of its own for headless (scripted) characters, maps/nav/headless/<zone>.nav: their
+	// navigation changes there and the zone's own navmesh (what NPCs walk) stays as it is. nullptr
+	// when the zone has none
+	static IPathfinder *LoadHeadless(const std::string &zone);
 };
