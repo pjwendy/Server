@@ -240,6 +240,8 @@ public:
 	/* Mob */
 	void FillSpawnStruct(NewSpawn_Struct *ns, Mob *ForWho);
 	bool Summon(Client *c, bool spell, bool CheckDistance);
+	bool MayMove(Client *c);
+	bool DragTo(Client *permit, Mob *to);
 	void Spawn();
 
 	char corpse_name[64];

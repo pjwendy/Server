@@ -1669,6 +1669,15 @@ bool Mob::SpellEffect(Mob* caster, uint16 spell_id, float partial, int level_ove
 						SetFeigned(true);
 					}
 				}
+				else if (IsBot()) {  // (a bot's necromancer or shadowknight: down till it gets up)
+					if (zone->random.Int(0, 99) > spells[spell_id].base_value[i]) {
+						entity_list.MessageCloseString(this, false, 200, 10, STRING_FEIGNFAILED, GetName());
+					} else {
+						SetFeigned(true);
+						WipeHateList();
+						SetAppearance(eaDead);
+					}
+				}
 				break;
 			}
 

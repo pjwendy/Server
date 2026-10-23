@@ -1952,6 +1952,40 @@ uint16 Corpse::GetFirstLootSlotByItemID(uint32 item_id)
 	return 0;
 }
 
+// whether c may move this corpse (drag it, or have it dragged): its owner, or someone it consented to
+bool Corpse::MayMove(Client *c)
+{
+	if (!c || (IsLocked() && c->Admin() < AccountStatus::GMAdmin)) {
+		return false;
+	}
+	if (GetCharID() == c->CharacterID()) {
+		return true;
+	}
+	for (const auto &name : m_consented_player_names) {
+		if (strcasecmp(c->GetName(), name.c_str()) == 0) {
+			return true;
+		}
+	}
+	if (m_consented_guild_id && m_consented_guild_id != GUILD_NONE && c->GuildID() == m_consented_guild_id) {
+		return true;
+	}
+	if (m_consented_group_id && c->GetGroup() && c->GetGroup()->GetID() == m_consented_group_id) {
+		return true;
+	}
+	return m_consented_raid_id && c->GetRaid() && c->GetRaid()->GetID() == m_consented_raid_id;
+}
+
+// dragged to where `to` stands by someone `permit` may let move it (a bot dragging for its owner)
+bool Corpse::DragTo(Client *permit, Mob *to)
+{
+	if (!to || !MayMove(permit)) {
+		return false;
+	}
+	GMMove(to->GetX(), to->GetY(), to->GetZ());
+	m_is_corpse_changed = true;
+	return true;
+}
+
 bool Corpse::Summon(Client *c, bool spell, bool CheckDistance)
 {
 	uint32 dist2 = 10000; // pow(100, 2);

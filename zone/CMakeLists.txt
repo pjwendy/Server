@@ -324,6 +324,7 @@ set(gm_command_sources
     bot_commands/bot_discipline.cpp
     bot_commands/bot_distance_ranged.cpp
     bot_commands/bot_find_aliases.cpp
+    bot_commands/bot_corpse_drag.cpp
     bot_commands/bot_follow.cpp
     bot_commands/bot_guard.cpp
     bot_commands/bot_heal_rotation.cpp

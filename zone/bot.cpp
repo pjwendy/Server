@@ -2183,6 +2183,11 @@ void Bot::AI_Process()
 		return;
 	}
 
+	// sent for a corpse: that's all we do till it's back (or we gave up)
+	if (m_drag_corpse_id && CorpseDragProcess(bot_owner)) {
+		return;
+	}
+
 	if (HOLDING || (raid && r_group == RAID_GROUPLESS)) {
 		TryNonCombatMovementChecks(bot_owner, follow_mob);
 
@@ -2944,6 +2949,203 @@ void Bot::DoAttackRounds(Mob* target, int hand) {
 			}
 		}
 	}
+}
+
+namespace {
+	constexpr float  DRAG_REACH        = 8.0f;     // close enough to take hold of a corpse
+	constexpr float  DRAG_HOME         = 12.0f;    // back beside the owner: let go
+	constexpr uint32 DRAG_GIVE_UP_MS   = 240000;   // a fetch that takes longer than this is given up
+	constexpr uint32 DRAG_FEIGN_MS     = 10000;    // lying feigned at least this long ...
+	constexpr float  DRAG_SAFE         = 80.0f;    // ... and till nothing this near hates us
+	constexpr uint32 DRAG_SCAN_MS      = 1000;
+	constexpr uint16 SPELL_FEIGN_DEATH = 366;      // necromancer 16, shadowknight 24
+	constexpr uint16 SPELL_COMATOSE    = 3685;     // both 52
+}
+
+void Bot::StartCorpseDrag(uint16 corpse_id)
+{
+	m_drag_corpse_id = corpse_id;
+	m_drag_holding   = false;
+	m_drag_give_up_timer.Start(DRAG_GIVE_UP_MS);
+	m_drag_scan_timer.Start(DRAG_SCAN_MS);
+	SetPullFlag(false);
+	SetPullingFlag(false);
+	SetReturningFlag(false);
+	SetAttackFlag(false);
+	SetAttackingFlag(false);
+	WipeHateList();
+	SetTarget(nullptr);
+	InterruptSpell();
+	// a rogue goes hidden and sneaking, as a player rogue goes for a corpse
+	if (GetClass() == Class::Rogue && GetSkill(EQ::skills::SkillHide) && GetSkill(EQ::skills::SkillSneak)) {
+		const float hide_chance = ((GetSkill(EQ::skills::SkillHide) / 250.0f) + .25f) * 100;
+		sneaking = zone->random.Real(0, 100) < GetSkill(EQ::skills::SkillSneak) + 25;
+		hidden   = sneaking && zone->random.Real(0, 100) < hide_chance;
+		if (hidden) {
+			SendAppearancePacket(AppearanceType::Invisibility, 1);
+		}
+	}
+}
+
+void Bot::StopCorpseDrag(const std::string& why)
+{
+	if (!why.empty()) {
+		RaidGroupSay(why.c_str());
+	}
+	m_drag_corpse_id = 0;
+	m_drag_holding   = false;
+	m_drag_give_up_timer.Disable();
+	m_drag_feign_timer.Disable();
+	if (GetFeigned()) {
+		SetFeigned(false);
+		SetAppearance(eaStanding);
+	}
+	if (hidden || sneaking) {
+		hidden   = false;
+		sneaking = false;
+		SendAppearancePacket(AppearanceType::Invisibility, 0);
+	}
+}
+
+// what a player's client does for it and a bot otherwise never does: whatever would aggro on a player
+// near it does (a bot walking with its owner is covered by the owner's scan; one out alone isn't)
+void Bot::DragAggroScan()
+{
+	if (!zone->CanDoCombat() || GetFeigned() || !m_drag_scan_timer.Check()) {
+		return;
+	}
+	for (auto &close_mob : GetCloseMobList()) {
+		Mob *mob = close_mob.second;
+		if (mob && mob->IsNPC() && mob->CheckWillAggro(this) && !mob->CheckAggro(this)) {
+			mob->AddToHateList(this, 25);
+		}
+	}
+}
+
+// feign death, as the class does: a monk by skill, a necromancer or shadowknight by spell
+bool Bot::TryFeignForDrag()
+{
+	if (m_drag_feign_reuse_timer.Enabled() && !m_drag_feign_reuse_timer.Check(false)) {
+		return false;
+	}
+	if (GetClass() == Class::Monk && GetSkill(EQ::skills::SkillFeignDeath)) {
+		m_drag_feign_reuse_timer.Start(std::max(0, FeignDeathReuseTime - GetSkillReuseTime(EQ::skills::SkillFeignDeath)) * 1000);
+		const uint16 skill = GetSkill(EQ::skills::SkillFeignDeath);
+		const uint16 total = std::min<uint16>(skill, 100) + (skill > 100 ? (skill - 100) / 2 : 0);
+		StopMoving();
+		if (zone->random.Real(0, 160) > total) {
+			RaidGroupSay("I have fallen to the ground.");
+			return false;
+		}
+		SetFeigned(true);
+		WipeHateList();
+		SetAppearance(eaDead);
+		m_drag_feign_timer.Start(DRAG_FEIGN_MS);
+		return true;
+	}
+	uint16 spell = 0;
+	if ((GetClass() == Class::Necromancer || GetClass() == Class::ShadowKnight) && GetLevel() >= 52) {
+		spell = SPELL_COMATOSE;
+	}
+	else if ((GetClass() == Class::Necromancer && GetLevel() >= 16) || (GetClass() == Class::ShadowKnight && GetLevel() >= 24)) {
+		spell = SPELL_FEIGN_DEATH;
+	}
+	if (!spell || IsCasting() || GetMana() < spells[spell].mana) {
+		return false;
+	}
+	StopMoving();
+	if (!CastSpell(spell, GetID(), EQ::spells::CastingSlot::Gem2)) {
+		return false;
+	}
+	m_drag_feign_reuse_timer.Start(spells[spell].recast_time);
+	m_drag_feign_timer.Start(DRAG_FEIGN_MS + spells[spell].cast_time);
+	return true;
+}
+
+// true while the fetch takes the AI's turn
+bool Bot::CorpseDragProcess(Client* owner)
+{
+	Mob *m = entity_list.GetMob(m_drag_corpse_id);
+	if (!owner || !m || !m->IsPlayerCorpse() || m->CastToCorpse()->IsBeingLooted()) {
+		StopCorpseDrag();
+		return false;
+	}
+	Corpse *corpse = m->CastToCorpse();
+	if (m_drag_give_up_timer.Check()) {
+		StopCorpseDrag(fmt::format("I couldn't get {} back.", corpse->GetCleanName()));
+		return false;
+	}
+	if (IsCasting()) {
+		return true;  // (a feign on its way)
+	}
+
+	// lying feigned: still, till the time's up and nothing near is after us
+	if (GetFeigned()) {
+		if (m_drag_feign_timer.Enabled() && !m_drag_feign_timer.Check(false)) {
+			return true;
+		}
+		for (auto &close_mob : GetCloseMobList(DRAG_SAFE)) {
+			Mob *mob = close_mob.second;
+			if (mob && mob->IsNPC() && mob->CheckAggro(this)) {
+				return true;
+			}
+		}
+		SetFeigned(false);
+		SetAppearance(eaStanding);
+		m_drag_feign_timer.Disable();
+	}
+
+	DragAggroScan();
+	// something's after us: feign if we can (else keep going: the group's at our owner)
+	bool hated = false;
+	for (auto &close_mob : GetCloseMobList(DRAG_SAFE)) {
+		Mob *mob = close_mob.second;
+		if (mob && mob->IsNPC() && mob->CheckAggro(this)) {
+			hated = true;
+			break;
+		}
+	}
+	if (hated && TryFeignForDrag()) {
+		return true;
+	}
+
+	if (!m_drag_holding) {
+		if (DistanceNoZ(m_Position, corpse->GetPosition()) > DRAG_REACH) {
+			const auto &p = corpse->GetPosition();
+			if (sneaking) {
+				WalkTo(p.x, p.y, p.z);
+			}
+			else {
+				RunTo(p.x, p.y, p.z);
+			}
+			return true;
+		}
+		if (!corpse->DragTo(owner, this)) {
+			StopCorpseDrag(fmt::format("I may not move {}.", corpse->GetCleanName()));
+			return false;
+		}
+		m_drag_holding = true;
+		RaidGroupSay(fmt::format("I have {}; bringing it back.", corpse->GetCleanName()).c_str());
+	}
+
+	// in tow: it follows us, as a player's dragged corpse does
+	if (DistanceSquaredNoZ(m_Position, corpse->GetPosition()) > RuleR(Character, DragCorpseDistance)) {
+		corpse->DragTo(owner, this);
+	}
+	if (DistanceNoZ(m_Position, owner->GetPosition()) > DRAG_HOME) {
+		const auto &p = owner->GetPosition();
+		if (sneaking) {
+			WalkTo(p.x, p.y, p.z);
+		}
+		else {
+			RunTo(p.x, p.y, p.z);
+		}
+		return true;
+	}
+	corpse->DragTo(owner, owner);
+	StopCorpseDrag(fmt::format("{} is here.", corpse->GetCleanName()));
+	StopMoving();
+	return false;
 }
 
 bool Bot::TryFacingTarget(Mob* tar) {

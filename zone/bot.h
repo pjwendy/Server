@@ -1090,6 +1090,15 @@ public:
 	bool RequiresLoSForPositioning();
 	bool HasRequiredLoSForPositioning(Mob* tar);
 
+	// A player's corpse fetched and dragged back to our owner (^corpsedrag): out alone, the bot is seen
+	// by what it passes as a player is, hides and sneaks if it's a rogue, and feigns death if it can
+	void StartCorpseDrag(uint16 corpse_id);
+	void StopCorpseDrag(const std::string& why = "");
+	uint16 GetDragCorpseID() const { return m_drag_corpse_id; }
+	bool CorpseDragProcess(Client* owner);
+	bool TryFeignForDrag();
+	void DragAggroScan();
+
 	// Try Combat Methods
 	bool TryEvade(Mob* tar);
 	bool TryFacingTarget(Mob* tar);
@@ -1165,6 +1174,13 @@ private:
 	Timer m_monk_evade_timer; // Monk evade FD timer
 	Timer m_auto_defend_timer;
 	Timer m_auto_save_timer;
+
+	uint16 m_drag_corpse_id = 0;      // the corpse we were sent for (^corpsedrag)
+	bool   m_drag_holding   = false;  // ... and it's in tow
+	Timer  m_drag_give_up_timer;      // no corpse back by then: let it go
+	Timer  m_drag_feign_timer;        // lying feigned at least this long
+	Timer  m_drag_feign_reuse_timer;  // a feign's reuse (the skill's, or the spell's recast)
+	Timer  m_drag_scan_timer;         // the proximity scan a player's client runs
 
 	Timer m_combat_jitter_timer;
 
