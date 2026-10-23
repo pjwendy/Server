@@ -974,7 +974,10 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 					return;
 				}
 				s.zone_request_pending = false;
-				SendZoneEvent(session_id, eqheadless::ZONE_REFUSED, zc->zoneID, fmt::format("the server refused the zone change ({})", zc->success));
+				// ZoneNotReady: world had no zone process free to start it in (not the zone line's fault)
+				SendZoneEvent(session_id, eqheadless::ZONE_REFUSED, zc->zoneID,
+					zc->success == ZoningMessage::ZoneNotReady ? std::string("the zone couldn't be started (no free zone process)")
+					                                           : fmt::format("the server refused the zone change ({})", zc->success));
 				return;
 			}
 			it->second.zoning      = true;
