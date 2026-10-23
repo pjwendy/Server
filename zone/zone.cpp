@@ -36,6 +36,7 @@
 #include "common/repositories/rule_sets_repository.h"
 #include "common/repositories/trader_repository.h"
 #include "common/repositories/zone_state_spawns_repository.h"
+#include "common/eqemu_config.h"
 #include "common/rulesys.h"
 #include "common/seperator.h"
 #include "common/serverinfo.h"
@@ -1150,7 +1151,6 @@ bool Zone::Init(bool is_static) {
 	zonemap  = Map::LoadMapFile(map_name);
 	watermap = WaterMap::LoadWaterMapfile(map_name);
 	pathing  = IPathfinder::Load(map_name);
-	headless_pathing = IPathfinder::LoadHeadless(map_name);
 
 	LogInfo("Loading timezone data");
 	zone_time.setEQTimeZone(content_db.GetZoneTimezone(zoneid, GetInstanceVersion()));
@@ -3306,7 +3306,20 @@ void Zone::ReloadMaps()
 	watermap = WaterMap::LoadWaterMapfile(map_name);
 	pathing  = IPathfinder::Load(map_name);
 	safe_delete(headless_pathing);
-	headless_pathing = IPathfinder::LoadHeadless(map_name);
+	headless_pathing_loaded = false;
+}
+
+IPathfinder *Zone::HeadlessPathing()
+{
+	// loaded the first time a headless character needs it, so a zone none of them visits (or a server
+	// that doesn't have them) never holds a second navmesh
+	if (!headless_pathing_loaded) {
+		headless_pathing_loaded = true;
+		if (EQEmuConfig::get()->HeadlessEnabled) {
+			headless_pathing = IPathfinder::LoadHeadless(map_name);
+		}
+	}
+	return headless_pathing ? headless_pathing : pathing;
 }
 
 uint32 Zone::GetTimerDuration(std::string name)

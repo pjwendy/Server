@@ -206,8 +206,9 @@ public:
 
 	IPathfinder                                   *pathing;
 	IPathfinder                                   *headless_pathing = nullptr; // (IPathfinder::LoadHeadless)
+	bool                                          headless_pathing_loaded = false;
 	// where headless characters find their way: their own navmesh if the zone has one, else the zone's
-	IPathfinder *HeadlessPathing() { return headless_pathing ? headless_pathing : pathing; }
+	IPathfinder *HeadlessPathing();
 	std::vector<NPC_Emote_Struct *>               npc_emote_list;
 	LinkedList<Spawn2 *>                          spawn2_list;
 	LinkedList<ZonePoint *>                       zone_point_list;
