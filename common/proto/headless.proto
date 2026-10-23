@@ -140,6 +140,7 @@ message ParcelSendCommand     { uint32 npc_id = 1; int32 slot = 2; uint32 quanti
 message ParcelRetrieveCommand { uint32 npc_id = 1; uint32 parcel_slot = 2; uint32 item_id = 3; }
 // under water: swim straight up to the surface, for air (a MoveEvent when there)
 message SurfaceCommand  { }
+message AaExpCommand    { uint32 percent = 1; } // the share of experience to AA (the client's slider): 100 levels no more
 
 message Command {
   uint32 id = 1; // echoed in CommandResult
@@ -171,6 +172,7 @@ message Command {
     ParcelSendCommand     parcel_send     = 26;
     ParcelRetrieveCommand parcel_retrieve = 27;
     SurfaceCommand        surface         = 28;
+    AaExpCommand          aa_exp          = 29;
   }
 }
 

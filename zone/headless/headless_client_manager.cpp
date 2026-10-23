@@ -311,6 +311,16 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 		case eqheadless::Command::kSurface: {
 			return session.mover ? session.mover->Surface() : "character is not ready to move";
 		}
+		case eqheadless::Command::kAaExp: {
+			// as the client's AA experience slider: OP_AAAction, set (or 0: off)
+			const uint32 pct = std::min<uint32>(cmd.aa_exp().percent(), 100);
+			auto app = new EQApplicationPacket(OP_AAAction, sizeof(AA_Action));
+			auto *a = reinterpret_cast<AA_Action *>(app->pBuffer);
+			a->action    = pct ? 1 : 2; // aaActionSetEXP, aaActionDisableEXP
+			a->exp_value = pct;
+			stream->Inject(app);
+			return "";
+		}
 		case eqheadless::Command::kTarget: {
 			const uint32 id = cmd.target().spawn_id();
 			if (id != 0 && !entity_list.GetMob(id)) {
