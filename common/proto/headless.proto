@@ -140,7 +140,8 @@ message ParcelSendCommand     { uint32 npc_id = 1; int32 slot = 2; uint32 quanti
 message ParcelRetrieveCommand { uint32 npc_id = 1; uint32 parcel_slot = 2; uint32 item_id = 3; }
 // under water: swim straight up to the surface, for air (a MoveEvent when there)
 message SurfaceCommand  { }
-message AaExpCommand    { uint32 percent = 1; } // the share of experience to AA (the client's slider): 100 levels no more
+message AaExpCommand    { uint32 percent = 1; }
+message CorpseDragCommand { uint32 corpse_id = 1; bool drop = 2; } // /corpse drag a corpse by spawn id (yours, or consented), or drop what you drag (corpse_id 0: all) // the share of experience to AA (the client's slider): 100 levels no more
 
 message Command {
   uint32 id = 1; // echoed in CommandResult
@@ -173,6 +174,7 @@ message Command {
     ParcelRetrieveCommand parcel_retrieve = 27;
     SurfaceCommand        surface         = 28;
     AaExpCommand          aa_exp          = 29;
+    CorpseDragCommand     corpse_drag     = 30;
   }
 }
 

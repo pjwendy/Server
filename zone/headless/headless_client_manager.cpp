@@ -352,6 +352,36 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 		case eqheadless::Command::kSurface: {
 			return session.mover ? session.mover->Surface() : "character is not ready to move";
 		}
+		case eqheadless::Command::kCorpseDrag: {
+			// as the client's /corpse drag and /corpse drop: the dragged corpse follows our position
+			// updates (Client::DragCorpses), within Character:DragCorpseDistance
+			const auto &d = cmd.corpse_drag();
+			Mob *corpse = d.corpse_id() ? entity_list.GetMob(d.corpse_id()) : nullptr;
+			if (d.corpse_id() && (!corpse || !corpse->IsPlayerCorpse())) {
+				return fmt::format("no player's corpse with id {}", d.corpse_id());
+			}
+			if (d.drop()) {
+				if (!corpse) {
+					auto app = new EQApplicationPacket(OP_CorpseDrop, 1);
+					stream->Inject(app);
+					return "";
+				}
+				const std::string name = corpse->GetName();
+				auto app = new EQApplicationPacket(OP_CorpseDrop, name.size() + 1);
+				memcpy(app->pBuffer, name.c_str(), name.size() + 1);
+				stream->Inject(app);
+				return "";
+			}
+			if (!corpse) {
+				return "no corpse to drag";
+			}
+			auto app = new EQApplicationPacket(OP_CorpseDrag, sizeof(CorpseDrag_Struct));
+			auto *cd = reinterpret_cast<CorpseDrag_Struct *>(app->pBuffer);
+			strn0cpy(cd->CorpseName, corpse->GetName(), sizeof(cd->CorpseName));
+			strn0cpy(cd->DraggerName, me->GetName(), sizeof(cd->DraggerName));
+			stream->Inject(app);
+			return "";
+		}
 		case eqheadless::Command::kAaExp: {
 			// as the client's AA experience slider: OP_AAAction, set (or 0: off)
 			const uint32 pct = std::min<uint32>(cmd.aa_exp().percent(), 100);
