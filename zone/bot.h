@@ -1013,6 +1013,12 @@ public:
 		uint32 augment_six = 0
 	);
 	uint32 CountBotItem(uint32 item_id);
+	// the pack (^pack): the general slots and the bags in them, carried, not worn
+	static bool IsPackSlot(int16 slot_id);
+	std::vector<int16> PackSlots();                      // every pack slot there is now (the bags' too)
+	int16 PackSlotFor(const EQ::ItemInstance& inst);     // where it would go, or INVALID_INDEX: no room
+	bool PackPut(int16 slot_id, const EQ::ItemInstance& inst);
+	int PackRoom();
 	std::map<uint16, uint32> GetBotItemSlots();
 	uint32 GetBotItemBySlot(uint16 slot_id);
 	int16 HasBotItem(uint32 item_id);

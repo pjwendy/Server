@@ -68,7 +68,7 @@ namespace EntityLimits
 
 		namespace invslot {
 			const uint64 EQUIPMENT_BITMASK = 0x00000000007FFFFF;
-			const uint64 GENERAL_BITMASK = 0x0000000000000000;
+			const uint64 GENERAL_BITMASK = 0x00000001FF800000; // a bot's pack: the ten general slots, and their bags (^pack)
 			const uint64 CURSOR_BITMASK = 0x0000000000000000;
 			const uint64 POSSESSIONS_BITMASK = (EQUIPMENT_BITMASK | GENERAL_BITMASK | CURSOR_BITMASK); // based on 34-slot count (RoF+)
 

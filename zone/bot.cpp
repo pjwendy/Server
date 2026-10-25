@@ -3941,6 +3941,93 @@ bool Bot::Spawn(Client* botCharacterOwner) {
 	return false;
 }
 
+bool Bot::IsPackSlot(int16 slot_id)
+{
+	return EQ::ValueWithin(slot_id, EQ::invslot::GENERAL_BEGIN, EQ::invslot::GENERAL_END) ||
+		   EQ::ValueWithin(slot_id, EQ::invbag::GENERAL_BAGS_BEGIN, EQ::invbag::GENERAL_BAGS_END);
+}
+
+std::vector<int16> Bot::PackSlots()
+{
+	std::vector<int16> out;
+	for (int16 g = EQ::invslot::GENERAL_BEGIN; g <= EQ::invslot::GENERAL_END; ++g) {
+		out.push_back(g);
+		const auto* bag = m_inv.GetItem(g);
+		if (bag && bag->IsClassBag()) {
+			for (uint8 i = EQ::invbag::SLOT_BEGIN; i < bag->GetItem()->BagSlots; ++i) {
+				out.push_back(EQ::InventoryProfile::CalcSlotId(g, i));
+			}
+		}
+	}
+	return out;
+}
+
+int16 Bot::PackSlotFor(const EQ::ItemInstance& inst)
+{
+	const auto* item = inst.GetItem();
+	if (!item) {
+		return INVALID_INDEX;
+	}
+	if (inst.IsStackable()) {  // onto a stack of the same with room
+		for (int16 slot : PackSlots()) {
+			const auto* have = m_inv.GetItem(slot);
+			if (have && have->GetID() == inst.GetID() && have->GetCharges() + inst.GetCharges() <= item->StackSize) {
+				return slot;
+			}
+		}
+	}
+	if (!inst.IsClassBag()) {  // into a bag that takes its size (bags don't go in bags)
+		for (int16 g = EQ::invslot::GENERAL_BEGIN; g <= EQ::invslot::GENERAL_END; ++g) {
+			const auto* bag = m_inv.GetItem(g);
+			if (!bag || !bag->IsClassBag() || bag->GetItem()->BagSize < item->Size) {
+				continue;
+			}
+			for (uint8 i = EQ::invbag::SLOT_BEGIN; i < bag->GetItem()->BagSlots; ++i) {
+				const int16 slot = EQ::InventoryProfile::CalcSlotId(g, i);
+				if (!m_inv.GetItem(slot)) {
+					return slot;
+				}
+			}
+		}
+	}
+	for (int16 g = EQ::invslot::GENERAL_BEGIN; g <= EQ::invslot::GENERAL_END; ++g) {
+		if (!m_inv.GetItem(g)) {
+			return g;
+		}
+	}
+	return INVALID_INDEX;
+}
+
+bool Bot::PackPut(int16 slot_id, const EQ::ItemInstance& inst)
+{
+	if (!GetBotID() || !IsPackSlot(slot_id)) {
+		return false;
+	}
+	auto* have = m_inv.GetItem(slot_id);
+	if (have) {  // a stack of the same: added to it
+		if (have->GetID() != inst.GetID() || !inst.IsStackable()) {
+			return false;
+		}
+		have->SetCharges(have->GetCharges() + inst.GetCharges());
+		return database.botdb.SaveItemBySlot(this, slot_id, have);
+	}
+	if (!database.botdb.SaveItemBySlot(this, slot_id, &inst)) {
+		return false;
+	}
+	return m_inv.PutItem(slot_id, inst) != EQ::invslot::SLOT_INVALID;
+}
+
+int Bot::PackRoom()
+{
+	int room = 0;  // (empty pack slots: an empty general slot takes a bag or one thing)
+	for (int16 slot : PackSlots()) {
+		if (!m_inv.GetItem(slot)) {
+			++room;
+		}
+	}
+	return room;
+}
+
 // Deletes the inventory record for the specified item from the database for this bot.
 void Bot::RemoveBotItemBySlot(uint16 slot_id)
 {

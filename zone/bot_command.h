@@ -1059,6 +1059,7 @@ void bot_command_default_settings(Client* c, const Seperator* sep);
 void bot_command_depart(Client *c, const Seperator *sep);
 void bot_command_find_aliases(Client *c, const Seperator *sep);
 void bot_command_corpse_drag(Client *c, const Seperator *sep);
+void bot_command_pack(Client *c, const Seperator *sep);
 void bot_command_follow(Client *c, const Seperator *sep);
 void bot_command_guard(Client *c, const Seperator *sep);
 void bot_command_heal_rotation(Client *c, const Seperator *sep);

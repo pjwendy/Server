@@ -988,8 +988,8 @@ bool BotDatabase::LoadItems(const uint32 bot_id, EQ::InventoryProfile& inventory
 		return true;
 	}
 
-	for (const auto& e : l) {
-		if (!EQ::ValueWithin(e.slot_id, EQ::invslot::EQUIPMENT_BEGIN, EQ::invslot::EQUIPMENT_END)) {
+	for (const auto& e : l) {  // (by slot: a pack's bags, in the general slots, come before what's in them)
+		if (!EQ::ValueWithin(e.slot_id, EQ::invslot::EQUIPMENT_BEGIN, EQ::invslot::EQUIPMENT_END) && !Bot::IsPackSlot(e.slot_id)) {
 			continue;
 		}
 
@@ -1128,7 +1128,7 @@ bool BotDatabase::SaveItemBySlot(Bot* b, const uint32 slot_id, const EQ::ItemIns
 	if (
 		!b ||
 		!b->GetBotID() ||
-		slot_id > EQ::invslot::EQUIPMENT_END
+		(slot_id > EQ::invslot::EQUIPMENT_END && !Bot::IsPackSlot(static_cast<int16>(slot_id)))
 	) {
 		return false;
 	}
