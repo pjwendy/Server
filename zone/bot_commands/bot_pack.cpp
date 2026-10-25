@@ -19,7 +19,7 @@
 
 // A bot's pack: its ten general slots and the bags in them, carried for its owner (nothing in it is
 // worn, so it changes none of the bot's stats). Every line this command says starts with "pack", so
-// a program reading them can tell them apart: "pack <slot> <item id> <count> <name>" for what's in it.
+// a program reading them can tell them apart: "pack <slot> <item id> <count> <bag|item> <name>" for what's in it.
 void bot_command_pack(Client* c, const Seperator* sep)
 {
 	if (helper_command_alias_fail(c, "bot_command_pack", sep->arg[0], "pack")) {
@@ -35,7 +35,7 @@ void bot_command_pack(Client* c, const Seperator* sep)
 		p.description = { "Your bot carries things for you in its pack: its ten general slots and the bags in them. Nothing in it is worn: it changes none of the bot's stats." };
 		p.notes = {
 			"- give: what's on your cursor goes into its pack (a stack onto one of the same, a bag into a free slot, anything else into a bag with room). A bag must be empty.",
-			"- list: every slot in its pack, as \"pack <slot> <item id> <count> <name>\", then how much room is left.",
+			"- list: every slot in its pack, as \"pack <slot> <item id> <count> <bag|item> <name>\", then how much room is left.",
 			"- take <slot>: that slot's item comes back to your cursor (a bag only when it's empty).",
 			"- room: how many more things it can carry."
 		};
@@ -85,8 +85,8 @@ void bot_command_pack(Client* c, const Seperator* sep)
 			for (int16 slot : bot->PackSlots()) {
 				const auto* inst = bot->GetBotItem(slot);
 				if (inst && inst->GetItem()) {
-					c->Message(Chat::White, fmt::format("pack {} {} {} {}", slot, inst->GetID(), inst->IsStackable() ? inst->GetCharges() : 1,
-														inst->GetItem()->Name).c_str());
+					c->Message(Chat::White, fmt::format("pack {} {} {} {} {}", slot, inst->GetID(), inst->IsStackable() ? inst->GetCharges() : 1,
+														inst->IsClassBag() ? "bag" : "item", inst->GetItem()->Name).c_str());
 				}
 			}
 		}
