@@ -87,7 +87,7 @@ namespace {
 	constexpr int    AIR_FLOOR           = 10;      // maximum air: (Stamina - 30) x lungs / 100, at least this ...
 	constexpr int    LUNGS_DEFAULT       = 100;     // ... and at most the lungs: spell effect 246, else this
 	constexpr float  HEAD_SHARE          = 0.75f;   // the head is this share of the character's size above it
-	constexpr float  SURFACE_UP          = 300.0f;  // a surface further up than this isn't one to swim to
+	constexpr float  SURFACE_UP          = 2000.0f; // a surface further up than this isn't one to swim to (Dagnor's Cauldron's lake is 350 deep)
 	// zones where being under water doesn't take air (the client's list: Erudin, the Southern Desert of Ro,
 	// Kerra Isle), and two with an air supply of their own (the Sleeper's Tomb, the Catacombs of Dranik)
 	constexpr uint32 BREATHE_ANYWAY[]    = {24, 35, 74};
