@@ -19,6 +19,7 @@
 
 #include "common/types.h"
 
+#include <map>
 #include <string>
 
 class Client;
