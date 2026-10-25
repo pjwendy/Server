@@ -164,6 +164,7 @@ Category `HeadlessClients`:
 | `parcel_send`, `parcel_retrieve` | Parcels, as a parcel merchant's parcel tab (open the window first, within reach). Send an item to a character by name, with a note; not attuned items, nor no-drop ones unless `World:FVNoDropFlag` lets players trade them; one parcel per `Parcel:ParcelDeliveryDelay`. Opening a parcel merchant lists the parcels waiting for the character (`MerchantEvent.parcels`); retrieve takes one into the bags. Needs `Parcel:EnableParcelMerchants`. |
 | `corpse_drag` | `/corpse drag` a corpse (yours, or one you're consented to) by spawn id: it follows you as you move, within the server's drag distance; or drop it (`drop`, all with no id). |
 | `aa_exp` | The share of experience going to AA, as the client's slider (0 turns it off, 100 stops levelling). |
+| `click_door` | Click a door in this zone by its door id (0-255), as the client does: a teleporter or a Plane of Knowledge book zones you where it goes. The server checks the distance, keys and locks. |
 | `invite`, `disband` | Invite to the group (the character's own bots, or real players if allowed), leave it. |
 
 `CommandResult.ok` means the server accepted the command. What happens next (the spell lands, the

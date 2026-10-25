@@ -382,6 +382,23 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			stream->Inject(app);
 			return "";
 		}
+		case eqheadless::Command::kClickDoor: {
+			// as the client clicks a door: OP_ClickDoor, its door id. A door with a destination (a
+			// teleporter, a Plane of Knowledge book) zones us there; the server checks how far we are
+			// (within the door's reach), keys and locks, and says why not, as it would to a player
+			const uint32 id = cmd.click_door().door_id();
+			Doors *door = id <= 255 ? entity_list.FindDoor(static_cast<uint8>(id)) : nullptr;
+			if (!door) {
+				return fmt::format("no door {} in this zone", id);
+			}
+			auto app = new EQApplicationPacket(OP_ClickDoor, sizeof(ClickDoor_Struct));
+			auto *cd = reinterpret_cast<ClickDoor_Struct *>(app->pBuffer);
+			cd->doorid    = door->GetDoorID();
+			cd->player_id = me->GetID();
+			stream->Inject(app);
+			LogHeadlessClient("[{}] clicking door [{}] ({})", me->GetCleanName(), door->GetDoorID(), door->GetDoorName());
+			return "";
+		}
 		case eqheadless::Command::kAaExp: {
 			// as the client's AA experience slider: OP_AAAction, set (or 0: off)
 			const uint32 pct = std::min<uint32>(cmd.aa_exp().percent(), 100);

@@ -141,6 +141,7 @@ message ParcelRetrieveCommand { uint32 npc_id = 1; uint32 parcel_slot = 2; uint3
 // under water: swim straight up to the surface, for air (a MoveEvent when there)
 message SurfaceCommand  { }
 message AaExpCommand    { uint32 percent = 1; }
+message ClickDoorCommand { uint32 door_id = 1; } // click a door in this zone by its door id, as the client does: a teleporter or a Plane of Knowledge book takes you where it goes (the server checks the distance, keys and locks)
 message CorpseDragCommand { uint32 corpse_id = 1; bool drop = 2; } // /corpse drag a corpse by spawn id (yours, or consented), or drop what you drag (corpse_id 0: all) // the share of experience to AA (the client's slider): 100 levels no more
 
 message Command {
@@ -175,6 +176,7 @@ message Command {
     SurfaceCommand        surface         = 28;
     AaExpCommand          aa_exp          = 29;
     CorpseDragCommand     corpse_drag     = 30;
+    ClickDoorCommand      click_door      = 31;
   }
 }
 
