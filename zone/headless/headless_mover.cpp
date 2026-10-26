@@ -88,6 +88,12 @@ namespace {
 	constexpr int    LUNGS_DEFAULT       = 100;     // ... and at most the lungs: spell effect 246, else this
 	constexpr float  HEAD_SHARE          = 0.75f;   // the head is this share of the character's size above it
 	constexpr float  SURFACE_UP          = 2000.0f; // a surface further up than this isn't one to swim to (Dagnor's Cauldron's lake is 350 deep)
+	// a route may keep the head under water for at most this share of a full breath at a stretch: the
+	// runner's breath watch (soldiers/breath.py) comes up at half, and a route it breaks off for air is
+	// planned again the same way. The navmesh has lake floors, and Dagnor's Cauldron's is 350 down: walks
+	// along it drowned five characters a night
+	constexpr float  UNDER_SHARE         = 0.4f;
+	constexpr float  UNDER_STEP          = 4.0f;    // the route looked at this often for water over the head
 	// zones where being under water doesn't take air (the client's list: Erudin, the Southern Desert of Ro,
 	// Kerra Isle), and two with an air supply of their own (the Sleeper's Tomb, the Catacombs of Dranik)
 	constexpr uint32 BREATHE_ANYWAY[]    = {24, 35, 74};
@@ -121,6 +127,8 @@ namespace {
 		).count();
 	}
 }
+
+static int EffectTotal(Client *me, uint16 effect); // (below, with breath)
 
 HeadlessMover::HeadlessMover(NullStream *stream, DoneCallback on_done)
 	: m_stream(stream), m_on_done(std::move(on_done))
@@ -187,6 +195,11 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 			if (progress && !cliff) {
 				m_partial = true; // walk it, then plan again from its end
 				FollowSwims(start);
+				if (TooLongUnder(start)) {
+					m_path.clear();
+					m_partial = false;
+					return false;
+				}
 				return true;
 			}
 		}
@@ -203,6 +216,10 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 		}
 		if (!via_lift) {
 			FollowSwims(start);
+			if (TooLongUnder(start)) {
+				m_path.clear();
+				return false;
+			}
 		}
 	}
 	else {
@@ -275,6 +292,51 @@ void HeadlessMover::FollowSwims(const glm::vec3 &start)
 		prev = p;
 	}
 	m_path = std::move(out);
+}
+
+bool HeadlessMover::TooLongUnder(const glm::vec3 &start)
+{
+	Client *me = m_stream->GetClient();
+	if (!me || !zone || !zone->HasWaterMap() || m_path.empty()) {
+		return false;
+	}
+	for (uint32 z : BREATHE_ANYWAY) {
+		if (zone->GetZoneID() == z) {
+			return false;
+		}
+	}
+	const float speed = RunSpeed(me);
+	if (speed <= 0.0f || EffectTotal(me, SpellEffect::WaterBreathing) > 0) {
+		return false;
+	}
+	const float head  = me->GetSize() * HEAD_SHARE;
+	const float limit = MaxAir(me) * UNDER_SHARE * speed; // units with the head under, at a stretch
+	auto wet = [&](const glm::vec3 &p) { return zone->watermap->InLiquid(p + glm::vec3(0.0f, 0.0f, head)); };
+	// the stretch we're in already doesn't count: under water now, the way out is what we want
+	bool  first = wet(start);
+	float under = 0.0f;
+	glm::vec3 prev = start;
+	for (const auto &p : m_path) {
+		const float len   = glm::length(p - prev);
+		const int   steps = std::max(1, static_cast<int>(std::ceil(len / UNDER_STEP)));
+		for (int i = 1; i <= steps; ++i) {
+			const glm::vec3 at = prev + (p - prev) * (static_cast<float>(i) / steps);
+			if (!wet(at)) {
+				first = false;
+				under = 0.0f;
+				continue;
+			}
+			under += len / steps;
+			if (!first && under > limit) {
+				LogHeadlessClient("[{}] the route keeps the head under water over [{:.0f}] units from [{:.0f}, {:.0f}, {:.0f}] ([{}] seconds of air: [{:.0f}] units at a stretch)",
+					me->GetCleanName(), under, at.x, at.y, at.z, MaxAir(me), limit);
+				m_too_deep = true;
+				return true;
+			}
+		}
+		prev = p;
+	}
+	return false;
 }
 
 bool HeadlessMover::StraightWalkable(const glm::vec3 &from, const glm::vec3 &to)
@@ -532,6 +594,7 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 	m_notes.clear();
 
 	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
+	m_too_deep = false;
 	m_through = through_zone_lines;
 	m_final   = destination;
 	m_legs    = 0;
@@ -539,7 +602,7 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 		if (StepOntoNavmesh(start, destination)) {
 			// a few steps onto the navmesh, then the way from there
 		}
-		else if (through_zone_lines && Flat(start, destination) <= ZONE_GAP && std::fabs(start.z - destination.z) <= ZONE_GAP_DZ &&
+		else if (!m_too_deep && through_zone_lines && Flat(start, destination) <= ZONE_GAP && std::fabs(start.z - destination.z) <= ZONE_GAP_DZ &&
 			StraightWalkable(start, destination)) {
 			LogHeadlessClient("[{}] no navmesh route to the zone line [{:.0f}] units away: walking straight",
 				me->GetCleanName(), Flat(start, destination));
@@ -548,7 +611,12 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 			m_partial = false;
 		}
 		else {
-			NoteNoRoute(start, destination);
+			if (m_too_deep) {
+				Note("too_deep", start, destination); // (this character's air, not the navmesh's fault)
+			}
+			else {
+				NoteNoRoute(start, destination);
+			}
 			m_on_done(Result::NoPath, start);
 			return "";
 		}
@@ -794,8 +862,9 @@ void HeadlessMover::Tick()
 			return;
 		}
 		const bool too_many = ++m_legs > PARTIAL_LEGS; // (the search's limit, not the navmesh's)
+		m_too_deep = false;
 		if (too_many || !PlanRoute(pos, m_final, m_through)) {
-			if (m_through && Flat(pos, m_final) <= ZONE_GAP && std::fabs(pos.z - m_final.z) <= ZONE_GAP_DZ &&
+			if (!m_too_deep && m_through && Flat(pos, m_final) <= ZONE_GAP && std::fabs(pos.z - m_final.z) <= ZONE_GAP_DZ &&
 				StraightWalkable(pos, m_final)) {
 				LogHeadlessClient("[{}] the navmesh ends [{:.0f}] units short of the zone line: walking the rest",
 					me->GetCleanName(), Flat(pos, m_final));
@@ -809,7 +878,10 @@ void HeadlessMover::Tick()
 				LogHeadlessClient("[{}] no way to the zone line from [{:.0f}, {:.0f}, {:.0f}]: [{:.0f}] units short, and the map shows no straight way",
 					me->GetCleanName(), pos.x, pos.y, pos.z, Flat(pos, m_final));
 			}
-			if (!too_many) {
+			if (m_too_deep) {
+				Note("too_deep", pos, m_final);
+			}
+			else if (!too_many) {
 				NoteNoRoute(pos, m_final);
 			}
 			Stop(Result::NoPath);

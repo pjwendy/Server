@@ -121,6 +121,9 @@ private:
 	static const std::vector<Swim> &Swims();
 	// m_path (planned from start) takes a swim link: its ends become the way through the water
 	void FollowSwims(const glm::vec3 &start);
+	// m_path (planned from start) keeps the head under water longer at a stretch than this character's
+	// air allows (UNDER_SHARE of it), with no water breathing: sets m_too_deep
+	bool TooLongUnder(const glm::vec3 &start);
 	// replaces m_path with a route through a lift when that's much shorter; true if it did
 	bool PlanWithLift(const glm::vec3 &start, const glm::vec3 &destination, float direct_length);
 	// the lift part of a walk; returns true while the lift has us (calling it, riding it)
@@ -151,6 +154,7 @@ private:
 	std::vector<NavNote>   m_notes;
 	std::unique_ptr<EQ::Timer> m_breath_timer;
 	int                    m_air = -1; // seconds of air left (-1: not counted yet, so full)
+	bool                   m_too_deep = false; // the last plan was refused for keeping the head under too long
 	uint64                 m_env_damage_at = 0; // when something not a mob last hurt us (RecentEnvironmentDamage)
 	std::string            m_env_damage;        // ... what it was
 
