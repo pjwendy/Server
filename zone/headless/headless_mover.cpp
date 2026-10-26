@@ -103,6 +103,8 @@ namespace {
 	constexpr int    MOVER_FLAGS         = PathingNotDisabled | PathingHeadless;
 	// a route's step is a swim link's when its ends are this near the link's
 	constexpr float  SWIM_MATCH          = 3.0f;
+	constexpr float  FLOOR_BELOW_NAV     = 6.0f;  // the map's floor this far under the route: look for the navmesh's
+	constexpr float  NAV_FLOOR_DZ        = 4.0f;  // ... within this of the route's height
 	constexpr float  OFF_MESH_STEP       = 10.0f;
 	constexpr float  OFF_MESH_MAX        = 60.0f;
 	constexpr int    OFF_MESH_DIRECTIONS = 12;
@@ -972,6 +974,21 @@ void HeadlessMover::Tick()
 	}
 	else {
 		pos.z = me->GetFixedZ(pos);
+		// a floor the navmesh has and the server's collision map doesn't (Crushbone's watchtowers, the
+		// navmesh built from the client's geometry: off a ladder onto one, the map's floor was the ground
+		// under it): where the map's floor is far below the route, the navmesh's floor at the route's
+		// height, if it has one there (over a dip the route's line runs above the ground, and the navmesh
+		// lies on the ground: none at that height, and the map's floor stands)
+		const glm::vec3 &to   = m_path[std::min(m_next, m_path.size() - 1)];
+		const glm::vec3 &from = m_next > 0 && m_next < m_path.size() ? m_path[m_next - 1] : to;
+		const float      span = Flat(from, to);
+		const float      t    = span > 0.01f ? std::clamp(1.0f - Flat(pos, to) / span, 0.0f, 1.0f) : 1.0f;
+		const float      line = from.z + (to.z - from.z) * t;
+		float            nav  = 0.0f;
+		if (pos.z < line - FLOOR_BELOW_NAV && zone->HeadlessPathing() &&
+			zone->HeadlessPathing()->NavHeight(glm::vec3(pos.x, pos.y, line), NAV_FLOOR_DZ, nav, MOVER_FLAGS)) {
+			pos.z = nav;
+		}
 	}
 
 	// the client notices zone lines itself (the server knows them from the water map's regions):

@@ -49,6 +49,33 @@ PathfinderNavmesh::~PathfinderNavmesh()
 	Clear();
 }
 
+bool PathfinderNavmesh::NavHeight(const glm::vec3 &at, float dz, float &z, int flags)
+{
+	if (!m_impl->nav_mesh) {
+		return false;
+	}
+	if (!m_impl->query) {
+		m_impl->query = dtAllocNavMeshQuery();
+		m_impl->query->init(m_impl->nav_mesh, RuleI(Pathing, MaxNavmeshNodes));
+	}
+	dtQueryFilter filter;
+	filter.setIncludeFlags(flags);
+	filter.setExcludeFlags((flags & PathingHeadless) ? 0 : PathingHeadless);
+	const glm::vec3 pos(at.x, at.z, at.y); // (Detour's y is up)
+	const glm::vec3 ext(1.0f, dz, 1.0f);
+	dtPolyRef ref = 0;
+	glm::vec3 nearest(0.0f);
+	if (dtStatusFailed(m_impl->query->findNearestPoly(&pos[0], &ext[0], &filter, &ref, &nearest[0])) || !ref) {
+		return false;
+	}
+	float h = 0.0f;
+	if (dtStatusFailed(m_impl->query->getPolyHeight(ref, &pos[0], &h))) {
+		return false;
+	}
+	z = h;
+	return true;
+}
+
 IPathfinder::IPath PathfinderNavmesh::FindRoute(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, int flags)
 {
 	partial = false;

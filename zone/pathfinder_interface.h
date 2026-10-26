@@ -97,6 +97,9 @@ public:
 	virtual IPath FindRoute(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, int flags = PathingNotDisabled) = 0;
 	virtual IPath FindPath(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, const PathfinderOptions& opts) = 0;
 	virtual glm::vec3 GetRandomLocation(const glm::vec3 &start, int flags = PathingNotDisabled) = 0;
+	// the height of the navmesh's floor at (at.x, at.y) within `dz` of at.z, if it has one there (false
+	// without a navmesh)
+	virtual bool NavHeight(const glm::vec3 &at, float dz, float &z, int flags = PathingNotDisabled) { return false; }
 	virtual void DebugCommand(Client *c, const Seperator *sep) = 0;
 
 	static IPathfinder *Load(const std::string &zone);
