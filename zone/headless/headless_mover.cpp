@@ -107,6 +107,7 @@ namespace {
 	constexpr float  NAV_FLOOR_DZ        = 4.0f;  // ... within this of the route's height
 	constexpr float  OFF_MESH_STEP       = 10.0f;
 	constexpr float  OFF_MESH_MAX        = 60.0f;
+	constexpr float  SWIM_OUT_DZ         = 12.0f; // in water, a navmesh floor this far up or down from us is a way out
 	constexpr int    OFF_MESH_DIRECTIONS = 12;
 
 	float Flat(const glm::vec3 &a, const glm::vec3 &b)
@@ -484,13 +485,25 @@ bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &desti
 		return false;
 	}
 	// FindRoute looks only 5 units across for the polygon we stand on: try rings around us,
-	// nearest first, each spot one we can walk straight to and a route starts from
+	// nearest first, each spot one we can walk straight to and a route starts from. In water we swim
+	// there instead: a spot on the navmesh near our height with nothing in the way (Maahoud, in North
+	// Qeynos's canal, the bank 8 units off: walked from the canal's bed, the bank was a wall)
+	const bool wet = zone->HasWaterMap() && zone->watermap->InLiquid(pos);
 	for (float r = OFF_MESH_STEP; r <= OFF_MESH_MAX; r += OFF_MESH_STEP) {
 		for (int i = 0; i < OFF_MESH_DIRECTIONS; ++i) {
 			const float a = i * 6.2831853f / OFF_MESH_DIRECTIONS;
 			glm::vec3 spot(pos.x + r * std::cos(a), pos.y + r * std::sin(a), pos.z + STRAIGHT_RISE);
-			spot.z = FloorBelow(spot);
-			if (spot.z == pos.z + STRAIGHT_RISE || !StraightWalkable(pos, spot) || !PlanRoute(spot, destination, m_through)) {
+			if (wet) {
+				float h = 0.0f;
+				if (!zone->HeadlessPathing()->NavHeight(glm::vec3(spot.x, spot.y, pos.z), SWIM_OUT_DZ, h, MOVER_FLAGS) ||
+					(zone->zonemap && !zone->zonemap->CheckLoS(pos, glm::vec3(spot.x, spot.y, h + BODY_HEIGHT))) ||
+					!PlanRoute(glm::vec3(spot.x, spot.y, h), destination, m_through)) {
+					continue;
+				}
+				spot.z = h;
+			}
+			else if ((spot.z = FloorBelow(spot)) == pos.z + STRAIGHT_RISE || !StraightWalkable(pos, spot) ||
+					 !PlanRoute(spot, destination, m_through)) {
 				continue;
 			}
 			LogHeadlessClient("[{}] off the navmesh at [{:.0f}, {:.0f}, {:.0f}]: stepping [{:.0f}] units onto it",
