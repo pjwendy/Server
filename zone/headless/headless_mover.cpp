@@ -977,6 +977,7 @@ void HeadlessMover::Tick()
 	// the client notices zone lines itself (the server knows them from the water map's regions):
 	// walk into one only when zoning, otherwise stop short of it
 	if (zone->HasWaterMap() && zone->watermap->InZoneLine(pos) && !zone->watermap->InZoneLine(m_pos)) {
+		LogHeadlessClient("[{}] at a zone line (the water map's) at [{:.1f}, {:.1f}, {:.1f}]", me->GetCleanName(), pos.x, pos.y, pos.z);
 		if (m_through) {
 			m_pos = pos;
 			SendUpdate(pos, me->GetHeading(), 0);
@@ -1035,6 +1036,10 @@ void HeadlessMover::Tick()
 		return;
 	}
 	if (arrived) {
+		if (m_stop_at_end) {
+			LogHeadlessClient("[{}] the route ends at a zone line (or teleporter) at [{:.1f}, {:.1f}, {:.1f}]",
+				me->GetCleanName(), pos.x, pos.y, pos.z);
+		}
 		Stop(m_stop_at_end ? Result::ZoneLine : Result::Arrived);
 		return;
 	}
