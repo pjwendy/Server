@@ -315,6 +315,25 @@ const std::vector<HeadlessMover::Jump> &HeadlessMover::Links(const std::string &
 	return cached;
 }
 
+const std::vector<HeadlessMover::Jump> &HeadlessMover::Teleports()
+{
+	return Links("teleports");
+}
+
+bool HeadlessMover::OnTeleport(size_t i) const
+{
+	if (i == 0 || i >= m_path.size()) {
+		return false;  // (from where it starts: the route reaches the pad first)
+	}
+	auto same = [](const glm::vec3 &a, const glm::vec3 &b) { return glm::length(a - b) < SWIM_MATCH; };
+	for (const auto &t : Teleports()) {
+		if (same(m_path[i], t.to) && same(m_path[i - 1], t.from)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool HeadlessMover::OnLadder(size_t i) const
 {
 	if (i >= m_path.size()) {
@@ -938,6 +957,14 @@ void HeadlessMover::Tick()
 			break; // at the button, or on the platform: HandleLift takes over
 		}
 		const glm::vec3 &target = m_path[m_next];
+		if (OnTeleport(m_next)) {
+			// a teleport pad: where it puts us, at once (costs none of the step)
+			LogHeadlessClient("[{}] taking the teleport pad at [{:.0f}, {:.0f}, {:.0f}] to [{:.0f}, {:.0f}, {:.0f}]",
+				me->GetCleanName(), pos.x, pos.y, pos.z, target.x, target.y, target.z);
+			pos = target;
+			m_next++;
+			continue;
+		}
 		// on land the floor gives our height; in water we swim, and on a ladder climb, up and down as
 		// well as across
 		const bool swimming = zone->HasWaterMap() && zone->watermap->InLiquid(pos);

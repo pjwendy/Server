@@ -135,6 +135,11 @@ private:
 	static const std::vector<Jump> &Links(const std::string &kind);
 	// the step to m_path[i] climbs (or drops down) a ladder: up and down as well as across, off the floor
 	bool OnLadder(size_t i) const;
+	// the zone's teleport pads (maps/nav/<zone>.teleports.json: a zone point into the zone itself, Erudin's
+	// between the upper city and the harbour): a link from beside the pad to where it puts you
+	static const std::vector<Jump> &Teleports();
+	// the step to m_path[i] is a teleport pad's: taken at once, as the pad moves a player
+	bool OnTeleport(size_t i) const;
 	// marks the steps of m_path (planned from start) that take a jump link (m_jump_at); false, and
 	// m_cant_jump, when it takes one this character can't jump now (jumping off, or too tired)
 	bool MarkJumps(const glm::vec3 &start);
