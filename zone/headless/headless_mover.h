@@ -121,6 +121,18 @@ private:
 	static const std::vector<Swim> &Swims();
 	// m_path (planned from start) takes a swim link: its ends become the way through the water
 	void FollowSwims(const glm::vec3 &start);
+	// the zone's jumps: a navmesh link up a ledge higher than a stair, or across a gap, that a player
+	// jumps (puppeteer's sweep adds them where nothing walks: maps/nav/<zone>.jumps.json)
+	struct Jump {
+		glm::vec3 from{0.0f};
+		glm::vec3 to{0.0f};
+	};
+	static const std::vector<Jump> &Jumps();
+	// marks the steps of m_path (planned from start) that take a jump link (m_jump_at); false, and
+	// m_cant_jump, when it takes one this character can't jump now (jumping off, or too tired)
+	bool MarkJumps(const glm::vec3 &start);
+	// what a jump costs in endurance, as the server takes it for a client's (Handle_OP_Jump)
+	static int JumpCost(Client *me);
 	// m_path (planned from start) keeps the head under water longer at a stretch than this character's
 	// air allows (UNDER_SHARE of it), with no water breathing: sets m_too_deep
 	bool TooLongUnder(const glm::vec3 &start);
@@ -155,6 +167,10 @@ private:
 	std::unique_ptr<EQ::Timer> m_breath_timer;
 	int                    m_air = -1; // seconds of air left (-1: not counted yet, so full)
 	bool                   m_too_deep = false; // the last plan was refused for keeping the head under too long
+	bool                   m_cant_jump = false; // ... or for a jump this character can't make
+	std::vector<bool>      m_jump_at;           // m_jump_at[i]: the step to m_path[i] is a jump
+	size_t                 m_jumping = SIZE_MAX; // the step being jumped (m_path index), and from where
+	glm::vec3              m_jump_from{0.0f};
 	uint64                 m_env_damage_at = 0; // when something not a mob last hurt us (RecentEnvironmentDamage)
 	std::string            m_env_damage;        // ... what it was
 

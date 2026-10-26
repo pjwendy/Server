@@ -195,8 +195,9 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 			if (progress && !cliff) {
 				m_partial = true; // walk it, then plan again from its end
 				FollowSwims(start);
-				if (TooLongUnder(start)) {
+				if (TooLongUnder(start) || !MarkJumps(start)) {
 					m_path.clear();
+					m_jump_at.clear();
 					m_partial = false;
 					return false;
 				}
@@ -216,14 +217,18 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 		}
 		if (!via_lift) {
 			FollowSwims(start);
-			if (TooLongUnder(start)) {
+			if (TooLongUnder(start) || !MarkJumps(start)) {
 				m_path.clear();
+				m_jump_at.clear();
 				return false;
 			}
 		}
 	}
 	else {
 		m_path.push_back(destination); // no navmesh: walk straight, following the floor
+	}
+	if (m_jump_at.size() != m_path.size()) {
+		m_jump_at.assign(m_path.size(), false); // (a lift's route, or no navmesh: no jumps on it)
 	}
 	return true;
 }
@@ -263,6 +268,76 @@ const std::vector<HeadlessMover::Swim> &HeadlessMover::Swims()
 		LogError("[{}] can't read its swims: {}", name, e.what());
 	}
 	return cached;
+}
+
+const std::vector<HeadlessMover::Jump> &HeadlessMover::Jumps()
+{
+	// the file doesn't change while a zone is up: read it once per zone
+	static std::vector<Jump> cached;
+	static std::string       cached_zone;
+	const std::string name = zone->GetShortName();
+	if (name == cached_zone) {
+		return cached;
+	}
+	cached.clear();
+	cached_zone = name;
+	std::ifstream in(fmt::format("{}/maps/nav/{}.jumps.json", PathManager::Instance()->GetServerPath(), name));
+	if (!in) {
+		return cached;
+	}
+	try {
+		const auto j  = nlohmann::json::parse(in);
+		auto       eq = [](const nlohmann::json &p) {
+			return glm::vec3(p.at(0).get<float>(), p.at(1).get<float>(), p.at(2).get<float>());
+		};
+		for (const auto &s : j.value("jumps", nlohmann::json::array())) {
+			cached.push_back({eq(s.at("from")), eq(s.at("to"))}); // (one way: a link both ways has both)
+		}
+		LogHeadlessClient("[{}] [{}] jumps", name, cached.size());
+	}
+	catch (const std::exception &e) {
+		LogError("[{}] can't read its jumps: {}", name, e.what());
+	}
+	return cached;
+}
+
+int HeadlessMover::JumpCost(Client *me)
+{
+	return me->GetLevel() < 20 ? 225 * me->GetLevel() / 100 : 50;
+}
+
+bool HeadlessMover::MarkJumps(const glm::vec3 &start)
+{
+	m_jump_at.assign(m_path.size(), false);
+	const auto &jumps = Jumps();
+	if (jumps.empty() || m_path.empty()) {
+		return true;
+	}
+	auto same = [](const glm::vec3 &a, const glm::vec3 &b) { return glm::length(a - b) < SWIM_MATCH; };
+	int       count = 0;
+	glm::vec3 prev  = start;
+	for (size_t i = 0; i < m_path.size(); ++i) {
+		for (const auto &j : jumps) {
+			if (same(prev, j.from) && same(m_path[i], j.to)) {
+				m_jump_at[i] = true;
+				++count;
+				break;
+			}
+		}
+		prev = m_path[i];
+	}
+	if (!count) {
+		return true;
+	}
+	Client *me = m_stream->GetClient();
+	if (RuleR(HeadlessClients, JumpHeight) <= 0.0f || !me || me->GetEndurance() < count * JumpCost(me)) {
+		LogHeadlessClient("[{}] the route takes [{}] jump(s) and we can't make them (jumping [{}], endurance [{}] of [{}] needed)",
+			me ? me->GetCleanName() : "?", count, RuleR(HeadlessClients, JumpHeight) > 0.0f ? "on" : "off",
+			me ? me->GetEndurance() : 0, me ? count * JumpCost(me) : 0);
+		m_cant_jump = true;
+		return false;
+	}
+	return true;
 }
 
 void HeadlessMover::FollowSwims(const glm::vec3 &start)
@@ -391,6 +466,7 @@ bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &desti
 				m_stream->GetClient() ? m_stream->GetClient()->GetCleanName() : "?", pos.x, pos.y, pos.z, r);
 			Note("off_mesh", pos, spot);
 			m_path.insert(m_path.begin(), spot);
+			m_jump_at.insert(m_jump_at.begin(), false);
 			return true;
 		}
 	}
@@ -594,7 +670,9 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 	m_notes.clear();
 
 	const glm::vec3 start(me->GetX(), me->GetY(), me->GetZ());
-	m_too_deep = false;
+	m_too_deep  = false;
+	m_cant_jump = false;
+	m_jumping   = SIZE_MAX;
 	m_through = through_zone_lines;
 	m_final   = destination;
 	m_legs    = 0;
@@ -602,17 +680,21 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 		if (StepOntoNavmesh(start, destination)) {
 			// a few steps onto the navmesh, then the way from there
 		}
-		else if (!m_too_deep && through_zone_lines && Flat(start, destination) <= ZONE_GAP && std::fabs(start.z - destination.z) <= ZONE_GAP_DZ &&
+		else if (!m_too_deep && !m_cant_jump && through_zone_lines && Flat(start, destination) <= ZONE_GAP && std::fabs(start.z - destination.z) <= ZONE_GAP_DZ &&
 			StraightWalkable(start, destination)) {
 			LogHeadlessClient("[{}] no navmesh route to the zone line [{:.0f}] units away: walking straight",
 				me->GetCleanName(), Flat(start, destination));
 			Note("straight_walk", start, destination);
 			m_path = {destination};
+			m_jump_at.clear();
 			m_partial = false;
 		}
 		else {
 			if (m_too_deep) {
 				Note("too_deep", start, destination); // (this character's air, not the navmesh's fault)
+			}
+			else if (m_cant_jump) {
+				Note("cant_jump", start, destination); // (this character's endurance, or jumping off: not the navmesh's)
 			}
 			else {
 				NoteNoRoute(start, destination);
@@ -700,6 +782,8 @@ std::string HeadlessMover::Surface()
 	}
 	m_notes.clear();
 	m_path        = {target};
+	m_jump_at.clear();
+	m_jumping     = SIZE_MAX;
 	m_through     = false;
 	m_final       = target;
 	m_legs        = 0;
@@ -829,8 +913,27 @@ void HeadlessMover::Tick()
 		(m_lift_phase == LiftPhase::Boarding) ||
 		(m_lift_phase == LiftPhase::Off && m_board + 1 < m_path.size() &&
 		 glm::length(glm::vec3(pos.x - m_path[m_board + 1].x, pos.y - m_path[m_board + 1].y, 0.0f)) < PLATFORM_RADIUS * 2);
+	// a jump (up a ledge, across a gap): off the floor, on an arc from where we jumped to where we land,
+	// as high as the client's jump goes; the server takes its endurance as for a client's (OP_Jump)
+	const bool jumping = m_next < m_path.size() && m_next < m_jump_at.size() && m_jump_at[m_next];
+	if (jumping && m_jumping != m_next) {
+		m_jumping   = m_next;
+		m_jump_from = m_next > 0 ? m_path[m_next - 1] : m_pos;
+		m_stream->Inject(new EQApplicationPacket(OP_Jump, 0));
+		LogHeadlessClient("[{}] jumping from [{:.1f}, {:.1f}, {:.1f}] to [{:.1f}, {:.1f}, {:.1f}]", me->GetCleanName(),
+			m_jump_from.x, m_jump_from.y, m_jump_from.z, m_path[m_next].x, m_path[m_next].y, m_path[m_next].z);
+	}
+	else if (!jumping) {
+		m_jumping = SIZE_MAX;
+	}
 	if (on_platform) {
 		pos.z = m_path[std::min(m_next, m_path.size() - 1)].z;
+	}
+	else if (jumping) {
+		const glm::vec3 &land = m_path[m_next];
+		const float      span = std::max(Flat(m_jump_from, land), 0.01f);
+		const float      t    = std::clamp(1.0f - Flat(pos, land) / span, 0.0f, 1.0f);
+		pos.z = m_jump_from.z + (land.z - m_jump_from.z) * t + 4.0f * RuleR(HeadlessClients, JumpHeight) * t * (1.0f - t);
 	}
 	else {
 		pos.z = me->GetFixedZ(pos);
@@ -862,14 +965,17 @@ void HeadlessMover::Tick()
 			return;
 		}
 		const bool too_many = ++m_legs > PARTIAL_LEGS; // (the search's limit, not the navmesh's)
-		m_too_deep = false;
+		m_too_deep  = false;
+		m_cant_jump = false;
+		m_jumping   = SIZE_MAX;
 		if (too_many || !PlanRoute(pos, m_final, m_through)) {
-			if (!m_too_deep && m_through && Flat(pos, m_final) <= ZONE_GAP && std::fabs(pos.z - m_final.z) <= ZONE_GAP_DZ &&
+			if (!m_too_deep && !m_cant_jump && m_through && Flat(pos, m_final) <= ZONE_GAP && std::fabs(pos.z - m_final.z) <= ZONE_GAP_DZ &&
 				StraightWalkable(pos, m_final)) {
 				LogHeadlessClient("[{}] the navmesh ends [{:.0f}] units short of the zone line: walking the rest",
 					me->GetCleanName(), Flat(pos, m_final));
 				Note("straight_walk", pos, m_final);
 				m_path = {m_final};
+				m_jump_at.clear();
 				m_partial = false;
 				m_next = 0;
 				return;
@@ -880,6 +986,9 @@ void HeadlessMover::Tick()
 			}
 			if (m_too_deep) {
 				Note("too_deep", pos, m_final);
+			}
+			else if (m_cant_jump) {
+				Note("cant_jump", pos, m_final);
 			}
 			else if (!too_many) {
 				NoteNoRoute(pos, m_final);
