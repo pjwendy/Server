@@ -896,7 +896,9 @@ void HeadlessMover::Tick()
 	}
 
 	// no real progress for a while (rooted, blocked by geometry)
-	if (glm::length(glm::vec3(pos.x - m_progress_pos.x, pos.y - m_progress_pos.y, 0.0f)) >= STUCK_DISTANCE) {
+	// (up and down count: surfacing goes straight up, and counted flat it was "stuck" every 3 seconds and
+	// stopped, coming up at 60% of its speed: Elandor drowned 50 units short from 340 down)
+	if (glm::length(pos - m_progress_pos) >= STUCK_DISTANCE) {
 		m_progress_pos = pos;
 		m_progress_ms  = now;
 	}
