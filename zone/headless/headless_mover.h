@@ -128,6 +128,13 @@ private:
 		glm::vec3 to{0.0f};
 	};
 	static const std::vector<Jump> &Jumps();
+	// the zone's ladders: a link a player climbs straight up, or drops down (maps/nav/<zone>.ladders.json,
+	// from puppeteer's navpatch: Cabilis East's guild hall, a ladder a floor)
+	static const std::vector<Jump> &Ladders();
+	// jumps or ladders ("jumps", "ladders"): the zone's maps/nav/<zone>.<kind>.json, read once per zone
+	static const std::vector<Jump> &Links(const std::string &kind);
+	// the step to m_path[i] climbs (or drops down) a ladder: up and down as well as across, off the floor
+	bool OnLadder(size_t i) const;
 	// marks the steps of m_path (planned from start) that take a jump link (m_jump_at); false, and
 	// m_cant_jump, when it takes one this character can't jump now (jumping off, or too tired)
 	bool MarkJumps(const glm::vec3 &start);

@@ -40,6 +40,7 @@
 #include <chrono>
 #include <fstream>
 #include <map>
+#include <map>
 
 extern Zone       *zone;
 extern EntityList entity_list;
@@ -272,16 +273,26 @@ const std::vector<HeadlessMover::Swim> &HeadlessMover::Swims()
 
 const std::vector<HeadlessMover::Jump> &HeadlessMover::Jumps()
 {
+	return Links("jumps");
+}
+
+const std::vector<HeadlessMover::Jump> &HeadlessMover::Ladders()
+{
+	return Links("ladders");
+}
+
+const std::vector<HeadlessMover::Jump> &HeadlessMover::Links(const std::string &kind)
+{
 	// the file doesn't change while a zone is up: read it once per zone
-	static std::vector<Jump> cached;
-	static std::string       cached_zone;
+	static std::map<std::string, std::pair<std::string, std::vector<Jump>>> cache; // kind -> (zone, links)
+	auto &[cached_zone, cached] = cache[kind];
 	const std::string name = zone->GetShortName();
 	if (name == cached_zone) {
 		return cached;
 	}
 	cached.clear();
 	cached_zone = name;
-	std::ifstream in(fmt::format("{}/maps/nav/{}.jumps.json", PathManager::Instance()->GetServerPath(), name));
+	std::ifstream in(fmt::format("{}/maps/nav/{}.{}.json", PathManager::Instance()->GetServerPath(), name, kind));
 	if (!in) {
 		return cached;
 	}
@@ -290,15 +301,33 @@ const std::vector<HeadlessMover::Jump> &HeadlessMover::Jumps()
 		auto       eq = [](const nlohmann::json &p) {
 			return glm::vec3(p.at(0).get<float>(), p.at(1).get<float>(), p.at(2).get<float>());
 		};
-		for (const auto &s : j.value("jumps", nlohmann::json::array())) {
+		for (const auto &s : j.value(kind, nlohmann::json::array())) {
 			cached.push_back({eq(s.at("from")), eq(s.at("to"))}); // (one way: a link both ways has both)
 		}
-		LogHeadlessClient("[{}] [{}] jumps", name, cached.size());
+		LogHeadlessClient("[{}] [{}] {}", name, cached.size(), kind);
 	}
 	catch (const std::exception &e) {
-		LogError("[{}] can't read its jumps: {}", name, e.what());
+		LogError("[{}] can't read its {}: {}", name, kind, e.what());
 	}
 	return cached;
+}
+
+bool HeadlessMover::OnLadder(size_t i) const
+{
+	if (i >= m_path.size()) {
+		return false;
+	}
+	auto same = [](const glm::vec3 &a, const glm::vec3 &b) { return glm::length(a - b) < SWIM_MATCH; };
+	for (const auto &l : Ladders()) {
+		if (!same(m_path[i], l.to)) {
+			continue;
+		}
+		// (the first step of a route: from where we stand, on the ladder or at its foot)
+		if (i > 0 ? same(m_path[i - 1], l.from) : glm::length(m_pos - l.from) <= glm::length(l.to - l.from) + SWIM_MATCH) {
+			return true;
+		}
+	}
+	return false;
 }
 
 int HeadlessMover::JumpCost(Client *me)
@@ -891,9 +920,11 @@ void HeadlessMover::Tick()
 			break; // at the button, or on the platform: HandleLift takes over
 		}
 		const glm::vec3 &target = m_path[m_next];
-		// on land the floor gives our height; in water we swim, up and down as well as across
+		// on land the floor gives our height; in water we swim, and on a ladder climb, up and down as
+		// well as across
 		const bool swimming = zone->HasWaterMap() && zone->watermap->InLiquid(pos);
-		glm::vec3  to(target.x - pos.x, target.y - pos.y, swimming ? target.z - pos.z : 0.0f);
+		const bool climbing = OnLadder(m_next);
+		glm::vec3  to(target.x - pos.x, target.y - pos.y, swimming || climbing ? target.z - pos.z : 0.0f);
 		const float dist = glm::length(to);
 
 		if (dist <= step || dist < ARRIVE_EPSILON) {
@@ -934,6 +965,10 @@ void HeadlessMover::Tick()
 		const float      span = std::max(Flat(m_jump_from, land), 0.01f);
 		const float      t    = std::clamp(1.0f - Flat(pos, land) / span, 0.0f, 1.0f);
 		pos.z = m_jump_from.z + (land.z - m_jump_from.z) * t + 4.0f * RuleR(HeadlessClients, JumpHeight) * t * (1.0f - t);
+	}
+	else if (OnLadder(m_next)) {
+		// on a ladder: the height the climb has got to (the floor under us is the one we left or the
+		// one we're going to)
 	}
 	else {
 		pos.z = me->GetFixedZ(pos);
