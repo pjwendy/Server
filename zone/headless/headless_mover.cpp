@@ -496,7 +496,10 @@ bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &desti
 			if (wet) {
 				float h = 0.0f;
 				if (!zone->HeadlessPathing()->NavHeight(glm::vec3(spot.x, spot.y, pos.z), SWIM_OUT_DZ, h, MOVER_FLAGS) ||
-					(zone->zonemap && !zone->zonemap->CheckLoS(pos, glm::vec3(spot.x, spot.y, h + BODY_HEIGHT))) ||
+					// (at the bank's height: from under the water a line up to it hits the canal's own wall,
+					// where a swimmer comes up first, then over the edge)
+					(zone->zonemap && !zone->zonemap->CheckLoS(glm::vec3(pos.x, pos.y, std::max(pos.z, h) + BODY_HEIGHT),
+															   glm::vec3(spot.x, spot.y, h + BODY_HEIGHT))) ||
 					!PlanRoute(glm::vec3(spot.x, spot.y, h), destination, m_through)) {
 					continue;
 				}
