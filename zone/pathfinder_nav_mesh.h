@@ -34,6 +34,7 @@ public:
 	virtual IPath FindPath(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, const PathfinderOptions& opts);
 	virtual glm::vec3 GetRandomLocation(const glm::vec3 &start, int flags = PathingNotDisabled);
 	virtual bool NavHeight(const glm::vec3 &at, float dz, float &z, int flags = PathingNotDisabled);
+	virtual bool NavNearest(const glm::vec3 &at, const glm::vec3 &half, glm::vec3 &out, int flags = PathingNotDisabled);
 	virtual void DebugCommand(Client *c, const Seperator *sep);
 
 private:

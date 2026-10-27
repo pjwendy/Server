@@ -109,12 +109,15 @@ namespace {
 	constexpr float  OFF_MESH_MAX        = 60.0f;
 	constexpr float  SWIM_OUT_DZ         = 12.0f; // in water, a navmesh floor this far up or down from us is a way out
 	constexpr int    OFF_MESH_DIRECTIONS = 12;
-	// on a lake's surface the shore can be far off (Lake Rathetear: five characters afloat 130-235 units
-	// out, the navmesh on the bed 130 under them): swim this far for it, a spot every this many units
-	// around each ring; one who breathes water sinks to the bed instead when no shore is in reach
+	// on a lake's surface the shore can be far off (Lake Rathetear: five characters afloat 160-700 units
+	// out, the navmesh on the bed 190 under them, with gaps): rings this far, a spot every this many
+	// units around each; past them the navmesh's nearest point at our height this far each way, or for
+	// one who breathes water its nearest under us, this far down and this far each way
 	constexpr float  SWIM_OUT_MAX        = 250.0f;
 	constexpr float  SWIM_OUT_SPACING    = 20.0f;
+	constexpr float  SWIM_FAR_MAX        = 800.0f;
 	constexpr float  SINK_MAX            = 400.0f;
+	constexpr float  SINK_WIDE           = 300.0f;
 
 	float Flat(const glm::vec3 &a, const glm::vec3 &b)
 	{
@@ -545,33 +548,36 @@ bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &desti
 			return true;
 		}
 	}
-	// no shore in reach: sink to the navmesh under us, if the way down is clear and air doesn't matter
+	if (!wet) {
+		return false;
+	}
+	// no shore in the rings: the navmesh's nearest point at our height further off (a swim on the
+	// surface takes no air), then, for one who breathes water (or where air doesn't matter), its nearest
+	// under us (the lake bed: its navmesh has gaps, so rarely straight down). Swum to in a straight line
 	Client *me = m_stream->GetClient();
-	if (!wet || !me || !(EffectTotal(me, SpellEffect::WaterBreathing) > 0 ||
-						 std::find(std::begin(BREATHE_ANYWAY), std::end(BREATHE_ANYWAY), zone->GetZoneID()) != std::end(BREATHE_ANYWAY))) {
-		return false;
-	}
-	// (NavHeight answers the floor nearest the middle of its window: slices from the top down, so the
-	// first floor found is the one under us, not a tunnel under the bed)
-	constexpr float SLICE = 25.0f;
-	float bed = pos.z;
-	for (float mid = pos.z - SLICE; mid > pos.z - SINK_MAX && bed >= pos.z; mid -= 2 * SLICE) {
-		if (!zone->HeadlessPathing()->NavHeight(glm::vec3(pos.x, pos.y, mid), SLICE, bed, MOVER_FLAGS)) {
-			bed = pos.z;
+	const bool breathes = me && (EffectTotal(me, SpellEffect::WaterBreathing) > 0 ||
+								 std::find(std::begin(BREATHE_ANYWAY), std::end(BREATHE_ANYWAY), zone->GetZoneID()) != std::end(BREATHE_ANYWAY));
+	struct Box { glm::vec3 at, half; const char *what; };
+	const Box boxes[] = {
+		{pos, glm::vec3(SWIM_FAR_MAX, SWIM_FAR_MAX, SWIM_OUT_DZ), "the shore"},
+		{pos - glm::vec3(0.0f, 0.0f, SINK_MAX / 2), glm::vec3(SINK_WIDE, SINK_WIDE, SINK_MAX / 2), "the bed"},
+	};
+	for (const auto &b : boxes) {
+		glm::vec3 to;
+		if ((&b != &boxes[0] && !breathes) || !zone->HeadlessPathing()->NavNearest(b.at, b.half, to, MOVER_FLAGS) ||
+			(&b != &boxes[0] && to.z >= pos.z) ||
+			(zone->zonemap && !zone->zonemap->CheckLoS(pos, to + glm::vec3(0.0f, 0.0f, BODY_HEIGHT))) ||
+			!PlanRoute(to, destination, m_through)) {
+			continue;
 		}
+		LogHeadlessClient("[{}] afloat off the navmesh at [{:.0f}, {:.0f}, {:.0f}]: swimming [{:.0f}] units to {} at [{:.0f}, {:.0f}, {:.0f}]",
+			who, pos.x, pos.y, pos.z, glm::length(to - pos), b.what, to.x, to.y, to.z);
+		Note("off_mesh", pos, to);
+		m_path.insert(m_path.begin(), to);
+		m_jump_at.insert(m_jump_at.begin(), false);
+		return true;
 	}
-	if (bed >= pos.z ||
-		(zone->zonemap && !zone->zonemap->CheckLoS(pos, glm::vec3(pos.x, pos.y, bed + BODY_HEIGHT))) ||
-		!PlanRoute(glm::vec3(pos.x, pos.y, bed), destination, m_through)) {
-		return false;
-	}
-	LogHeadlessClient("[{}] afloat off the navmesh at [{:.0f}, {:.0f}, {:.0f}], no shore in [{:.0f}] units: sinking [{:.0f}] units to the bed",
-		who, pos.x, pos.y, pos.z, SWIM_OUT_MAX, pos.z - bed);
-	const glm::vec3 down(pos.x, pos.y, bed);
-	Note("off_mesh", pos, down);
-	m_path.insert(m_path.begin(), down);
-	m_jump_at.insert(m_jump_at.begin(), false);
-	return true;
+	return false;
 }
 
 void HeadlessMover::Note(const char *kind, const glm::vec3 &at, const glm::vec3 &to, const glm::vec3 &closest)

@@ -100,6 +100,8 @@ public:
 	// the height of the navmesh's floor at (at.x, at.y) within `dz` of at.z, if it has one there (false
 	// without a navmesh)
 	virtual bool NavHeight(const glm::vec3 &at, float dz, float &z, int flags = PathingNotDisabled) { return false; }
+	// the navmesh's nearest point to `at` within the box `half` (each way: x, y, z) around it, if any
+	virtual bool NavNearest(const glm::vec3 &at, const glm::vec3 &half, glm::vec3 &out, int flags = PathingNotDisabled) { return false; }
 	virtual void DebugCommand(Client *c, const Seperator *sep) = 0;
 
 	static IPathfinder *Load(const std::string &zone);
