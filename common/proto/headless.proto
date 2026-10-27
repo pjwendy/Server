@@ -114,6 +114,9 @@ message ZoneToCommand   { string zone = 1; uint32 number = 2; bool plan_only = 3
 // merchants, as the client's merchant window: open (stand within ~20 units), buy and sell, close.
 // Opening sends a MerchantEvent with what it sells.
 message MerchantCommand { uint32 npc_id = 1; bool open = 2; }
+// hand an item (an inventory slot: a stack's quantity, 0 for all of it) to an NPC beside us, as the
+// client's trade window does: the NPC's script takes it (a quest's hand-in, the Priest of Luclin's soulstone)
+message GiveCommand     { uint32 npc_id = 1; int32 slot = 2; uint32 quantity = 3; }
 message BuyCommand      { uint32 npc_id = 1; uint32 merchant_slot = 2; uint32 quantity = 3; }
 message SellCommand     { uint32 npc_id = 1; int32 slot = 2; uint32 quantity = 3; } // slot: inventory slot
 // pick an item up and put it down elsewhere (equip it, put a bag in a slot, bank it); swaps with
@@ -180,6 +183,7 @@ message Command {
     AaExpCommand          aa_exp          = 29;
     CorpseDragCommand     corpse_drag     = 30;
     ClickDoorCommand      click_door      = 31;
+    GiveCommand           give            = 32;
   }
 }
 

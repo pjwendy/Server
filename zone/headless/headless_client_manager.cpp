@@ -841,6 +841,40 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			stream->Inject(app);
 			return "";
 		}
+		case eqheadless::Command::kGive: {
+			// the client's trade window with an NPC: open it, put the item in, give (the NPC's script takes it)
+			const auto &gv = cmd.give();
+			Mob *npc = entity_list.GetMob(gv.npc_id());
+			const EQ::ItemInstance *inst = me->GetInv().GetItem(gv.slot());
+			if (!npc || !npc->IsNPC()) {
+				return "that's not an NPC";
+			}
+			if (DistanceSquared(me->GetPosition(), npc->GetPosition()) > USE_NPC_RANGE2) {
+				return "too far from them";
+			}
+			if (npc->IsEngaged()) {
+				return "they're fighting";
+			}
+			if (!inst || !inst->GetItem()) {
+				return fmt::format("nothing in slot {}", gv.slot());
+			}
+			auto rq = new EQApplicationPacket(OP_TradeRequest, sizeof(TradeRequest_Struct));
+			auto *tr = reinterpret_cast<TradeRequest_Struct *>(rq->pBuffer);
+			tr->to_mob_id   = npc->GetID();
+			tr->from_mob_id = me->GetID();
+			stream->Inject(rq);
+			auto mv = new EQApplicationPacket(OP_MoveItem, sizeof(MoveItem_Struct));
+			auto *mi = reinterpret_cast<MoveItem_Struct *>(mv->pBuffer);
+			mi->from_slot       = gv.slot();
+			mi->to_slot         = EQ::invslot::TRADE_BEGIN;
+			mi->number_in_stack = gv.quantity() ? gv.quantity() : (inst->IsStackable() ? std::max<int16>(1, inst->GetCharges()) : 0);
+			stream->Inject(mv);
+			auto ok = new EQApplicationPacket(OP_TradeAcceptClick, sizeof(TradeAccept_Struct));
+			reinterpret_cast<TradeAccept_Struct *>(ok->pBuffer)->from_mob_id = me->GetID();
+			stream->Inject(ok);
+			LogHeadlessClient("[{}] giving [{}] to [{}]", me->GetCleanName(), inst->GetItem()->Name, npc->GetCleanName());
+			return "";
+		}
 		case eqheadless::Command::kScribe: {
 			const auto &sc = cmd.scribe();
 			const EQ::ItemInstance *inst = me->GetInv().GetItem(EQ::invslot::slotCursor);
