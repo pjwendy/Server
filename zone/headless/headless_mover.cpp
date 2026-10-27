@@ -1170,7 +1170,10 @@ void HeadlessMover::Tick()
 		const float      t    = span > 0.01f ? std::clamp(1.0f - Flat(pos, to) / span, 0.0f, 1.0f) : 1.0f;
 		const float      line = from.z + (to.z - from.z) * t;
 		float            nav  = 0.0f;
-		if (pos.z < line - FLOOR_BELOW_NAV && zone->HeadlessPathing() &&
+		// (not in water: swimming up to the surface, the navmesh's floor under us put us back on it every
+		// tick, and the walk was "stuck": Grukmar in Paludal, three hours)
+		const bool       afloat = zone->HasWaterMap() && zone->watermap->InLiquid(pos);
+		if (!afloat && pos.z < line - FLOOR_BELOW_NAV && zone->HeadlessPathing() &&
 			zone->HeadlessPathing()->NavHeight(glm::vec3(pos.x, pos.y, line), NAV_FLOOR_DZ, nav, MOVER_FLAGS)) {
 			pos.z = nav;
 		}
