@@ -17,6 +17,12 @@
 */
 #include "pathfinder_nav_mesh.h"
 
+namespace {
+	constexpr unsigned char AVOID_AREA = 12;     // an area no navmesh has: the polygons a route keeps out of
+	constexpr float         AVOID_COST = 20.0f;  // ... each unit through one costs this many round
+	constexpr float         AVOID_DZ   = 40.0f;  // ... within this of the mob's height
+}
+
 #include "common/compression.h"
 #include "zone/client.h"
 #include "zone/water_map.h"
@@ -99,6 +105,53 @@ bool PathfinderNavmesh::NavNearest(const glm::vec3 &at, const glm::vec3 &half, g
 	return true;
 }
 
+IPathfinder::IPath PathfinderNavmesh::FindRouteAvoiding(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck,
+	int flags, const std::vector<glm::vec4> &avoid)
+{
+	if (!m_impl->nav_mesh || avoid.empty()) {
+		return FindRoute(start, end, partial, stuck, flags);
+	}
+	if (!m_impl->query) {
+		m_impl->query = dtAllocNavMeshQuery();
+		m_impl->query->init(m_impl->nav_mesh, RuleI(Pathing, MaxNavmeshNodes));
+	}
+	// the polygons within each circle take the avoided area for this one route (the zone's one thread:
+	// nothing else plans in between), at AVOID_COST to cross, then have their own areas back. A
+	// circle round our start or our destination isn't avoided: there's no way round it
+	dtQueryFilter all;
+	all.setIncludeFlags(PathingAll);
+	std::vector<std::pair<dtPolyRef, unsigned char>> marked;
+	dtPolyRef polys[256];
+	for (const auto &c : avoid) {
+		const glm::vec2 at(c.x, c.y);
+		if (glm::length(at - glm::vec2(start.x, start.y)) <= c.w || glm::length(at - glm::vec2(end.x, end.y)) <= c.w) {
+			continue;
+		}
+		const float centre[3] = {c.x, c.z, c.y}, ext[3] = {c.w, AVOID_DZ, c.w}; // (Detour's y is up)
+		int n = 0;
+		if (dtStatusFailed(m_impl->query->queryPolygons(centre, ext, &all, polys, &n, 256))) {
+			continue;
+		}
+		for (int i = 0; i < n; ++i) {
+			float nearest[3];
+			bool  over = false;
+			unsigned char area = 0;
+			if (dtStatusFailed(m_impl->nav_mesh->getPolyArea(polys[i], &area)) || area == AVOID_AREA ||
+				dtStatusFailed(m_impl->query->closestPointOnPoly(polys[i], centre, nearest, &over)) ||
+				glm::length(glm::vec2(nearest[0] - c.x, nearest[2] - c.y)) > c.w) {
+				continue;
+			}
+			marked.emplace_back(polys[i], area);
+			m_impl->nav_mesh->setPolyArea(polys[i], AVOID_AREA);
+		}
+	}
+	auto route = FindRoute(start, end, partial, stuck, flags);
+	for (auto it = marked.rbegin(); it != marked.rend(); ++it) {
+		m_impl->nav_mesh->setPolyArea(it->first, it->second);
+	}
+	return route;
+}
+
 IPathfinder::IPath PathfinderNavmesh::FindRoute(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, int flags)
 {
 	partial = false;
@@ -128,6 +181,7 @@ IPathfinder::IPath PathfinderNavmesh::FindRoute(const glm::vec3 &start, const gl
 	filter.setAreaCost(8, 1.0f); //General Area
 	filter.setAreaCost(9, 0.1f); //Portal
 	filter.setAreaCost(10, 0.1f); //Prefer
+	filter.setAreaCost(AVOID_AREA, AVOID_COST); // (FindRouteAvoiding's, for the length of one route)
 
 	dtPolyRef start_ref;
 	dtPolyRef end_ref;

@@ -52,7 +52,9 @@ public:
 
 	// plans a route and starts walking; returns "" or why it can't. A walk stops at a zone line
 	// (Result::ZoneLine) without stepping in, unless through_zone_lines: then it walks into it.
-	std::string Start(const glm::vec3 &destination, bool through_zone_lines = false);
+	// through_zone_lines: into a zone line at the end (ZoneTo); avoid: round the mobs that would aggro us
+	// where there's a way (a journey always does: ZoneTo)
+	std::string Start(const glm::vec3 &destination, bool through_zone_lines = false, bool avoid = false);
 	void Stop(Result why);
 	// plan a route without walking (a walk under way carries on): its length, or -1 if there's
 	// no way there
@@ -97,6 +99,9 @@ private:
 	void Go(Client *me, const glm::vec3 &start); // m_path planned: stand up and start walking it
 	// fills m_path (and the lift plan) for a walk from start; false if there's no way there
 	bool PlanRoute(const glm::vec3 &start, const glm::vec3 &destination, bool through_zone_lines);
+	// the mobs near the way from `from` to `to` that would aggro us (hostile, not grey to us, able to see
+	// us): (x, y, z, their aggro radius and a margin), for the route to keep out of
+	std::vector<glm::vec4> Threats(const glm::vec3 &from, const glm::vec3 &to) const;
 	void SendUpdate(const glm::vec3 &pos, float heading, uint32 animation);
 	// a real client clicks closed doors it walks into; returns true while we wait for one to open
 	bool HandleDoors(uint64 now);
@@ -207,6 +212,7 @@ private:
 	// a partial route being walked in legs towards m_final
 	glm::vec3 m_final{0.0f};
 	bool      m_partial = false;
+	bool      m_avoid = false;            // this walk keeps round the mobs that would aggro us (Threats)
 	float     m_swim = 0.0f;          // how much of m_path SwimOnSurface made a swim
 	float     m_checked_swim = 0.0f;  // ... of the route the last Check planned, all its legs
 	int       m_legs    = 0;

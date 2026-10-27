@@ -19,7 +19,10 @@
 
 #include "zone/map.h"
 
+#include "glm/vec4.hpp"
+
 #include <list>
+#include <vector>
 
 class Client;
 class Seperator;
@@ -96,6 +99,10 @@ public:
 
 	virtual IPath FindRoute(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, int flags = PathingNotDisabled) = 0;
 	virtual IPath FindPath(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, const PathfinderOptions& opts) = 0;
+	// as FindRoute, keeping out of these circles (x, y, z, radius) where there's a way round: the mobs that
+	// would aggro a headless character on its way (its mover, travelling)
+	virtual IPath FindRouteAvoiding(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, int flags,
+		const std::vector<glm::vec4> &avoid) { return FindRoute(start, end, partial, stuck, flags); }
 	virtual glm::vec3 GetRandomLocation(const glm::vec3 &start, int flags = PathingNotDisabled) = 0;
 	// the height of the navmesh's floor at (at.x, at.y) within `dz` of at.z, if it has one there (false
 	// without a navmesh)

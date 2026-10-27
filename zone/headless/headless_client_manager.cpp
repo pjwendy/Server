@@ -62,6 +62,7 @@ namespace {
 	// the client takes a few seconds to memorise a spell (an approximation; it varies a little)
 	constexpr uint32 MEMORIZE_MS         = 3000;
 	constexpr uint32 LOOT_ITEM_MS        = 50;   // between a corpse's items (a corpse allows one per 10ms)
+	constexpr float  REZ_NEAR            = 100.0f; // a rez is taken when its corpse is this near us (it puts us there)
 
 	uint64 NowMs()
 	{
@@ -342,7 +343,7 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				return "";
 			}
 			session.zone_line_to = 0; // a walk of our own ends a ZoneTo
-			return session.mover->Start(glm::vec3(m.x(), m.y(), m.z()));
+			return session.mover->Start(glm::vec3(m.x(), m.y(), m.z()), false, m.avoid());
 		}
 		case eqheadless::Command::kStop: {
 			if (session.mover) {
@@ -988,6 +989,32 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 				memcpy(mouse->pBuffer, app->pBuffer, sizeof(ClientTarget_Struct));
 				it->second.stream->Inject(mouse);
 			}
+			return;
+		}
+		case OP_RezzRequest: {
+			// a rez offered: the client's half is the yes or no box. Yes when it's one of our own bots, or
+			// one of our group, and the corpse is here by us (summoned or dragged to us, or we're at it):
+			// accepting puts us at the corpse, and one where we died can be beside what killed us
+			Client *me = it->second.stream->GetClient();
+			if (!me || app->size < sizeof(Resurrect_Struct)) {
+				return;
+			}
+			auto rez = *reinterpret_cast<const Resurrect_Struct *>(app->pBuffer);
+			Mob *rezzer = entity_list.GetMob(rez.rezzer_name);
+			if (!rezzer) {
+				rezzer = entity_list.GetBotByBotName(rez.rezzer_name);
+			}
+			const bool ours = rezzer && ((rezzer->IsBot() && rezzer->CastToBot()->GetBotOwner() == me) ||
+										 (me->GetGroup() && me->GetGroup()->IsGroupMember(rezzer)));
+			const bool near = rez.zone_id == zone->GetZoneID() && rez.instance_id == zone->GetInstanceID() &&
+				glm::length(glm::vec2(rez.x - me->GetX(), rez.y - me->GetY())) <= REZ_NEAR;
+			rez.action = (ours && near) ? ResurrectionActions::Accept : ResurrectionActions::Decline;
+			LogHeadlessClient("[{}] rez from [{}] ([{}]) for [{}]: {}", me->GetCleanName(), rez.rezzer_name,
+				spells[rez.spellid].name, rez.corpse_name, rez.action == ResurrectionActions::Accept ? "accepted"
+				: !ours ? "declined (not ours)" : "declined (the corpse isn't here by us)");
+			auto answer = new EQApplicationPacket(OP_RezzAnswer, sizeof(Resurrect_Struct));
+			memcpy(answer->pBuffer, &rez, sizeof(Resurrect_Struct));
+			it->second.stream->Inject(answer);
 			return;
 		}
 		case OP_RequestClientZoneChange: {

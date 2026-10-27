@@ -87,7 +87,8 @@ message SitCommand    { bool sit = 1; }                // false stands up
 // same position updates a real client sends. Progress shows in Self; a MoveEvent reports the end.
 // plan_only: don't walk, just answer with a MoveEvent (plan_only set): ARRIVED and the route's
 // length if there's a way there, NO_PATH if not. A walk under way carries on.
-message MoveToCommand { float x = 1; float y = 2; float z = 3; bool plan_only = 4; }
+// avoid: keep round the mobs that would aggro us where there's a way (a ZoneTo always does): a corpse run
+message MoveToCommand { float x = 1; float y = 2; float z = 3; bool plan_only = 4; bool avoid = 5; }
 message StopCommand   {}
 // group invite, as /invite: a player, or an EQEmu bot you own (HeadlessClients:AllowBots /
 // AllowGroupWithPlayers). Empty name invites the current target.

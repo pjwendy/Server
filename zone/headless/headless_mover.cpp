@@ -119,6 +119,10 @@ namespace {
 	constexpr float  SWIM_FAR_MAX        = 800.0f;
 	constexpr float  SINK_MAX            = 400.0f;
 	constexpr float  SINK_WIDE           = 300.0f;
+	// a journey keeps round the mobs that would aggro us (Threats): those this far either side of the way,
+	// by their aggro radius and this much more
+	constexpr float  THREAT_REACH        = 300.0f;
+	constexpr float  THREAT_MARGIN       = 15.0f;
 
 	float Flat(const glm::vec3 &a, const glm::vec3 &b)
 	{
@@ -160,7 +164,9 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 	if (zone->HeadlessPathing()) {
 		bool partial = false;
 		bool stuck   = false;
-		auto route   = zone->HeadlessPathing()->FindRoute(start, destination, partial, stuck, MOVER_FLAGS);
+		const auto threats = m_avoid ? Threats(start, destination) : std::vector<glm::vec4>();
+		auto route   = threats.empty() ? zone->HeadlessPathing()->FindRoute(start, destination, partial, stuck, MOVER_FLAGS)
+			: zone->HeadlessPathing()->FindRouteAvoiding(start, destination, partial, stuck, MOVER_FLAGS, threats);
 		float direct = 0.0f;
 		const glm::vec3 *last = nullptr;
 		for (auto &node : route) {
@@ -865,7 +871,35 @@ float HeadlessMover::Check(const glm::vec3 &destination)
 	return length;
 }
 
-std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone_lines)
+std::vector<glm::vec4> HeadlessMover::Threats(const glm::vec3 &from, const glm::vec3 &to) const
+{
+	std::vector<glm::vec4> out;
+	Client *me = m_stream->GetClient();
+	if (!me) {
+		return out;
+	}
+	// (the way's surroundings: a route round the mobs can stray from the straight line, but not far)
+	const glm::vec2 a(from.x, from.y), b(to.x, to.y);
+	const float     reach = glm::length(b - a) / 2.0f + THREAT_REACH;
+	const glm::vec2 mid   = (a + b) / 2.0f;
+	for (const auto &[id, npc] : entity_list.GetNPCList()) {
+		if (!npc || npc->IsCorpse() || npc->GetHP() <= 0 || npc->GetOwner() || npc->GetAggroRange() <= 0.0f ||
+			glm::length(glm::vec2(npc->GetX(), npc->GetY()) - mid) > reach) {
+			continue;
+		}
+		// as the server's CheckWillAggro, ahead of time: hostile to us, not grey to us (the undead aggro
+		// anyway), and able to see us (invisible, it's a way through)
+		const FACTION_VALUE faction = me->GetReverseFactionCon(npc);
+		if ((faction != FACTION_SCOWLS && faction != FACTION_THREATENINGLY) || me->IsInvisible(npc) ||
+			(me->GetLevelCon(npc->GetLevel()) == ConsiderColor::Gray && npc->GetBodyType() != BodyType::Undead)) {
+			continue;
+		}
+		out.emplace_back(npc->GetX(), npc->GetY(), npc->GetZ(), npc->GetAggroRange() + THREAT_MARGIN);
+	}
+	return out;
+}
+
+std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone_lines, bool avoid)
 {
 	Client *me = m_stream->GetClient();
 	if (!me) {
@@ -882,6 +916,7 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 	m_cant_jump = false;
 	m_jumping   = SIZE_MAX;
 	m_through = through_zone_lines;
+	m_avoid   = through_zone_lines || avoid;
 	m_final   = destination;
 	m_legs    = 0;
 	if (!PlanRoute(start, destination, through_zone_lines)) {
@@ -921,6 +956,9 @@ std::string HeadlessMover::Start(const glm::vec3 &destination, bool through_zone
 		prev = p;
 	}
 
+	if (m_avoid) {
+		LogHeadlessClient("[{}] keeping round [{}] mobs that would aggro us", me->GetCleanName(), Threats(start, destination).size());
+	}
 	LogHeadlessClient(
 		"[{}] moving to [{:.1f}, {:.1f}, {:.1f}] via [{}] points ([{:.0f}] units), navmesh [{}], run speed [{}] = [{:.1f}] units/s",
 		me->GetCleanName(),
@@ -993,6 +1031,7 @@ std::string HeadlessMover::Surface()
 	m_jump_at.clear();
 	m_jumping     = SIZE_MAX;
 	m_through     = false;
+	m_avoid       = false;
 	m_final       = target;
 	m_legs        = 0;
 	m_partial     = false;

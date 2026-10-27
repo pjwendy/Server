@@ -31,6 +31,8 @@ public:
 	virtual ~PathfinderNavmesh();
 
 	virtual IPath FindRoute(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, int flags = PathingNotDisabled);
+	virtual IPath FindRouteAvoiding(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, int flags,
+		const std::vector<glm::vec4> &avoid);
 	virtual IPath FindPath(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, const PathfinderOptions& opts);
 	virtual glm::vec3 GetRandomLocation(const glm::vec3 &start, int flags = PathingNotDisabled);
 	virtual bool NavHeight(const glm::vec3 &at, float dz, float &z, int flags = PathingNotDisabled);
