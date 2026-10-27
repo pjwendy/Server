@@ -121,6 +121,12 @@ private:
 	static const std::vector<Swim> &Swims();
 	// m_path (planned from start) takes a swim link: its ends become the way through the water
 	void FollowSwims(const glm::vec3 &start);
+	// m_path (planned from start) swims on the surface, as a player does: its steps under water lifted till
+	// the head's out (not under a ceiling, nor through a bridge from the step before), down only at the end
+	// to a destination under water
+	void SwimOnSurface(const glm::vec3 &start);
+	// how far above p the water ends (false: not in water, or no surface within SURFACE_UP)
+	bool WaterTop(const glm::vec3 &p, float &top) const;
 	// the zone's jumps: a navmesh link up a ledge higher than a stair, or across a gap, that a player
 	// jumps (puppeteer's sweep adds them where nothing walks: maps/nav/<zone>.jumps.json)
 	struct Jump {

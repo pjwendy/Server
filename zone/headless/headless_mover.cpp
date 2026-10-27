@@ -208,6 +208,7 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 			if (progress && !cliff) {
 				m_partial = true; // walk it, then plan again from its end
 				FollowSwims(start);
+				SwimOnSurface(start);
 				if (TooLongUnder(start) || !MarkJumps(start)) {
 					m_path.clear();
 					m_jump_at.clear();
@@ -230,6 +231,7 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 		}
 		if (!via_lift) {
 			FollowSwims(start);
+			SwimOnSurface(start);
 			if (TooLongUnder(start) || !MarkJumps(start)) {
 				m_path.clear();
 				m_jump_at.clear();
@@ -427,6 +429,75 @@ void HeadlessMover::FollowSwims(const glm::vec3 &start)
 		prev = p;
 	}
 	m_path = std::move(out);
+}
+
+bool HeadlessMover::WaterTop(const glm::vec3 &p, float &top) const
+{
+	if (!zone || !zone->HasWaterMap() || !zone->watermap->InLiquid(p)) {
+		return false;
+	}
+	for (float up = 1.0f; up <= SURFACE_UP; up += 1.0f) {
+		if (!zone->watermap->InLiquid(p + glm::vec3(0.0f, 0.0f, up))) {
+			top = up;
+			return true;
+		}
+	}
+	return false;
+}
+
+void HeadlessMover::SwimOnSurface(const glm::vec3 &start)
+{
+	Client *me = m_stream->GetClient();
+	if (!me || !zone || !zone->HasWaterMap() || m_path.empty()) {
+		return;
+	}
+	// the navmesh lies on the bed, so a route through water walked the bottom with the head under (Lake
+	// Rathetear's way to South Karana drowned characters; five more came up for air mid-lake, far from any
+	// navmesh). A player swims on top unless what they're after is down there
+	const float head = me->GetSize() * HEAD_SHARE;
+	auto lifted = [&](const glm::vec3 &p, glm::vec3 &up) {
+		float top = 0.0f;
+		const glm::vec3 eye = p + glm::vec3(0.0f, 0.0f, head);
+		if (!WaterTop(eye, top)) {
+			return false; // (the head's out already)
+		}
+		up = glm::vec3(p.x, p.y, p.z + top + 1.0f);
+		return !zone->zonemap || zone->zonemap->CheckLoS(eye, up + glm::vec3(0.0f, 0.0f, head)); // (a flooded tunnel's roof)
+	};
+	// a link's ends stay put (a ladder out of the water, a pad, a jump: the steps are known by them)
+	auto link_end = [&](const glm::vec3 &p) {
+		for (const auto *links : {&Ladders(), &Teleports(), &Jumps()}) {
+			for (const auto &l : *links) {
+				if (glm::length(p - l.from) < SWIM_MATCH || glm::length(p - l.to) < SWIM_MATCH) {
+					return true;
+				}
+			}
+		}
+		return false;
+	};
+	std::vector<glm::vec3> out;
+	glm::vec3 prev = start;
+	size_t    lifts = 0;
+	for (size_t i = 0; i < m_path.size(); ++i) {
+		const glm::vec3 &p    = m_path[i];
+		// the destination: down to it at the end (a partial route's end isn't one: planned on from)
+		const bool       last = i + 1 == m_path.size() && !m_partial;
+		glm::vec3        up;
+		if (!link_end(p) && lifted(p, up) && (!zone->zonemap || zone->zonemap->CheckLoS(prev + glm::vec3(0.0f, 0.0f, head), up + glm::vec3(0.0f, 0.0f, head)))) {
+			out.push_back(up); // (the last too, then straight down to it)
+			++lifts;
+			if (!last) {
+				prev = up;
+				continue;
+			}
+		}
+		out.push_back(p);
+		prev = p;
+	}
+	if (lifts) {
+		LogHeadlessClient("[{}] swimming on the surface: [{}] of [{}] steps lifted out of the water", me->GetCleanName(), lifts, m_path.size());
+		m_path = std::move(out);
+	}
 }
 
 bool HeadlessMover::TooLongUnder(const glm::vec3 &start)
