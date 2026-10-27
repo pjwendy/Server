@@ -88,6 +88,7 @@ namespace {
 	constexpr int    AIR_FLOOR           = 10;      // maximum air: (Stamina - 30) x lungs / 100, at least this ...
 	constexpr int    LUNGS_DEFAULT       = 100;     // ... and at most the lungs: spell effect 246, else this
 	constexpr float  HEAD_SHARE          = 0.75f;   // the head is this share of the character's size above it
+	constexpr float  SURFACE_STEP        = 10.0f;   // a route through water looked at this often for the floor, to swim above it
 	constexpr float  SURFACE_UP          = 2000.0f; // a surface further up than this isn't one to swim to (Dagnor's Cauldron's lake is 350 deep)
 	// a route may keep the head under water for at most this share of a full breath at a stretch: the
 	// runner's breath watch (soldiers/breath.py) comes up at half, and a route it breaks off for air is
@@ -436,9 +437,11 @@ bool HeadlessMover::WaterTop(const glm::vec3 &p, float &top) const
 	if (!zone || !zone->HasWaterMap() || !zone->watermap->InLiquid(p)) {
 		return false;
 	}
-	for (float up = 1.0f; up <= SURFACE_UP; up += 1.0f) {
+	// (4 units at a time, then back to the unit: a route's every step through deep water asks)
+	for (float up = 4.0f; up <= SURFACE_UP + 4.0f; up += 4.0f) {
 		if (!zone->watermap->InLiquid(p + glm::vec3(0.0f, 0.0f, up))) {
-			top = up;
+			for (top = up - 3.0f; top < up && zone->watermap->InLiquid(p + glm::vec3(0.0f, 0.0f, top)); top += 1.0f) {
+			}
 			return true;
 		}
 	}
@@ -476,20 +479,38 @@ void HeadlessMover::SwimOnSurface(const glm::vec3 &start)
 		return false;
 	};
 	std::vector<glm::vec3> out;
-	glm::vec3 prev = start;
+	glm::vec3 prev = start;  // (the last step put out)
+	glm::vec3 from = start;  // (the route's last step)
 	size_t    lifts = 0;
+	auto take = [&](const glm::vec3 &q) {
+		glm::vec3 up;
+		if (lifted(q, up) && (!zone->zonemap || zone->zonemap->CheckLoS(prev + glm::vec3(0.0f, 0.0f, head), up + glm::vec3(0.0f, 0.0f, head)))) {
+			out.push_back(up);
+			prev = up;
+			++lifts;
+			return true;
+		}
+		return false;
+	};
 	for (size_t i = 0; i < m_path.size(); ++i) {
 		const glm::vec3 &p    = m_path[i];
 		// the destination: down to it at the end (a partial route's end isn't one: planned on from)
 		const bool       last = i + 1 == m_path.size() && !m_partial;
-		glm::vec3        up;
-		if (!link_end(p) && lifted(p, up) && (!zone->zonemap || zone->zonemap->CheckLoS(prev + glm::vec3(0.0f, 0.0f, head), up + glm::vec3(0.0f, 0.0f, head)))) {
-			out.push_back(up); // (the last too, then straight down to it)
-			++lifts;
-			if (!last) {
-				prev = up;
-				continue;
+		// a step's way between the route's corners, every SURFACE_STEP on the floor under it, as a player
+		// wades in till the water's over the head and swims from there (the route's corners alone: a bank,
+		// then the bed hundreds of units out, its line from the bank through the bank itself; Aldric's 5,000
+		// units over Lake Rathetear to the Rathe Mountains, refused as too deep)
+		if (!link_end(from) && !link_end(p)) {
+			const float len = glm::length(p - from);
+			const int   n   = static_cast<int>(std::ceil(len / SURFACE_STEP));
+			for (int k = 1; k < n; ++k) {
+				const glm::vec3 s = from + (p - from) * (static_cast<float>(k) / n);
+				take(glm::vec3(s.x, s.y, FloorBelow(glm::vec3(s.x, s.y, std::max(from.z, p.z)))));
 			}
+		}
+		from = p;
+		if (!link_end(p) && take(p) && !last) {
+			continue; // (the last lifted too: then straight down to it)
 		}
 		out.push_back(p);
 		prev = p;
