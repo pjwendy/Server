@@ -337,6 +337,7 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				move->set_z(m.z());
 				move->set_plan_only(true);
 				move->set_route_length(std::max(length, 0.0f));
+				move->set_swim_length(length >= 0.0f ? session.mover->CheckedSwim() : 0.0f);
 				SendFrame(session_id, frame);
 				return "";
 			}
@@ -689,6 +690,23 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			if (!best) {
 				return number ? fmt::format("{} has no zone line {} to {}", zone->GetShortName(), number, ShortName(zone_id))
 					: fmt::format("{} has no zone line to {}", zone->GetShortName(), ShortName(zone_id));
+			}
+
+			if (cmd.zone_to().plan_only()) {
+				// the walk it would take, without taking it (a walk under way carries on)
+				const glm::vec3 spot = ZonePointSpot(best, here);
+				const float length   = session.mover->Check(spot);
+				eqheadless::ServerFrame frame;
+				auto *move = frame.mutable_event()->mutable_move();
+				move->set_status(length >= 0.0f ? eqheadless::MOVE_ARRIVED : eqheadless::MOVE_NO_PATH);
+				move->set_x(spot.x);
+				move->set_y(spot.y);
+				move->set_z(spot.z);
+				move->set_plan_only(true);
+				move->set_route_length(std::max(length, 0.0f));
+				move->set_swim_length(length >= 0.0f ? session.mover->CheckedSwim() : 0.0f);
+				SendFrame(session_id, frame);
+				return "";
 			}
 
 			// end a walk that's under way first: its "stopped" must not be taken as this ZoneTo failing

@@ -450,6 +450,7 @@ bool HeadlessMover::WaterTop(const glm::vec3 &p, float &top) const
 
 void HeadlessMover::SwimOnSurface(const glm::vec3 &start)
 {
+	m_swim = 0.0f;
 	Client *me = m_stream->GetClient();
 	if (!me || !zone || !zone->HasWaterMap() || m_path.empty()) {
 		return;
@@ -482,11 +483,16 @@ void HeadlessMover::SwimOnSurface(const glm::vec3 &start)
 	glm::vec3 prev = start;  // (the last step put out)
 	glm::vec3 from = start;  // (the route's last step)
 	size_t    lifts = 0;
+	bool      afloat = false; // (the last step put out was a swim's)
 	auto take = [&](const glm::vec3 &q) {
 		glm::vec3 up;
 		if (lifted(q, up) && (!zone->zonemap || zone->zonemap->CheckLoS(prev + glm::vec3(0.0f, 0.0f, head), up + glm::vec3(0.0f, 0.0f, head)))) {
+			if (afloat) {
+				m_swim += glm::length(up - prev);
+			}
 			out.push_back(up);
-			prev = up;
+			prev   = up;
+			afloat = true;
 			++lifts;
 			return true;
 		}
@@ -513,7 +519,8 @@ void HeadlessMover::SwimOnSurface(const glm::vec3 &start)
 			continue; // (the last lifted too: then straight down to it)
 		}
 		out.push_back(p);
-		prev = p;
+		prev   = p;
+		afloat = false;
 	}
 	if (lifts) {
 		LogHeadlessClient("[{}] swimming on the surface: [{}] of [{}] steps lifted out of the water", me->GetCleanName(), lifts, m_path.size());
@@ -829,10 +836,12 @@ float HeadlessMover::Check(const glm::vec3 &destination)
 	float     length = 0.0f;
 	glm::vec3 from   = start;
 	bool      there  = false;
+	m_checked_swim   = 0.0f;
 	for (int leg = 0; leg <= PARTIAL_LEGS; ++leg) {
 		if (!PlanRoute(from, destination, false) || m_path.empty()) {
 			break;
 		}
+		m_checked_swim += m_swim;
 		glm::vec3 prev = from;
 		for (const auto &p : m_path) {
 			length += glm::length(p - prev);

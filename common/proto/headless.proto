@@ -107,7 +107,9 @@ message LootCommand     { uint32 corpse_id = 1; }                   // loot ever
 // player does; a ZoneEvent follows. Plain MoveTo stops at zone lines instead.
 // walk through a zone line to a neighbouring zone: the one with the shortest walk from here, or the
 // zone point `number` (zone_points.number: a zone with several entrances to another)
-message ZoneToCommand   { string zone = 1; uint32 number = 2; }
+// plan_only: don't walk, just answer with a MoveEvent (plan_only set), as MoveTo's: the walk to the zone
+// line it would take, its route_length and swim_length (the levitating soldier asks before a leg)
+message ZoneToCommand   { string zone = 1; uint32 number = 2; bool plan_only = 3; }
 // merchants, as the client's merchant window: open (stand within ~20 units), buy and sell, close.
 // Opening sends a MerchantEvent with what it sells.
 message MerchantCommand { uint32 npc_id = 1; bool open = 2; }
@@ -224,6 +226,7 @@ message MoveEvent {
   bool       plan_only    = 5; // the answer to a plan_only MoveTo: x, y, z are where we asked about
   float      route_length = 6; // plan_only and ARRIVED: how far the walk would be
   repeated NavNote nav    = 7; // where this walk found the navmesh wanting (for fixing the zone's navmesh)
+  float      swim_length  = 8; // plan_only and ARRIVED: how much of the walk is a swim (on the surface)
 }
 
 // a walk that failed because of the navmesh, or went round a gap in it

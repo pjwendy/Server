@@ -57,6 +57,8 @@ public:
 	// plan a route without walking (a walk under way carries on): its length, or -1 if there's
 	// no way there
 	float Check(const glm::vec3 &destination);
+	// how much of the route the last Check planned is a swim (on the surface)
+	float CheckedSwim() const { return m_checked_swim; }
 	// under water: swim straight up to the surface (a client's player does when short of air); "" or why not
 	std::string Surface();
 	// turn on the spot to face a point, as the client's /face; returns "" or why it can't
@@ -205,6 +207,8 @@ private:
 	// a partial route being walked in legs towards m_final
 	glm::vec3 m_final{0.0f};
 	bool      m_partial = false;
+	float     m_swim = 0.0f;          // how much of m_path SwimOnSurface made a swim
+	float     m_checked_swim = 0.0f;  // ... of the route the last Check planned, all its legs
 	int       m_legs    = 0;
 
 	enum class LiftPhase { None, ToButton, Calling, Boarding, Riding, Off };
