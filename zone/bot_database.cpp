@@ -1177,7 +1177,9 @@ bool BotDatabase::SaveItemBySlot(Bot* b, const uint32 slot_id, const EQ::ItemIns
 
 bool BotDatabase::DeleteItemBySlot(const uint32 bot_id, const uint32 slot_id)
 {
-	if (!bot_id || slot_id > EQ::invslot::EQUIPMENT_END) {
+	// (pack slots too, as SaveItemBySlot takes them: without, a bag slot's save added a row beside the old
+	// one and an item taken out stayed in the table; 336 rows too many on eq1, 532 on eq3)
+	if (!bot_id || (slot_id > EQ::invslot::EQUIPMENT_END && !Bot::IsPackSlot(static_cast<int16>(slot_id)))) {
 		return false;
 	}
 
