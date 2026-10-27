@@ -1254,6 +1254,10 @@ void HeadlessMover::Tick()
 		m_progress_ms  = now;
 	}
 	else if (now - m_progress_ms > STUCK_MS) {
+		const glm::vec3 &to = m_path[std::min(m_next, m_path.size() - 1)];
+		LogHeadlessClient("[{}] stuck at [{:.1f}, {:.1f}, {:.1f}] (server [{:.1f}, {:.1f}, {:.1f}]), on step [{}] of [{}] to [{:.1f}, {:.1f}, {:.1f}], in water [{}], speed [{:.1f}]",
+			me->GetCleanName(), pos.x, pos.y, pos.z, me->GetX(), me->GetY(), me->GetZ(), m_next, m_path.size(), to.x, to.y, to.z,
+			zone->HasWaterMap() && zone->watermap->InLiquid(pos) ? "yes" : "no", RunSpeed(me));
 		if (RunSpeed(me) > 0.0f) {
 			Note("stuck", pos, m_path[m_next]); // walking into something the navmesh says isn't there
 		}
