@@ -21,6 +21,7 @@ namespace {
 	constexpr unsigned char AVOID_AREA = 12;     // an area no navmesh has: the polygons a route keeps out of
 	constexpr float         AVOID_COST = 20.0f;  // ... each unit through one costs this many round
 	constexpr float         AVOID_DZ   = 40.0f;  // ... within this of the mob's height
+	constexpr float         HEADLESS_LAVA_COST = 50.0f; // lava (navbuild marks the headless navmesh's): next to never
 }
 
 #include "common/compression.h"
@@ -173,7 +174,7 @@ IPathfinder::IPath PathfinderNavmesh::FindRoute(const glm::vec3 &start, const gl
 	filter.setExcludeFlags((flags & PathingHeadless) ? 0 : PathingHeadless); // (a headless link also carries Normal or Water)
 	filter.setAreaCost(0, 1.0f); //Normal
 	filter.setAreaCost(1, 3.0f); //Water
-	filter.setAreaCost(2, 5.0f); //Lava
+	filter.setAreaCost(2, (flags & PathingHeadless) ? HEADLESS_LAVA_COST : 5.0f); //Lava (a headless character never takes it lightly)
 	filter.setAreaCost(4, 1.0f); //PvP
 	filter.setAreaCost(5, 2.0f); //Slime
 	filter.setAreaCost(6, 2.0f); //Ice
@@ -443,7 +444,7 @@ glm::vec3 PathfinderNavmesh::GetRandomLocation(const glm::vec3 &start, int flags
 	filter.setExcludeFlags((flags & PathingHeadless) ? 0 : PathingHeadless); // (a headless link also carries Normal or Water)
 	filter.setAreaCost(0, 1.0f); //Normal
 	filter.setAreaCost(1, 3.0f); //Water
-	filter.setAreaCost(2, 5.0f); //Lava
+	filter.setAreaCost(2, (flags & PathingHeadless) ? HEADLESS_LAVA_COST : 5.0f); //Lava (a headless character never takes it lightly)
 	filter.setAreaCost(4, 1.0f); //PvP
 	filter.setAreaCost(5, 2.0f); //Slime
 	filter.setAreaCost(6, 2.0f); //Ice
