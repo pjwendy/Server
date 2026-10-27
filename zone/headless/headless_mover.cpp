@@ -109,6 +109,12 @@ namespace {
 	constexpr float  OFF_MESH_MAX        = 60.0f;
 	constexpr float  SWIM_OUT_DZ         = 12.0f; // in water, a navmesh floor this far up or down from us is a way out
 	constexpr int    OFF_MESH_DIRECTIONS = 12;
+	// on a lake's surface the shore can be far off (Lake Rathetear: five characters afloat 130-235 units
+	// out, the navmesh on the bed 130 under them): swim this far for it, a spot every this many units
+	// around each ring; one who breathes water sinks to the bed instead when no shore is in reach
+	constexpr float  SWIM_OUT_MAX        = 250.0f;
+	constexpr float  SWIM_OUT_SPACING    = 20.0f;
+	constexpr float  SINK_MAX            = 400.0f;
 
 	float Flat(const glm::vec3 &a, const glm::vec3 &b)
 	{
@@ -508,9 +514,12 @@ bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &desti
 	// there instead: a spot on the navmesh near our height with nothing in the way (Maahoud, in North
 	// Qeynos's canal, the bank 8 units off: walked from the canal's bed, the bank was a wall)
 	const bool wet = zone->HasWaterMap() && zone->watermap->InLiquid(pos);
-	for (float r = OFF_MESH_STEP; r <= OFF_MESH_MAX; r += OFF_MESH_STEP) {
-		for (int i = 0; i < OFF_MESH_DIRECTIONS; ++i) {
-			const float a = i * 6.2831853f / OFF_MESH_DIRECTIONS;
+	const char *who = m_stream->GetClient() ? m_stream->GetClient()->GetCleanName() : "?";
+	for (float r = OFF_MESH_STEP; r <= (wet ? SWIM_OUT_MAX : OFF_MESH_MAX); r += OFF_MESH_STEP) {
+		const int directions = wet ? std::max(OFF_MESH_DIRECTIONS, static_cast<int>(std::ceil(6.2831853f * r / SWIM_OUT_SPACING)))
+								   : OFF_MESH_DIRECTIONS;
+		for (int i = 0; i < directions; ++i) {
+			const float a = i * 6.2831853f / directions;
 			glm::vec3 spot(pos.x + r * std::cos(a), pos.y + r * std::sin(a), pos.z + STRAIGHT_RISE);
 			if (wet) {
 				float h = 0.0f;
@@ -528,15 +537,41 @@ bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &desti
 					 !PlanRoute(spot, destination, m_through)) {
 				continue;
 			}
-			LogHeadlessClient("[{}] off the navmesh at [{:.0f}, {:.0f}, {:.0f}]: stepping [{:.0f}] units onto it",
-				m_stream->GetClient() ? m_stream->GetClient()->GetCleanName() : "?", pos.x, pos.y, pos.z, r);
+			LogHeadlessClient("[{}] off the navmesh at [{:.0f}, {:.0f}, {:.0f}]: {} [{:.0f}] units onto it",
+				who, pos.x, pos.y, pos.z, wet ? "swimming" : "stepping", r);
 			Note("off_mesh", pos, spot);
 			m_path.insert(m_path.begin(), spot);
 			m_jump_at.insert(m_jump_at.begin(), false);
 			return true;
 		}
 	}
-	return false;
+	// no shore in reach: sink to the navmesh under us, if the way down is clear and air doesn't matter
+	Client *me = m_stream->GetClient();
+	if (!wet || !me || !(EffectTotal(me, SpellEffect::WaterBreathing) > 0 ||
+						 std::find(std::begin(BREATHE_ANYWAY), std::end(BREATHE_ANYWAY), zone->GetZoneID()) != std::end(BREATHE_ANYWAY))) {
+		return false;
+	}
+	// (NavHeight answers the floor nearest the middle of its window: slices from the top down, so the
+	// first floor found is the one under us, not a tunnel under the bed)
+	constexpr float SLICE = 25.0f;
+	float bed = pos.z;
+	for (float mid = pos.z - SLICE; mid > pos.z - SINK_MAX && bed >= pos.z; mid -= 2 * SLICE) {
+		if (!zone->HeadlessPathing()->NavHeight(glm::vec3(pos.x, pos.y, mid), SLICE, bed, MOVER_FLAGS)) {
+			bed = pos.z;
+		}
+	}
+	if (bed >= pos.z ||
+		(zone->zonemap && !zone->zonemap->CheckLoS(pos, glm::vec3(pos.x, pos.y, bed + BODY_HEIGHT))) ||
+		!PlanRoute(glm::vec3(pos.x, pos.y, bed), destination, m_through)) {
+		return false;
+	}
+	LogHeadlessClient("[{}] afloat off the navmesh at [{:.0f}, {:.0f}, {:.0f}], no shore in [{:.0f}] units: sinking [{:.0f}] units to the bed",
+		who, pos.x, pos.y, pos.z, SWIM_OUT_MAX, pos.z - bed);
+	const glm::vec3 down(pos.x, pos.y, bed);
+	Note("off_mesh", pos, down);
+	m_path.insert(m_path.begin(), down);
+	m_jump_at.insert(m_jump_at.begin(), false);
+	return true;
 }
 
 void HeadlessMover::Note(const char *kind, const glm::vec3 &at, const glm::vec3 &to, const glm::vec3 &closest)
