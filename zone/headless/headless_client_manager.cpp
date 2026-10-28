@@ -35,6 +35,7 @@
 #include "zone/corpse.h"
 #include "zone/entity.h"
 #include "zone/groups.h"
+#include "zone/object.h"
 #include "zone/headless/null_stream.h"
 #include "zone/worldserver.h"
 #include "zone/zone.h"
@@ -399,6 +400,35 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			cd->player_id = me->GetID();
 			stream->Inject(app);
 			LogHeadlessClient("[{}] clicking door [{}] ({})", me->GetCleanName(), door->GetDoorID(), door->GetDoorName());
+			return "";
+		}
+		case eqheadless::Command::kClickObject: {
+			// as the client clicks a world container (OP_ClickObject): the server opens it for us if we're within reach
+			const uint32 id = cmd.click_object().object_id();
+			Object *object = entity_list.GetObjectByDBID(id);
+			if (!object) {
+				return fmt::format("no object {} in this zone", id);
+			}
+			auto app = new EQApplicationPacket(OP_ClickObject, sizeof(ClickObject_Struct));
+			auto *co = reinterpret_cast<ClickObject_Struct *>(app->pBuffer);
+			co->drop_id   = object->GetID();
+			co->player_id = me->GetID();
+			stream->Inject(app);
+			LogHeadlessClient("[{}] clicking object [{}] ({})", me->GetCleanName(), id, object->GetModelName());
+			return "";
+		}
+		case eqheadless::Command::kCloseObject: {
+			stream->Inject(new EQApplicationPacket(OP_ClickObjectAction, 0)); // (what the client sends to close one)
+			return "";
+		}
+		case eqheadless::Command::kCombine: {
+			// the client's Combine button: OP_TradeSkillCombine for the container (the server does the recipe, the skill roll and the items)
+			auto app = new EQApplicationPacket(OP_TradeSkillCombine, sizeof(NewCombine_Struct));
+			auto *nc = reinterpret_cast<NewCombine_Struct *>(app->pBuffer);
+			nc->container_slot      = static_cast<int16>(cmd.combine().container_slot());
+			nc->guildtribute_slot   = 0;
+			stream->Inject(app);
+			LogHeadlessClient("[{}] combining in slot [{}]", me->GetCleanName(), cmd.combine().container_slot());
 			return "";
 		}
 		case eqheadless::Command::kAaExp: {
