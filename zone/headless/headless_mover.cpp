@@ -108,7 +108,10 @@ namespace {
 	constexpr float  NAV_FLOOR_DZ        = 4.0f;  // ... within this of the route's height
 	constexpr float  OFF_MESH_STEP       = 10.0f;
 	constexpr float  OFF_MESH_MAX        = 60.0f;
-	constexpr float  SWIM_OUT_DZ         = 12.0f; // in water, a navmesh floor this far up or down from us is a way out
+	constexpr float  SWIM_OUT_DZ         = 12.0f; // in water, a navmesh floor this far up or down from us is a way out ...
+	// ... and further up: a swimmer under the navmesh (Iceclad's ocean: 33 under a floor it never reached) comes up to it, which takes
+	// no air that the surface doesn't give back
+	constexpr float  SWIM_UP_MAX         = 150.0f;
 	constexpr int    OFF_MESH_DIRECTIONS = 12;
 	// on a lake's surface the shore can be far off (Lake Rathetear: five characters afloat 160-700 units
 	// out, the navmesh on the bed 190 under them, with gaps): rings this far, a spot every this many
@@ -631,7 +634,10 @@ bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &desti
 			glm::vec3 spot(pos.x + r * std::cos(a), pos.y + r * std::sin(a), pos.z + STRAIGHT_RISE);
 			if (wet) {
 				float h = 0.0f;
-				if (!zone->HeadlessPathing()->NavHeight(glm::vec3(spot.x, spot.y, pos.z), SWIM_OUT_DZ, h, MOVER_FLAGS) ||
+				// a floor from SWIM_OUT_DZ below us to SWIM_UP_MAX above (the window's middle and half-height)
+				if (!zone->HeadlessPathing()->NavHeight(glm::vec3(spot.x, spot.y, pos.z + (SWIM_UP_MAX - SWIM_OUT_DZ) / 2),
+														(SWIM_UP_MAX + SWIM_OUT_DZ) / 2, h, MOVER_FLAGS) ||
+					h < pos.z - SWIM_OUT_DZ || h > pos.z + SWIM_UP_MAX ||
 					// (at the bank's height: from under the water a line up to it hits the canal's own wall,
 					// where a swimmer comes up first, then over the edge)
 					(zone->zonemap && !zone->zonemap->CheckLoS(glm::vec3(pos.x, pos.y, std::max(pos.z, h) + BODY_HEIGHT),
@@ -664,13 +670,16 @@ bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &desti
 								 std::find(std::begin(BREATHE_ANYWAY), std::end(BREATHE_ANYWAY), zone->GetZoneID()) != std::end(BREATHE_ANYWAY));
 	struct Box { glm::vec3 at, half; const char *what; };
 	const Box boxes[] = {
-		{pos, glm::vec3(SWIM_FAR_MAX, SWIM_FAR_MAX, SWIM_OUT_DZ), "the shore"},
+		{pos + glm::vec3(0.0f, 0.0f, (SWIM_UP_MAX - SWIM_OUT_DZ) / 2), glm::vec3(SWIM_FAR_MAX, SWIM_FAR_MAX, (SWIM_UP_MAX + SWIM_OUT_DZ) / 2), "the shore"},
 		{pos - glm::vec3(0.0f, 0.0f, SINK_MAX / 2), glm::vec3(SINK_WIDE, SINK_WIDE, SINK_MAX / 2), "the bed"},
 	};
 	for (const auto &b : boxes) {
 		glm::vec3 to;
-		if ((&b != &boxes[0] && !breathes) || !zone->HeadlessPathing()->NavNearest(b.at, b.half, to, MOVER_FLAGS) ||
+		if (!zone->HeadlessPathing()->NavNearest(b.at, b.half, to, MOVER_FLAGS) ||
 			(&b != &boxes[0] && to.z >= pos.z) ||
+			// the bed is down there: for one who can't breathe water only if the swim there fits in the breath (as a route's
+			// stretch under water does: UNDER_SHARE of the air at our speed), else it needs water breathing (an item or spell)
+			(&b != &boxes[0] && !breathes && (!me || glm::length(to - pos) > MaxAir(me) * UNDER_SHARE * RunSpeed(me))) ||
 			(zone->zonemap && !zone->zonemap->CheckLoS(pos, to + glm::vec3(0.0f, 0.0f, BODY_HEIGHT))) ||
 			!PlanRoute(to, destination, m_through)) {
 			continue;
