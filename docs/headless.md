@@ -165,6 +165,7 @@ Category `HeadlessClients`:
 | `corpse_drag` | `/corpse drag` a corpse (yours, or one you're consented to) by spawn id: it follows you as you move, within the server's drag distance; or drop it (`drop`, all with no id). |
 | `aa_exp` | The share of experience going to AA, as the client's slider (0 turns it off, 100 stops levelling). |
 | `click_door` | Click a door in this zone by its door id (0-255), as the client does: a teleporter or a Plane of Knowledge book zones you where it goes. The server checks the distance, keys and locks. |
+| `click_object`, `close_object`, `combine` | Tradeskills: open a world container (oven, forge, loom, brew barrel, kiln, pottery wheel...) by its object table id, as a click does (the server checks the distance); the items go in with `move_item` to its slots (4000 on); `combine` is the Combine button, for the world container (slot 1000) or an inventory bag's slot. The server does the recipe and the skill roll. |
 | `invite`, `disband` | Invite to the group (the character's own bots, or real players if allowed), leave it. |
 
 `CommandResult.ok` means the server accepted the command. What happens next (the spell lands, the
