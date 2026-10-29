@@ -241,6 +241,13 @@ message MoveEvent {
   float      route_length = 6; // plan_only and ARRIVED: how far the walk would be
   repeated NavNote nav    = 7; // where this walk found the navmesh wanting (for fixing the zone's navmesh)
   float      swim_length  = 8; // plan_only and ARRIVED: how much of the walk is a swim (on the surface)
+  repeated Pt path        = 9; // plan_only and ARRIVED: the walk's points, in order (at most about 120: the 3D view's mini map draws the route)
+}
+
+message Pt {
+  float x = 1;
+  float y = 2;
+  float z = 3;
 }
 
 // a walk that failed because of the navmesh, or went round a gap in it

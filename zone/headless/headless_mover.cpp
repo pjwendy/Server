@@ -852,11 +852,13 @@ float HeadlessMover::Check(const glm::vec3 &destination)
 	glm::vec3 from   = start;
 	bool      there  = false;
 	m_checked_swim   = 0.0f;
+	m_checked_path.clear();
 	for (int leg = 0; leg <= PARTIAL_LEGS; ++leg) {
 		if (!PlanRoute(from, destination, false) || m_path.empty()) {
 			break;
 		}
 		m_checked_swim += m_swim;
+		m_checked_path.insert(m_checked_path.end(), m_path.begin(), m_path.end());
 		glm::vec3 prev = from;
 		for (const auto &p : m_path) {
 			length += glm::length(p - prev);

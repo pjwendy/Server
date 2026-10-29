@@ -61,6 +61,7 @@ public:
 	float Check(const glm::vec3 &destination);
 	// how much of the route the last Check planned is a swim (on the surface)
 	float CheckedSwim() const { return m_checked_swim; }
+	const std::vector<glm::vec3> &CheckedPath() const { return m_checked_path; }
 	// under water: swim straight up to the surface (a client's player does when short of air); "" or why not
 	std::string Surface();
 	// turn on the spot to face a point, as the client's /face; returns "" or why it can't
@@ -214,6 +215,7 @@ private:
 	bool      m_partial = false;
 	bool      m_avoid = false;            // this walk keeps round the mobs that would aggro us (Threats)
 	float     m_swim = 0.0f;          // how much of m_path SwimOnSurface made a swim
+	std::vector<glm::vec3> m_checked_path;  // the points of the route the last Check planned, all its legs
 	float     m_checked_swim = 0.0f;  // ... of the route the last Check planned, all its legs
 	int       m_legs    = 0;
 

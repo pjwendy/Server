@@ -340,6 +340,16 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				move->set_plan_only(true);
 				move->set_route_length(std::max(length, 0.0f));
 				move->set_swim_length(length >= 0.0f ? session.mover->CheckedSwim() : 0.0f);
+				if (length >= 0.0f) {
+					const auto &pts = session.mover->CheckedPath();
+					const size_t step = std::max<size_t>(1, (pts.size() + 119) / 120);
+					for (size_t i = 0; i < pts.size(); i += step) {
+						auto *pt = move->add_path();
+						pt->set_x(pts[i].x);
+						pt->set_y(pts[i].y);
+						pt->set_z(pts[i].z);
+					}
+				}
 				SendFrame(session_id, frame);
 				return "";
 			}
@@ -736,6 +746,16 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				move->set_plan_only(true);
 				move->set_route_length(std::max(length, 0.0f));
 				move->set_swim_length(length >= 0.0f ? session.mover->CheckedSwim() : 0.0f);
+				if (length >= 0.0f) {
+					const auto &pts = session.mover->CheckedPath();
+					const size_t step = std::max<size_t>(1, (pts.size() + 119) / 120);
+					for (size_t i = 0; i < pts.size(); i += step) {
+						auto *pt = move->add_path();
+						pt->set_x(pts[i].x);
+						pt->set_y(pts[i].y);
+						pt->set_z(pts[i].z);
+					}
+				}
 				SendFrame(session_id, frame);
 				return "";
 			}
