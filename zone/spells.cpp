@@ -270,6 +270,11 @@ bool Mob::CastSpell(uint16 spell_id, uint16 target_id, CastingSlot slot,
 		StopNavigation();
 	}
 
+	// a bot stops to cast, as a player does (it was only NPCs that did): it cast on the run beside its leader. Bards sing on the move.
+	if (IsBot() && IsMoving() && cast_time > 0 && GetClass() != Class::Bard) {
+		StopMoving();
+	}
+
 	if(resist_adjust)
 	{
 		return(DoCastSpell(spell_id, target_id, slot, cast_time, mana_cost, oSpellWillFinish, item_slot, timer, timer_duration, *resist_adjust, aa_id));
