@@ -94,6 +94,7 @@ void bot_command_pull(Client *c, const Seperator *sep)
 			case Class::Bard:
 			case Class::Ranger:
 				bot_iter->SetPullFlag();
+				bot_iter->RaidGroupSay(fmt::format("Pulling {}.", target_mob->GetCleanName()).c_str());
 
 				return;
 			default:
@@ -126,6 +127,7 @@ void bot_command_pull(Client *c, const Seperator *sep)
 
 	if (bot_puller) {
 		bot_puller->SetPullFlag();
+		bot_puller->RaidGroupSay(fmt::format("Pulling {}.", target_mob->GetCleanName()).c_str());
 	}
 
 	helper_no_available_bots(c, bot_puller);

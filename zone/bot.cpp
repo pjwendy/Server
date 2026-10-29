@@ -3574,6 +3574,7 @@ bool Bot::PullingFlagChecks(Client* bot_owner) {
 		return false;
 	}
 	else if (GetTarget()->GetHateList().size()) {
+		RaidGroupSay(fmt::format("Incoming {}!", GetTarget()->GetCleanName()).c_str());
 		SetPullingFlag(false);
 		SetReturningFlag();
 
