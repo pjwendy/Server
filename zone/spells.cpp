@@ -306,6 +306,11 @@ bool Mob::DoCastSpell(uint16 spell_id, uint16 target_id, CastingSlot slot,
 		return(false);
 	}
 
+	// a bot stops to cast whichever way it got here (Bot::CastSpell does not go through Mob::CastSpell): bards sing on the move
+	if (IsBot() && IsMoving() && cast_time > 0 && GetClass() != Class::Bard) {
+		StopMoving();
+	}
+
 	const SPDat_Spell_Struct &spell = spells[spell_id];
 
 	LogSpells("DoCastSpell called for spell [{}] ([{}]) on entity [{}], slot [{}], time [{}], mana [{}], from item [{}]",
