@@ -1105,6 +1105,10 @@ public:
 	bool TryFeignForDrag();
 	// ^feign: lie feigned (a monk by skill, a necromancer or shadowknight by spell) to be forgotten by what is after us, and stand again when nothing near is
 	bool StartFeignHold();
+	bool TryFightFeign();
+	void PetBackOffCheck();
+	bool m_pet_backed = false;        // the pet was called off (near death) and is kept off till it has mended
+	uint32 m_fight_check_at = 0;      // when the fight checks (feign, the pet) last ran
 	bool FeignHoldProcess();
 	void DragAggroScan();
 

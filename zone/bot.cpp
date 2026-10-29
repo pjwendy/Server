@@ -2188,6 +2188,15 @@ void Bot::AI_Process()
 		return;
 	}
 
+	// a feigning class taking a beating lies down (the group carries on), and a pet near death is called off
+	if (Timer::GetCurrentTime() - m_fight_check_at >= 1000) {
+		m_fight_check_at = Timer::GetCurrentTime();
+		if (TryFightFeign()) {
+			return;
+		}
+		PetBackOffCheck();
+	}
+
 	// sent for a corpse: that's all we do till it's back (or we gave up)
 	if (m_drag_corpse_id && CorpseDragProcess(bot_owner)) {
 		return;
@@ -2276,7 +2285,7 @@ void Bot::AI_Process()
 		}
 
 		// This causes conflicts with default pet handler (bounces between targets)
-		if (NOT_PULLING_BOT && NOT_RETURNING_BOT && HasControllablePet(BotAnimEmpathy::Attack)) {
+		if (NOT_PULLING_BOT && NOT_RETURNING_BOT && !m_pet_backed && HasControllablePet(BotAnimEmpathy::Attack)) {
 			// We don't add to hate list here because it's assumed to already be on the list
 			GetPet()->SetTarget(tar);
 		}
@@ -3084,6 +3093,44 @@ bool Bot::StartFeignHold()
 	}
 	m_feign_hold = true;
 	return true;
+}
+
+// in an ordinary fight: a monk or necromancer under 35% health (a shadowknight under 18%) with the mob it fights turned on it feigns death, which makes
+// the mob forget it, and gets up when nothing near is after it any more; the group's healer and tank go on
+bool Bot::TryFightFeign()
+{
+	const auto cls = GetClass();
+	if (cls != Class::Monk && cls != Class::Necromancer && cls != Class::ShadowKnight) {
+		return false;
+	}
+	if (m_feign_hold || GetFeigned() || IsCasting() || !GetTarget() || !GetTarget()->IsNPC()) {
+		return false;
+	}
+	if (GetHPRatio() >= (cls == Class::ShadowKnight ? 18.0f : 35.0f) || GetTarget()->GetTarget() != this) {
+		return false;
+	}
+	return StartFeignHold();
+}
+
+// a pet under a quarter of its health is called off (hate wiped, told to follow) and kept off till it is above two thirds, which the owner's healing or
+// a rest brings; the owner's own fight code sends it in again after that
+void Bot::PetBackOffCheck()
+{
+	if (!HasPet()) {
+		m_pet_backed = false;
+		return;
+	}
+	Mob *pet = GetPet();
+	if (!m_pet_backed) {
+		if (pet->GetHPRatio() < 25.0f && pet->GetTarget()) {
+			pet->WipeHateList();
+			pet->SetTarget(nullptr);
+			pet->SetPetOrder(PetOrder::Follow);
+			m_pet_backed = true;
+		}
+	} else if (pet->GetHPRatio() >= 66.0f) {
+		m_pet_backed = false;
+	}
 }
 
 // true while lying feigned (or the feign is on its way) and the AI's turn is taken
