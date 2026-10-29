@@ -611,11 +611,19 @@ float Mob::CalculateDistance(Mob* mob) {
 
 void Mob::WalkTo(float x, float y, float z)
 {
+	// a bot that is casting stands still (bards sing on the move): nothing that moves it may start it going again
+	if (IsBot() && IsCasting() && GetClass() != Class::Bard) {
+		return;
+	}
 	mMovementManager->NavigateTo(this, x, y, z, MovementWalking);
 }
 
 void Mob::RunTo(float x, float y, float z)
 {
+	// a bot that is casting stands still (bards sing on the move): nothing that moves it may start it going again
+	if (IsBot() && IsCasting() && GetClass() != Class::Bard) {
+		return;
+	}
 	mMovementManager->NavigateTo(this, x, y, z, MovementRunning);
 }
 
