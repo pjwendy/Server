@@ -381,6 +381,7 @@ message Spawn {
   bool      headless   = 13; // a headless (AI-controlled) character
   uint32    target_id  = 14; // who it has targeted (for NPCs in combat: who it's hitting), 0 if none
   uint32    mana_pct   = 15; // 0-100 (0 for spawns without mana)
+  uint32    gender     = 16; // 0 male, 1 female, 2 neutral (the model to draw)
 }
 
 message Self {
@@ -424,6 +425,7 @@ message Self {
                                    // some zones spawn differently by night: spawn_events)
   uint32          air        = 38; // seconds of air left under water (full whenever you can breathe)
   uint32          max_air    = 39; // seconds of air at most (Stamina, Lung Capacity); at none, you drown
+  uint32          gender     = 40; // 0 male, 1 female, 2 neutral
 }
 
 message Gem {

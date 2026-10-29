@@ -1664,6 +1664,7 @@ void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob)
 	out->set_level(mob->GetLevel());
 	out->set_class_id(mob->GetClass());
 	out->set_race_id(mob->GetRace());
+	out->set_gender(mob->GetGender());
 	out->set_x(mob->GetX());
 	out->set_y(mob->GetY());
 	out->set_z(mob->GetZ());
@@ -1701,6 +1702,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 	self->set_level(me->GetLevel());
 	self->set_class_id(me->GetClass());
 	self->set_race_id(me->GetRace());
+	self->set_gender(me->GetGender());
 	self->set_hp(me->GetHP());
 	self->set_max_hp(me->GetMaxHP());
 	self->set_mana(me->GetMana());
