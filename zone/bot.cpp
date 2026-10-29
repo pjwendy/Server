@@ -2183,6 +2183,11 @@ void Bot::AI_Process()
 		return;
 	}
 
+	// told to feign (^feign): lying still till nothing near is after us
+	if (m_feign_hold && FeignHoldProcess()) {
+		return;
+	}
+
 	// sent for a corpse: that's all we do till it's back (or we gave up)
 	if (m_drag_corpse_id && CorpseDragProcess(bot_owner)) {
 		return;
@@ -3060,6 +3065,45 @@ bool Bot::TryFeignForDrag()
 	m_drag_feign_reuse_timer.Start(spells[spell].recast_time);
 	m_drag_feign_timer.Start(DRAG_FEIGN_MS + spells[spell].cast_time);
 	return true;
+}
+
+// ^feign: the puller (or anyone) with too much on it lies feigned: the same feign as the corpse drag's, held till the time is up and nothing near is after us
+bool Bot::StartFeignHold()
+{
+	if (GetFeigned() || IsCasting()) {
+		return false;
+	}
+	if (!TryFeignForDrag()) {
+		return false;
+	}
+	m_feign_hold = true;
+	return true;
+}
+
+// true while lying feigned (or the feign is on its way) and the AI's turn is taken
+bool Bot::FeignHoldProcess()
+{
+	if (IsCasting()) {
+		return true;
+	}
+	if (!GetFeigned()) {
+		m_feign_hold = false;  // (the feign failed, or something stood us up)
+		return false;
+	}
+	if (m_drag_feign_timer.Enabled() && !m_drag_feign_timer.Check(false)) {
+		return true;
+	}
+	for (auto &close_mob : GetCloseMobList(DRAG_SAFE)) {
+		Mob *mob = close_mob.second;
+		if (mob && mob->IsNPC() && mob->CheckAggro(this)) {
+			return true;
+		}
+	}
+	SetFeigned(false);
+	SetAppearance(eaStanding);
+	m_drag_feign_timer.Disable();
+	m_feign_hold = false;
+	return false;
 }
 
 // true while the fetch takes the AI's turn

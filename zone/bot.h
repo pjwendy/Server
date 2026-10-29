@@ -1103,6 +1103,9 @@ public:
 	uint16 GetDragCorpseID() const { return m_drag_corpse_id; }
 	bool CorpseDragProcess(Client* owner);
 	bool TryFeignForDrag();
+	// ^feign: lie feigned (a monk by skill, a necromancer or shadowknight by spell) to be forgotten by what is after us, and stand again when nothing near is
+	bool StartFeignHold();
+	bool FeignHoldProcess();
 	void DragAggroScan();
 
 	// Try Combat Methods
@@ -1186,6 +1189,7 @@ private:
 	Timer  m_drag_give_up_timer;      // no corpse back by then: let it go
 	Timer  m_drag_feign_timer;        // lying feigned at least this long
 	Timer  m_drag_feign_reuse_timer;  // a feign's reuse (the skill's, or the spell's recast)
+	bool   m_feign_hold = false;      // ^feign: lying feigned till it is safe
 	Timer  m_drag_scan_timer;         // the proximity scan a player's client runs
 
 	Timer m_combat_jitter_timer;
