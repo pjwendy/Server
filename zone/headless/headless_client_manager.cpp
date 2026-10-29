@@ -1459,6 +1459,37 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			}
 			break;
 		}
+		case OP_Damage: {
+			// the client makes its own combat text from this packet ("You slash a rat for 12 points of damage"); a headless one makes it here, for what its
+			// group does and takes (not the spells', which arrive as messages)
+			if (app->size < sizeof(CombatDamage_Struct)) {
+				return;
+			}
+			auto *cd = reinterpret_cast<const CombatDamage_Struct *>(app->pBuffer);
+			Client *me = it->second.stream->GetClient();
+			Mob *src = entity_list.GetMob(cd->source), *tgt = entity_list.GetMob(cd->target);
+			if (!me || !src || !tgt || cd->type == 231) {
+				return;
+			}
+			auto ours = [&](Mob *m) {
+				Mob *o = m->GetOwnerOrSelf();
+				return o == me || (me->GetGroup() && me->GetGroup()->IsGroupMember(o)) || (o->IsBot() && o->CastToBot()->GetBotOwner() == me);
+			};
+			if (!ours(src) && !ours(tgt)) {
+				return;
+			}
+			static const char *verbs[] = {"slashes", "crushes", "pierces", "bashes", "hits", "hits", "hits", "pierces", "kicks", "bashes", "hits", "hits", "hits", "hits", "hits"};
+			const int32 dmg = static_cast<int32>(cd->damage);
+			const char *a = src->GetCleanName(), *b = tgt->GetCleanName();
+			auto *msg = frame.mutable_event()->mutable_message();
+			msg->set_type(src->GetOwnerOrSelf() == me || ours(src) ? 279 : 280);
+			if (dmg > 0) {
+				msg->set_text(fmt::format("{} {} {} for {} points of damage.", a, cd->type < 15 ? verbs[cd->type] : "hits", b, dmg));
+			} else {
+				msg->set_text(fmt::format("{} tries to hit {}, but misses!", a, b));
+			}
+			break;
+		}
 		case OP_SimpleMessage: {
 			if (app->size < sizeof(SimpleMessage_Struct)) {
 				return;

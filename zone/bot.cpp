@@ -2549,6 +2549,12 @@ bool Bot::TryNonCombatMovementChecks(Client* bot_owner, const Mob* follow_mob) {
 
 bool Bot::TryIdleChecks(float fm_distance) {
 
+	// nothing is started while the owner is on the move, bards aside: the group is travelling, and a buff begun on the run is a walk stopped for it
+	Client *idle_owner = GetBotOwner() ? GetBotOwner()->CastToClient() : nullptr;
+	if (GetClass() != Class::Bard && idle_owner && idle_owner->IsMoving()) {
+		return false;
+	}
+
 	if (
 		(
 			(NOT_GUARDING && fm_distance <= GetFollowDistance()) ||
