@@ -382,6 +382,8 @@ message Spawn {
   uint32    target_id  = 14; // who it has targeted (for NPCs in combat: who it's hitting), 0 if none
   uint32    mana_pct   = 15; // 0-100 (0 for spawns without mana)
   uint32    gender     = 16; // 0 male, 1 female, 2 neutral (the model to draw)
+  uint32    primary    = 17; // the model of what it holds in its primary hand (IT<n>; for an NPC its d_melee_texture1), 0 if none
+  uint32    secondary  = 18; // ... and in its secondary
 }
 
 message Self {

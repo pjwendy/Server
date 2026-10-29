@@ -1665,6 +1665,8 @@ void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob)
 	out->set_class_id(mob->GetClass());
 	out->set_race_id(mob->GetRace());
 	out->set_gender(mob->GetGender());
+	out->set_primary(mob->GetEquipmentMaterial(EQ::textures::weaponPrimary));
+	out->set_secondary(mob->GetEquipmentMaterial(EQ::textures::weaponSecondary));
 	out->set_x(mob->GetX());
 	out->set_y(mob->GetY());
 	out->set_z(mob->GetZ());
