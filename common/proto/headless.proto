@@ -154,6 +154,7 @@ message CorpseDragCommand { uint32 corpse_id = 1; bool drop = 2; } // /corpse dr
 // MoveItem (to its slots, EQ::invslot::WORLD_BEGIN on) and Combine does the rest, as the client's Combine button does
 message ClickObjectCommand { uint32 object_id = 1; } // open a world container by its object table id (the server checks the distance), as a click on it
 message CloseObjectCommand {}                        // close the container opened
+message BuyAaCommand       { uint32 rank_id = 1; } // buy one rank of an alternate advancement ability with a point, as the client's AA window does (aa_ranks.id: the rank bought, one at a time); refused with why when it can't be bought
 message CombineCommand     { int32 container_slot = 1; } // combine what is in a container: an inventory bag's slot, or 1000 (SLOT_TRADESKILL_EXPERIMENT_COMBINE) for the world container opened; the answer is chat (the skill-ups and the product land in the inventory)
 
 message Command {
@@ -193,6 +194,7 @@ message Command {
     ClickObjectCommand    click_object    = 33;
     CloseObjectCommand    close_object    = 34;
     CombineCommand        combine         = 35;
+    BuyAaCommand          buy_aa          = 36;
   }
 }
 

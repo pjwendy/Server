@@ -441,6 +441,23 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			LogHeadlessClient("[{}] combining in slot [{}]", me->GetCleanName(), cmd.combine().container_slot());
 			return "";
 		}
+		case eqheadless::Command::kBuyAa: {
+			// as the client's AA window: a point spent on the next rank of an ability (the server checks the level, the price, the prerequisites)
+			const int rank_id = static_cast<int>(cmd.buy_aa().rank_id());
+			auto *rank = zone->GetAlternateAdvancementRank(rank_id);
+			if (!rank || !rank->base_ability) {
+				return fmt::format("no AA rank {}", rank_id);
+			}
+			if (me->GetAAPoints() < static_cast<uint32>(rank->cost)) {
+				return fmt::format("{} costs {} points, we have {}", rank->base_ability->name, rank->cost, me->GetAAPoints());
+			}
+			if (!me->CanPurchaseAlternateAdvancementRank(rank, true, true)) {
+				return fmt::format("can't buy rank {} of {} now (level, prerequisites, or already bought)", rank_id, rank->base_ability->name);
+			}
+			me->PurchaseAlternateAdvancementRank(rank_id);
+			LogHeadlessClient("[{}] bought AA rank [{}] ({})", me->GetCleanName(), rank_id, rank->base_ability->name);
+			return "";
+		}
 		case eqheadless::Command::kAaExp: {
 			// as the client's AA experience slider: OP_AAAction, set (or 0: off)
 			const uint32 pct = std::min<uint32>(cmd.aa_exp().percent(), 100);
