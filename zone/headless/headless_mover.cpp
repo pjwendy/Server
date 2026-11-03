@@ -169,6 +169,17 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 		bool partial = false;
 		bool stuck   = false;
 		auto threats = m_avoid ? Threats(start, destination) : std::vector<glm::vec4>();
+		// a way round the mobs refused as too deep: past them instead, the boats still kept round (a fight beats no way at all.
+		// Ilvara's walk from Iceclad's succor point to the Eastern Wastes, 3 November: the straight way swims on top, the one round
+		// the mobs went through the deep water, and the walk failed with no way, a petition back to the same spot)
+		const size_t mobs = threats.size(); // (before the boats go in)
+		auto past_them = [&]() {
+			Client *me = m_stream->GetClient();
+			LogHeadlessClient("[{}] the way round [{}] mobs is too deep: past them instead", me ? me->GetCleanName() : "?", mobs);
+			m_avoid    = false;
+			m_too_deep = false;
+			return PlanRoute(start, destination, through_zone_lines);
+		};
 		// the boats' boxes: round them whatever the walk (a circle round each: FindRouteAvoiding leaves one round the start or the destination)
 		for (const auto &b : Boats()) {
 			if (b.to != m_boat_to) {
@@ -231,7 +242,7 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 					m_path.clear();
 					m_jump_at.clear();
 					m_partial = false;
-					return false;
+					return m_too_deep && mobs ? past_them() : false;
 				}
 				return true;
 			}
@@ -253,7 +264,7 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 			if (TooLongUnder(start) || !MarkJumps(start)) {
 				m_path.clear();
 				m_jump_at.clear();
-				return false;
+				return m_too_deep && mobs ? past_them() : false;
 			}
 		}
 	}
