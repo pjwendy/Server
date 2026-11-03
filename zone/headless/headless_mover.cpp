@@ -94,7 +94,7 @@ namespace {
 	// runner's breath watch (soldiers/breath.py) comes up at half, and a route it breaks off for air is
 	// planned again the same way. The navmesh has lake floors, and Dagnor's Cauldron's is 350 down: walks
 	// along it drowned five characters a night
-	constexpr float  UNDER_SHARE         = 0.5f;   // (was 0.4: Iceclad's succor point is in the sea, and the way out keeps the head under for 328 units against 325: refused as too deep, 24 times a day)
+	constexpr float  UNDER_SHARE         = 0.45f;  // (was 0.4, the breath watch comes up at 0.5: Iceclad's succor point is in the sea, and the way out keeps the head under for 328 units against 325: refused as too deep, 24 times a day)
 	constexpr float  UNDER_STEP          = 4.0f;    // the route looked at this often for water over the head
 	// zones where being under water doesn't take air (the client's list: Erudin, the Southern Desert of Ro,
 	// Kerra Isle), and two with an air supply of their own (the Sleeper's Tomb, the Catacombs of Dranik)
