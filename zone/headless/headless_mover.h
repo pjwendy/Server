@@ -55,6 +55,16 @@ public:
 	// through_zone_lines: into a zone line at the end (ZoneTo); avoid: round the mobs that would aggro us
 	// where there's a way (a journey always does: ZoneTo)
 	std::string Start(const glm::vec3 &destination, bool through_zone_lines = false, bool avoid = false);
+	// the zone's boats: an invisible NPC by a dock that moves whoever walks into its box to another zone (a quest script's proximity and
+	// movepc: Oasis of Marr's to Timorous Deep). A route keeps round every box but the one to the zone of this walk (AllowBoatTo; 0: none), so a
+	// walk across the zone doesn't board one. From puppeteer's tools/build_boats.py, maps/nav/boats.json (every zone's, read once)
+	struct Boat {
+		float     x1 = 0, x2 = 0, y1 = 0, y2 = 0, z = 0; // the box, and the height of the NPC that makes it
+		uint32    to = 0;                                // the zone it moves you to
+		glm::vec3 land{0.0f};
+	};
+	static const std::vector<Boat> &Boats();
+	void AllowBoatTo(uint32 zone_id) { m_boat_to = zone_id; }
 	void Stop(Result why);
 	// plan a route without walking (a walk under way carries on): its length, or -1 if there's
 	// no way there
@@ -214,6 +224,7 @@ private:
 	glm::vec3 m_final{0.0f};
 	bool      m_partial = false;
 	bool      m_avoid = false;            // this walk keeps round the mobs that would aggro us (Threats)
+	uint32    m_boat_to = 0;              // the zone whose boat this walk is for: its box isn't kept round (Boats)
 	float     m_swim = 0.0f;          // how much of m_path SwimOnSurface made a swim
 	std::vector<glm::vec3> m_checked_path;  // the points of the route the last Check planned, all its legs
 	float     m_checked_swim = 0.0f;  // ... of the route the last Check planned, all its legs

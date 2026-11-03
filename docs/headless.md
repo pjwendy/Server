@@ -159,7 +159,7 @@ Set it with `INSERT INTO rule_values (ruleset_id, rule_name, rule_value) VALUES 
 | `chat` | Say, tell, group, guild, raid, shout, OOC, auction. A say starting with `#` is a GM command (if the account's status allows it). One starting with `^` is an EQEmu bot command (if `AllowBots`). |
 | `sit` | Sit or stand. |
 | `move_to`, `stop` | Walk to a point on the navmesh, or only plan the walk (`plan_only`: the route's length and its points, up to about 120, or no route). A walk by a sitting character is refused until it has stood up (send `sit` first). |
-| `zone_to` | Walk to the zone line for a neighbouring zone and through it. |
+| `zone_to` | Walk to the zone line for a neighbouring zone and through it; or, where no zone line has a walk, to a **boat** to that zone (see below). |
 | `cast`, `stop_cast`, `memorize`, `scribe` | Cast from a gem, interrupt, memorise a spell, scribe a scroll into the book. |
 | `consider` | `/consider` a spawn: its con colour and faction standing. |
 | `loot` | Loot a corpse (everything the character may take). |
@@ -296,3 +296,10 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Boats
+
+Some crossings are no zone line: an invisible NPC by a dock has a quest script (`quest::set_proximity` and `quest::movepc` in `EVENT_ENTER`) that moves whoever walks into its box to another zone (Oasis of Marr's `#_#_2` to Timorous Deep; Timorous's to Firiona Vie, Oasis and Overthere; Iceclad and Northern Ro's; Erudin's to Erud's Crossing). Neither `zone_points` nor the water maps know them, and a headless walk planned straight through one boarded it without meaning to (five characters ended in Timorous Deep in a week).
+
+`maps/nav/boats.json` (puppeteer's `tools/build_boats.py` reads the scripts and the spawn points) lists them: the zone, the box, the zone it moves you to and where. The mover keeps round every box (a circle round it) except the one a `zone_to` is for; a `zone_to` to a zone with no zone line walks to the middle of the box of the nearest boat to it, and the script does the rest (no zone change request is made). A walk of your own (`move_to`) never enters one when there is a way round.
+

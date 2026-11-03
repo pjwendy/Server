@@ -364,6 +364,8 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				return "";
 			}
 			session.zone_line_to = 0; // a walk of our own ends a ZoneTo
+			session.mover->AllowBoatTo(0);
+			session.zone_line_boat = false;
 			return session.mover->Start(glm::vec3(m.x(), m.y(), m.z()), false, m.avoid());
 		}
 		case eqheadless::Command::kStop: {
@@ -752,18 +754,35 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 					best_walk = walk;
 				}
 			}
-			if (!best) {
+			// a boat to the zone (a proximity box that moves you there: HeadlessMover::Boats), when no zone line has a walk
+			const HeadlessMover::Boat *boat = nullptr;
+			float boat_walk = 0.0f;
+			if (!best && !number) {
+				for (const auto &b : HeadlessMover::Boats()) {
+					if (b.to != zone_id) {
+						continue;
+					}
+					const glm::vec3 spot((b.x1 + b.x2) / 2.0f, (b.y1 + b.y2) / 2.0f, b.z);
+					const float walk = session.mover->Check(spot);
+					if (walk >= 0.0f && (!boat || walk < boat_walk)) {
+						boat      = &b;
+						boat_walk = walk;
+					}
+				}
+			}
+			if (!best && !boat) {
 				best = nearest;
 			}
-			if (!best) {
+			if (!best && !boat) {
 				return number ? fmt::format("{} has no zone line {} to {}", zone->GetShortName(), number, ShortName(zone_id))
 					: fmt::format("{} has no zone line to {}", zone->GetShortName(), ShortName(zone_id));
 			}
 
+			const glm::vec3 boat_spot = boat ? glm::vec3((boat->x1 + boat->x2) / 2.0f, (boat->y1 + boat->y2) / 2.0f, boat->z) : glm::vec3(0.0f);
 			if (cmd.zone_to().plan_only()) {
 				// the walk it would take, without taking it (a walk under way carries on)
-				const glm::vec3 spot = ZonePointSpot(best, here);
-				const float length   = session.mover->Check(spot);
+				const glm::vec3 spot = boat ? boat_spot : ZonePointSpot(best, here);
+				const float length   = boat ? boat_walk : session.mover->Check(spot);
 				eqheadless::ServerFrame frame;
 				auto *move = frame.mutable_event()->mutable_move();
 				move->set_status(length >= 0.0f ? eqheadless::MOVE_ARRIVED : eqheadless::MOVE_NO_PATH);
@@ -792,8 +811,13 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				session.zone_line_to = 0;
 				session.mover->Stop(HeadlessMover::Result::Stopped);
 			}
-			session.zone_line_to = zone_id;
-			const std::string error = session.mover->Start(ZonePointSpot(best, here), true);
+			session.zone_line_to   = zone_id;
+			session.zone_line_boat = boat != nullptr;
+			session.mover->AllowBoatTo(boat ? zone_id : 0);
+			if (boat) {
+				LogHeadlessClient("[{}] walking into the boat to [{}] at [{:.0f}, {:.0f}, {:.0f}]", me->GetCleanName(), ShortName(zone_id), boat_spot.x, boat_spot.y, boat_spot.z);
+			}
+			const std::string error = session.mover->Start(boat ? boat_spot : ZonePointSpot(best, here), true);
 			if (!error.empty()) {
 				session.zone_line_to = 0;
 			}
@@ -1619,7 +1643,13 @@ void HeadlessClientManager::ReportSpawned(const std::string &session_id, uint32 
 
 			// ZoneTo: we're at (or in) the zone line; ask to go through it, as the client does
 			if (s != m_sessions.end() && s->second.zone_line_to) {
-				if (result == HeadlessMover::Result::ZoneLine || result == HeadlessMover::Result::Arrived) {
+				if (s->second.zone_line_boat) {
+					// a boat's box: the quest script moves us, as we step in; there's no zone line to ask for
+					if (result != HeadlessMover::Result::Arrived && result != HeadlessMover::Result::ZoneLine) {
+						SendZoneEvent(session_id, eqheadless::ZONE_REFUSED, s->second.zone_line_to, "couldn't reach the boat");
+					}
+				}
+				else if (result == HeadlessMover::Result::ZoneLine || result == HeadlessMover::Result::Arrived) {
 					RequestZoneLine(session_id, s->second, where);
 				}
 				else {

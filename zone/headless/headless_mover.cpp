@@ -126,6 +126,7 @@ namespace {
 	// by their aggro radius and this much more
 	constexpr float  THREAT_REACH        = 300.0f;
 	constexpr float  THREAT_MARGIN       = 15.0f;
+	constexpr float  BOAT_MARGIN         = 12.0f;   // round a boat's box this far past its corners
 
 	float Flat(const glm::vec3 &a, const glm::vec3 &b)
 	{
@@ -167,7 +168,14 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 	if (zone->HeadlessPathing()) {
 		bool partial = false;
 		bool stuck   = false;
-		const auto threats = m_avoid ? Threats(start, destination) : std::vector<glm::vec4>();
+		auto threats = m_avoid ? Threats(start, destination) : std::vector<glm::vec4>();
+		// the boats' boxes: round them whatever the walk (a circle round each: FindRouteAvoiding leaves one round the start or the destination)
+		for (const auto &b : Boats()) {
+			if (b.to != m_boat_to) {
+				const float cx = (b.x1 + b.x2) / 2.0f, cy = (b.y1 + b.y2) / 2.0f;
+				threats.emplace_back(cx, cy, b.z, std::hypot((b.x2 - b.x1) / 2.0f, (b.y2 - b.y1) / 2.0f) + BOAT_MARGIN);
+			}
+		}
 		auto route   = threats.empty() ? zone->HeadlessPathing()->FindRoute(start, destination, partial, stuck, MOVER_FLAGS)
 			: zone->HeadlessPathing()->FindRouteAvoiding(start, destination, partial, stuck, MOVER_FLAGS, threats);
 		float direct = 0.0f;
@@ -256,6 +264,51 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 		m_jump_at.assign(m_path.size(), false); // (a lift's route, or no navmesh: no jumps on it)
 	}
 	return true;
+}
+
+const std::vector<HeadlessMover::Boat> &HeadlessMover::Boats()
+{
+	// the zone's: the file has every zone's, and doesn't change while the zone is up
+	static std::vector<Boat> cached;
+	static std::string       cached_zone;
+	const std::string name = zone->GetShortName();
+	if (name == cached_zone) {
+		return cached;
+	}
+	cached.clear();
+	cached_zone = name;
+	std::ifstream in(fmt::format("{}/maps/nav/boats.json", PathManager::Instance()->GetServerPath()));
+	if (!in) {
+		return cached;
+	}
+	try {
+		const auto j = nlohmann::json::parse(in);
+		for (const auto &b : j.value("boats", nlohmann::json::array())) {
+			if (b.at("zone").get<std::string>() != name) {
+				continue;
+			}
+			Boat boat;
+			const auto &box = b.at("box");
+			boat.x1   = box.at(0).get<float>();
+			boat.x2   = box.at(1).get<float>();
+			boat.y1   = box.at(2).get<float>();
+			boat.y2   = box.at(3).get<float>();
+			boat.z    = b.at("at").at(2).get<float>();
+			boat.to   = ZoneID(b.at("to").get<std::string>().c_str());
+			const auto &land = b.at("land");
+			boat.land = glm::vec3(land.at(0).get<float>(), land.at(1).get<float>(), land.at(2).get<float>());
+			if (boat.to) {
+				cached.push_back(boat);
+			}
+		}
+		if (!cached.empty()) {
+			LogHeadlessClient("[{}] [{}] boats kept round (walk into one only to ride it)", name, cached.size());
+		}
+	}
+	catch (const std::exception &e) {
+		LogError("[{}] can't read its boats: {}", name, e.what());
+	}
+	return cached;
 }
 
 const std::vector<HeadlessMover::Swim> &HeadlessMover::Swims()

@@ -93,6 +93,7 @@ private:
 		uint32                                   zone_to     = 0;
 		uint32                                   instance_to = 0;
 		uint32                                   zone_line_to = 0; // ZoneTo: the zone whose line we're walking to
+		bool                                     zone_line_boat = false; // ... and it's a boat's box (HeadlessMover::Boats), not a zone line
 		// casting and memorising, as the client tracks them
 		std::array<uint64, 12>                   gem_ready_ms{};   // per gem: refreshing until
 		uint64                                   mem_until_ms = 0; // memorising until
