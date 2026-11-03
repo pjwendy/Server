@@ -624,7 +624,7 @@ bool HeadlessMover::TooLongUnder(const glm::vec3 &start)
 			return false;
 		}
 	}
-	const float speed = RunSpeed(me);
+	const float speed = AirSpeed(me);
 	if (speed <= 0.0f || EffectTotal(me, SpellEffect::WaterBreathing) > 0) {
 		return false;
 	}
@@ -755,7 +755,7 @@ bool HeadlessMover::StepOntoNavmesh(const glm::vec3 &pos, const glm::vec3 &desti
 			(&b != &boxes[0] && to.z >= pos.z) ||
 			// the bed is down there: for one who can't breathe water only if the swim there fits in the breath (as a route's
 			// stretch under water does: UNDER_SHARE of the air at our speed), else it needs water breathing (an item or spell)
-			(&b != &boxes[0] && !breathes && (!me || glm::length(to - pos) > MaxAir(me) * UNDER_SHARE * RunSpeed(me))) ||
+			(&b != &boxes[0] && !breathes && (!me || glm::length(to - pos) > MaxAir(me) * UNDER_SHARE * AirSpeed(me))) ||
 			(zone->zonemap && !zone->zonemap->CheckLoS(pos, to + glm::vec3(0.0f, 0.0f, BODY_HEIGHT))) ||
 			!PlanRoute(to, destination, m_through)) {
 			continue;
@@ -1166,6 +1166,14 @@ std::string HeadlessMover::Face(const glm::vec3 &point)
 float HeadlessMover::RunSpeed(const Mob *me)
 {
 	return me->GetRunspeed() * SPEED_TO_UNITS;
+}
+
+// a stretch under water is planned at the speed we're sure to keep the whole way: not over the unbuffed run. Spirit of Wolf
+// (40 against 28) let Ilvara plan Iceclad's eastern sea, 755 units under against 752; it wore off, and at 16 units a second
+// the same stretch took half as long again: up for air with 35 seconds left, where no navmesh is in reach, a petition (E-165)
+float HeadlessMover::AirSpeed(const Mob *me)
+{
+	return std::min(me->GetRunspeed(), me->GetBaseRunspeed()) * SPEED_TO_UNITS;
 }
 
 void HeadlessMover::Place(const glm::vec3 &pos, float heading)

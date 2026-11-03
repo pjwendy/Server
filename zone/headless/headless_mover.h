@@ -92,6 +92,7 @@ public:
 	const std::vector<NavNote> &Notes() const { return m_notes; }
 	// how fast a walk goes for this character now, in units per second (0 when rooted, stunned or mezzed)
 	static float RunSpeed(const Mob *me);
+	static float AirSpeed(const Mob *me); // the speed a stretch under water is planned at (no buff that can wear off on the way)
 	// breath, as the client keeps it (RoF2's eqgame.exe, read with Ghidra: the breath routine runs once a
 	// second): air goes down a second at a time while the head is under water, unless something lets the
 	// character breathe there (spell effect 14), and is back to full the moment it can breathe; at none
