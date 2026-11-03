@@ -213,6 +213,23 @@ namespace {
 		return cached;
 	}
 
+	// where to walk for a boat: the navmesh inside its box nearest the box's middle (the proximity has no height: any floor in
+	// the box moves you), a little in from the edges. The middle at the NPC's height was walked to before, and it's rarely on the
+	// navmesh (Overthere's NPC is 140 above the floor there, Timorous's docks are open water): no walk, so "overthere has no
+	// zone line to timorous", and Grakk, Selka, Sylthra and Velthrin stranded in Timorous Deep all evening on 3 November
+	constexpr float BOAT_INSIDE = 5.0f;   // in from the box's edges
+	constexpr float BOAT_DEPTH  = 400.0f; // up or down from the NPC's height
+	glm::vec3 BoatSpot(const HeadlessMover::Boat &b)
+	{
+		const glm::vec3 middle((b.x1 + b.x2) / 2.0f, (b.y1 + b.y2) / 2.0f, b.z);
+		const glm::vec3 half(std::max(1.0f, (b.x2 - b.x1) / 2.0f - BOAT_INSIDE), std::max(1.0f, (b.y2 - b.y1) / 2.0f - BOAT_INSIDE), BOAT_DEPTH);
+		glm::vec3 on;
+		if (zone->HeadlessPathing() && zone->HeadlessPathing()->NavNearest(middle, half, on, PathingNotDisabled | PathingHeadless)) {
+			return on;
+		}
+		return middle;
+	}
+
 	glm::vec3 ZonePointSpot(const ZonePoint *zp, const glm::vec3 &from)
 	{
 		const auto &spots = ZoneLineSpots();
@@ -762,7 +779,7 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 					if (b.to != zone_id) {
 						continue;
 					}
-					const glm::vec3 spot((b.x1 + b.x2) / 2.0f, (b.y1 + b.y2) / 2.0f, b.z);
+					const glm::vec3 spot = BoatSpot(b);
 					const float walk = session.mover->Check(spot);
 					if (walk >= 0.0f && (!boat || walk < boat_walk)) {
 						boat      = &b;
@@ -778,7 +795,7 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 					: fmt::format("{} has no zone line to {}", zone->GetShortName(), ShortName(zone_id));
 			}
 
-			const glm::vec3 boat_spot = boat ? glm::vec3((boat->x1 + boat->x2) / 2.0f, (boat->y1 + boat->y2) / 2.0f, boat->z) : glm::vec3(0.0f);
+			const glm::vec3 boat_spot = boat ? BoatSpot(*boat) : glm::vec3(0.0f);
 			if (cmd.zone_to().plan_only()) {
 				// the walk it would take, without taking it (a walk under way carries on)
 				const glm::vec3 spot = boat ? boat_spot : ZonePointSpot(best, here);
