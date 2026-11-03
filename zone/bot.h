@@ -476,6 +476,8 @@ public:
 	bool GetPauseAI() const { return _pauseAI; }
 	void SetPauseAI(bool pause_flag) { _pauseAI = pause_flag; }
 	bool IsCommandedSpell() const { return _commandedSpell; }
+	// Bots:StrategicCombat (the fork): a mezzed or rooted mob the group has parked isn't hit by a spell that would break it while anything else is on the hate list
+	bool SparesParkedTarget(uint16 spell_id, Mob* tar);
 	void SetCommandedSpell(bool value) { _commandedSpell = value;  }
 	bool IsPullingSpell() const { return _pullingSpell; }
 	void SetPullingSpell(bool value) { _pullingSpell = value; }

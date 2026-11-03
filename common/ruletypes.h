@@ -768,6 +768,7 @@ RULE_CATEGORY_END()
 
 RULE_CATEGORY(Bots)
 RULE_BOOL(Bots, Enabled, false, "Enable of disable bot functionality, default is false")
+RULE_BOOL(Bots, StrategicCombat, false, "Bots fight as a coordinated group does (fork): they spare what the group has parked, a mezzed or rooted mob, from the spells that would break it (a nuke on a rooted mob, any damage on a mezzed one, an area spell that would hit one) while anything else is still fighting. Default false: the stock bot AI")
 RULE_INT(Bots, BotExpansionSettings, 16383, "Sets the expansion settings for bot use. Defaults to all expansions enabled up to TSS")
 RULE_BOOL(Bots, AllowCamelCaseNames, false, "Allows the use of 'MyBot' type names")
 RULE_BOOL(Bots, AllowBotEquipAnyRaceGear, false, "Allows Bots to wear Equipment even if their race is not valid")

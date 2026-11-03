@@ -12691,7 +12691,53 @@ bool Bot::HasRequiredLoSForPositioning(Mob* tar) {
 		return false;
 	}
 
+	if (RuleB(Bots, StrategicCombat) && !IsCommandedSpell() && tar && SparesParkedTarget(spell_id, tar)) {
+		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} on {}: it is parked and the group is still fighting.'", GetCleanName(), GetSpellName(spell_id), tar->GetCleanName());
+		return false;
+	}
+
 	return true;
+}
+
+// A mob the group has parked (mezzed, or rooted) and a spell that would wake it: any damage breaks a mez; on a root, only a direct spell does (a DoT's
+// ticks don't: Mob::Damage, TryRootFadeByDamage). It is spared only while something else is on the owner's (or this bot's) hate list that isn't parked
+// itself: the last mob left is fought as any is.
+bool Bot::SparesParkedTarget(uint16 spell_id, Mob* tar)
+{
+	if (!tar || !tar->IsNPC() || !IsValidSpell(spell_id) || !IsDetrimentalSpell(spell_id)) {
+		return false;
+	}
+
+	const bool mezzed = tar->IsMezzed();
+	const bool rooted = tar->IsRooted();
+	if (!mezzed && !rooted) {
+		return false;
+	}
+
+	bool breaks = false;
+	if (mezzed) {
+		breaks = SpellBreaksMez(spell_id);
+	}
+	else {
+		// direct damage (an instant HP effect): a cast spell that isn't a buff tick
+		breaks = IsDamageSpell(spell_id) && spells[spell_id].buff_duration == 0;
+	}
+	if (!breaks) {
+		return false;
+	}
+
+	Mob* owner = GetBotOwner();
+	for (auto &close_mob : m_close_mobs) {
+		Mob* m = close_mob.second;
+		if (!m || m == tar || !m->IsNPC() || m->GetHP() <= 0 || m->IsMezzed() || m->IsRooted()) {
+			continue;
+		}
+		if (m->CastToNPC()->IsOnHatelist(this) || (owner && m->CastToNPC()->IsOnHatelist(owner))) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 bool Bot::HasValidAETarget(Bot* caster, uint16 spell_id, uint16 spell_type, Mob* tar) {
@@ -12756,6 +12802,17 @@ bool Bot::HasValidAETarget(Bot* caster, uint16 spell_id, uint16 spell_type, Mob*
 				!m->CastToNPC()->IsOnHatelist(caster->GetOwner())
 			)
 		) {
+			continue;
+		}
+
+		if (RuleB(Bots, StrategicCombat) && !caster->IsCommandedSpell() && caster->SparesParkedTarget(spell_id, m)) {
+			// an area spell that would hit a parked mob breaks its mez or root: not cast at all
+			const bool hit = IsPBAESpell(spell_id)
+				? spell_ae_range >= Distance(caster->GetPosition(), m->GetPosition())
+				: (tar && spell_ae_range >= Distance(tar->GetPosition(), m->GetPosition()));
+			if (hit) {
+				return false;
+			}
 			continue;
 		}
 
