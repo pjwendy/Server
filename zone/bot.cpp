@@ -10277,6 +10277,11 @@ bool Bot::CastChecks(uint16 spell_id, Mob* tar, uint16 spell_type, bool precheck
 		return false;
 	}
 
+	if (RuleB(Bots, StrategicCombat) && !IsCommandedSpell() && tar && SparesParkedTarget(spell_id, tar)) {
+		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} on {}: it is parked and the group is still fighting.'", GetCleanName(), GetSpellName(spell_id), tar->GetCleanName());
+		return false;
+	}
+
 	return true;
 }
 
@@ -12688,11 +12693,6 @@ bool Bot::HasRequiredLoSForPositioning(Mob* tar) {
 	}
 
 	if (RequiresLoSForPositioning() && !HasLoS()) {
-		return false;
-	}
-
-	if (RuleB(Bots, StrategicCombat) && !IsCommandedSpell() && tar && SparesParkedTarget(spell_id, tar)) {
-		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} on {}: it is parked and the group is still fighting.'", GetCleanName(), GetSpellName(spell_id), tar->GetCleanName());
 		return false;
 	}
 
