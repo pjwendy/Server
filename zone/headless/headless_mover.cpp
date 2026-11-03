@@ -546,9 +546,16 @@ void HeadlessMover::SwimOnSurface(const glm::vec3 &start)
 	glm::vec3 from = start;  // (the route's last step)
 	size_t    lifts = 0;
 	bool      afloat = false; // (the last step put out was a swim's)
-	auto take = [&](const glm::vec3 &q) {
+	// dive: a step between the corners whose way up is clear, but not the swim to it from the last step put out (an ice floe
+	// in between, in Iceclad's sea): the route goes under it there, on the bed, and the steps after are looked at from there.
+	// Else each was looked at from that last step, through the floe, none was lifted, and the bed corner beyond kept the head
+	// under for 763 units: refused as too deep, and Ilvara petitioned back to the same spot all day (E-156, 3 November)
+	auto take = [&](const glm::vec3 &q, bool dive) {
 		glm::vec3 up;
-		if (lifted(q, up) && (!zone->zonemap || zone->zonemap->CheckLoS(prev + glm::vec3(0.0f, 0.0f, head), up + glm::vec3(0.0f, 0.0f, head)))) {
+		if (!lifted(q, up)) {
+			return false;
+		}
+		if (!zone->zonemap || zone->zonemap->CheckLoS(prev + glm::vec3(0.0f, 0.0f, head), up + glm::vec3(0.0f, 0.0f, head))) {
 			if (afloat) {
 				m_swim += glm::length(up - prev);
 			}
@@ -557,6 +564,11 @@ void HeadlessMover::SwimOnSurface(const glm::vec3 &start)
 			afloat = true;
 			++lifts;
 			return true;
+		}
+		if (dive) {
+			out.push_back(q);
+			prev   = q;
+			afloat = false;
 		}
 		return false;
 	};
@@ -573,11 +585,11 @@ void HeadlessMover::SwimOnSurface(const glm::vec3 &start)
 			const int   n   = static_cast<int>(std::ceil(len / SURFACE_STEP));
 			for (int k = 1; k < n; ++k) {
 				const glm::vec3 s = from + (p - from) * (static_cast<float>(k) / n);
-				take(glm::vec3(s.x, s.y, FloorBelow(glm::vec3(s.x, s.y, std::max(from.z, p.z)))));
+				take(glm::vec3(s.x, s.y, FloorBelow(glm::vec3(s.x, s.y, std::max(from.z, p.z)))), true);
 			}
 		}
 		from = p;
-		if (!link_end(p) && take(p) && !last) {
+		if (!link_end(p) && take(p, false) && !last) { // (a corner that isn't lifted is put out below, as it is)
 			continue; // (the last lifted too: then straight down to it)
 		}
 		out.push_back(p);
