@@ -143,6 +143,14 @@ Category `HeadlessClients`:
 | `ShowDisplayTag` | `true` | Show `DisplayTag`. When false it's left off, and removed from characters that already carry it. They stay flagged as headless in the database either way. |
 | `CommandRateLimit` | `20` | Commands per second per character. More are refused. |
 
+Category `Bots` (the fork's own rule):
+
+| Rule | Default | Meaning |
+|---|---|---|
+| `StrategicCombat` | `false` | Bots fight as a coordinated group does. Off, the stock bot AI. On, a bot doesn't cast a spell that would break a mob the group has **parked** (mezzed, or rooted): no damage at all on a mezzed mob, no direct spell on a rooted one (a DoT's ticks don't break a root on the server), and no area spell that would hit one, while anything else is on the hate list; the last mob left is fought as any is. A bot's commanded casts (`^cast`) are its owner's call and are not held back. |
+
+Set it with `INSERT INTO rule_values (ruleset_id, rule_name, rule_value) VALUES (1, 'Bots:StrategicCombat', 'true') ON DUPLICATE KEY UPDATE rule_value = 'true'` and `#rules reload` (or a restart).
+
 ## What a headless character can do
 
 | Command | |
