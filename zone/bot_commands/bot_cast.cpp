@@ -492,9 +492,11 @@ void bot_command_cast(Client* c, const Seperator* sep)
 	bool is_success = false;
 	uint16 success_count = 0;
 	Bot* first_found = nullptr;
+	uint16 skipped_state = 0, skipped_group = 0, skipped_los = 0;  // why no bot cast it, for the message at the end
 
 	for (auto bot_iter : sbl) {
 		if (!bot_iter->ValidStateCheck(c)) {
+			skipped_state++;
 			continue;
 		}
 
@@ -513,9 +515,10 @@ void bot_command_cast(Client* c, const Seperator* sep)
 				IsBotSpellTypeBeneficial(spell_type) &&
 				!RuleB(Bots, CrossRaidBuffingAndHealing) &&
 				!bot_iter->IsInGroupOrRaid(new_tar, true)
-			) {
-				continue;
-			}
+				) {
+					skipped_group++;
+					continue;
+				}
 
 			if (IsBotSpellTypeDetrimental(spell_type) && !bot_iter->IsAttackAllowed(new_tar)) {
 				bot_iter->RaidGroupSay(
@@ -580,6 +583,9 @@ void bot_command_cast(Client* c, const Seperator* sep)
 		else {
 			bot_iter->SetCommandedSpell(true);
 			bot_iter->SetHasLoS(BotSpellTypeRequiresLoS(spell_type) ? bot_iter->DoLosChecks(new_tar) : true);
+			if (!bot_iter->HasLoS()) {
+				skipped_los++;
+			}
 
 			if (bot_iter->AICastSpell(new_tar, 100, spell_type, sub_target_type, sub_type)) {
 				if (!first_found) {
@@ -619,9 +625,11 @@ void bot_command_cast(Client* c, const Seperator* sep)
 		c->Message(
 			Chat::Yellow,
 			fmt::format(
-				"No bots are capable of casting [{}] on {}. This could be due to this to any number of things: range, mana, immune, target type, etc.",
+				"No bots are capable of casting [{}] on {}. This could be due to this to any number of things: range, mana, immune, target type, etc. "
+				"(of {} bots: {} not able to act (stance, hold, dead, not in the group), {} outside the group, {} without line of sight)",
 				(by_spell_id ? spells[chosen_spell_id].name : type),
-				tar ? tar->GetCleanName() : "your target"
+				tar ? tar->GetCleanName() : "your target",
+				sbl.size(), skipped_state, skipped_group, skipped_los
 			).c_str()
 		);
 
