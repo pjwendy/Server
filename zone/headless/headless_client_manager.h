@@ -78,6 +78,8 @@ private:
 		std::string name;
 		uint32 target_id;
 		uint32 mana_pct;
+		uint32 casting_spell_id = 0;
+		uint32 status = 0;
 	};
 
 	struct Session {

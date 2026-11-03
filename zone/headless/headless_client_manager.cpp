@@ -99,6 +99,16 @@ namespace {
 		return app;
 	}
 
+	// what is on a mob that a program planning a fight wants to know: mezzed 1, rooted 2, stunned 4, feared or fleeing 8, charmed 16
+	uint32 SpawnStatusOf(Mob *mob)
+	{
+		if (mob->IsCorpse()) {
+			return 0;
+		}
+		return (mob->IsMezzed() ? 1u : 0u) | (mob->IsRooted() ? 2u : 0u) | (mob->IsStunned() ? 4u : 0u) | (mob->IsFeared() ? 8u : 0u) |
+			   (mob->IsCharmed() ? 16u : 0u);
+	}
+
 	eqheadless::SpawnType SpawnTypeOf(Mob *mob)
 	{
 		if (mob->IsCorpse()) {
@@ -1749,6 +1759,8 @@ void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob)
 	out->set_headless(IsHeadless(mob));
 	out->set_target_id(mob->GetTarget() ? mob->GetTarget()->GetID() : 0);
 	out->set_mana_pct(mob->GetMaxMana() > 0 ? static_cast<uint32>(std::lround(mob->GetManaRatio())) : 0);
+	out->set_casting_spell_id(mob->IsCasting() ? mob->CastingSpellID() : 0);
+	out->set_status(SpawnStatusOf(mob));
 }
 
 void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot)
@@ -1985,6 +1997,8 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 
 		const uint32 hp_pct   = static_cast<uint32>(std::lround(std::max(0.0f, mob->GetHPRatio())));
 		const uint32 mana_pct = mob->GetMaxMana() > 0 ? static_cast<uint32>(std::lround(mob->GetManaRatio())) : 0;
+		const uint32 casting  = mob->IsCasting() ? mob->CastingSpellID() : 0;
+		const uint32 status   = SpawnStatusOf(mob);
 		auto seen = session.seen.find(id);
 		const bool is_new = seen == session.seen.end();
 		if (!is_new) {
@@ -1992,7 +2006,8 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			if (std::fabs(s.x - mob->GetX()) < MOVE_EPSILON && std::fabs(s.y - mob->GetY()) < MOVE_EPSILON &&
 				std::fabs(s.z - mob->GetZ()) < MOVE_EPSILON && s.heading == mob->GetHeading() &&
 				s.hp_pct == hp_pct && s.level == mob->GetLevel() && s.name == mob->GetCleanName() &&
-				s.target_id == (mob->GetTarget() ? mob->GetTarget()->GetID() : 0) && s.mana_pct == mana_pct) {
+				s.target_id == (mob->GetTarget() ? mob->GetTarget()->GetID() : 0) && s.mana_pct == mana_pct &&
+				s.casting_spell_id == casting && s.status == status) {
 				return;
 			}
 		}
@@ -2000,7 +2015,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		FillSpawn(snapshot ? frame.mutable_snapshot()->add_spawns() : frame.mutable_delta()->add_spawns_changed(), mob);
 		session.seen[id] = SeenSpawn{
 			mob->GetX(), mob->GetY(), mob->GetZ(), mob->GetHeading(), hp_pct, mob->GetLevel(), mob->GetCleanName(),
-			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u, mana_pct
+			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u, mana_pct, casting, status
 		};
 		changed = true;
 	};
