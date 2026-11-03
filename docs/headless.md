@@ -175,7 +175,9 @@ Ending a session logs the character out at once: it's saved and removed, with no
 
 **What a character sees.** Combat text is made for it, as a client makes its own from the combat packets: `X hits Y for N points of damage.` (the verb by the kind of hit)
 and `X tries to hit Y, but misses!`, for what the character, its group, its bots and its pets do and take (spell damage arrives as the server's own messages). A
-spawn carries its gender and the materials of what it holds in its primary and secondary hands, so a program can draw it.
+spawn carries its gender and the materials of what it holds in its primary and secondary hands, so a program can draw it, the spell it is casting
+(`casting_spell_id`, so a caster can be interrupted) and what is on it (`status`: 1 mezzed, 2 rooted, 4 stunned, 8 feared or fleeing, 16 charmed, so a program
+knows a mob is parked and that a root has broken).
 
 **Bots** (EQEmu's, with these changes in the fork): a bot stands still to cast (no casting while it walks, and no walking while it casts, bards aside); the bot
 sent to pull says `Pulling X.`, and `Incoming X!` once the mob has come for the group; an idle bot doesn't run its idle spell checks while its owner is moving;
