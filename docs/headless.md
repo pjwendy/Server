@@ -150,7 +150,7 @@ Category `HeadlessClients`:
 | `target`, `face`, `attack` | Target by spawn id (with the client's range and line-of-sight checks), face, auto-attack on or off. |
 | `chat` | Say, tell, group, guild, raid, shout, OOC, auction. A say starting with `#` is a GM command (if the account's status allows it). One starting with `^` is an EQEmu bot command (if `AllowBots`). |
 | `sit` | Sit or stand. |
-| `move_to`, `stop` | Walk to a point on the navmesh, or only plan the walk (`plan_only`: the route's length, or no route). |
+| `move_to`, `stop` | Walk to a point on the navmesh, or only plan the walk (`plan_only`: the route's length and its points, up to about 120, or no route). A walk by a sitting character is refused until it has stood up (send `sit` first). |
 | `zone_to` | Walk to the zone line for a neighbouring zone and through it. |
 | `cast`, `stop_cast`, `memorize`, `scribe` | Cast from a gem, interrupt, memorise a spell, scribe a scroll into the book. |
 | `consider` | `/consider` a spawn: its con colour and faction standing. |
@@ -163,7 +163,7 @@ Category `HeadlessClients`:
 | `use_item` | Right-click an item: its click effect, a potion or food, or a tome (which teaches its discipline). |
 | `parcel_send`, `parcel_retrieve` | Parcels, as a parcel merchant's parcel tab (open the window first, within reach). Send an item to a character by name, with a note; not attuned items, nor no-drop ones unless `World:FVNoDropFlag` lets players trade them; one parcel per `Parcel:ParcelDeliveryDelay`. Opening a parcel merchant lists the parcels waiting for the character (`MerchantEvent.parcels`); retrieve takes one into the bags. Needs `Parcel:EnableParcelMerchants`. |
 | `corpse_drag` | `/corpse drag` a corpse (yours, or one you're consented to) by spawn id: it follows you as you move, within the server's drag distance; or drop it (`drop`, all with no id). |
-| `aa_exp` | The share of experience going to AA, as the client's slider (0 turns it off, 100 stops levelling). |
+| `aa_exp`, `buy_aa` | The share of experience going to AA, as the client's slider (0 turns it off, 100 stops levelling); and one rank of an alternate advancement ability bought with a point (`rank_id` is `aa_ranks.id`, the next rank of the ability: the server checks the level, the price and the prerequisites and answers why when it can't be bought). AA experience only accrues from level 51, as in the game. |
 | `click_door` | Click a door in this zone by its door id (0-255), as the client does: a teleporter or a Plane of Knowledge book zones you where it goes. The server checks the distance, keys and locks. |
 | `click_object`, `close_object`, `combine` | Tradeskills: open a world container (oven, forge, loom, brew barrel, kiln, pottery wheel...) by its object table id, as a click does (the server checks the distance); the items go in with `move_item` to its slots (4000 on); `combine` is the Combine button, for the world container (slot 1000) or an inventory bag's slot. The server does the recipe and the skill roll. |
 | `invite`, `disband` | Invite to the group (the character's own bots, or real players if allowed), leave it. |
@@ -172,6 +172,16 @@ Category `HeadlessClients`:
 mob dies, the walk arrives) comes back as state and events, just as a player sees it on screen.
 
 Ending a session logs the character out at once: it's saved and removed, with no linkdead time.
+
+**What a character sees.** Combat text is made for it, as a client makes its own from the combat packets: `X hits Y for N points of damage.` (the verb by the kind of hit)
+and `X tries to hit Y, but misses!`, for what the character, its group, its bots and its pets do and take (spell damage arrives as the server's own messages). A
+spawn carries its gender and the materials of what it holds in its primary and secondary hands, so a program can draw it.
+
+**Bots** (EQEmu's, with these changes in the fork): a bot stands still to cast (no casting while it walks, and no walking while it casts, bards aside); the bot
+sent to pull says `Pulling X.`, and `Incoming X!` once the mob has come for the group; an idle bot doesn't run its idle spell checks while its owner is moving;
+`^feign` lies a monk (by skill), necromancer or shadowknight bot down feigning death until nothing near is after it; a bot of those classes at low health with its
+target on it feigns by itself (a monk or necromancer under 35%, a shadowknight under 18%), and a bot's pet under a quarter of its health is called off until it
+has mended.
 
 ## The protocol
 
