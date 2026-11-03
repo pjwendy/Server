@@ -10026,6 +10026,14 @@ bool Bot::CastChecks(uint16 spell_id, Mob* tar, uint16 spell_type, bool precheck
 		return false;
 	}
 
+	// a spell whose components its owner doesn't carry isn't chosen by the AI: it used to be started every four seconds, to be stopped at the end of the cast
+	// with "needs 1 Bloodstone for Leatherskin" (a druid, all day: the mana, the hand-overs it won't take, a rez it was slow to answer). A commanded cast still
+	// goes ahead, to say what is missing.
+	if (!IsCommandedSpell() && !OwnerHasReagentsFor(spell_id)) {
+		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} due to the owner lacking its reagents.'", GetCleanName(), GetSpellName(spell_id));
+		return false;
+	}
+
 	bool is_mana_exempt = RuleB(Bots, FinishBuffing) && !IsEngaged() && IsBotBuffSpellType(spell_type);
 
 	if (!BotHasEnoughMana(spell_id) && !is_mana_exempt) {
@@ -12694,6 +12702,38 @@ bool Bot::HasRequiredLoSForPositioning(Mob* tar) {
 
 	if (RequiresLoSForPositioning() && !HasLoS()) {
 		return false;
+	}
+
+	return true;
+}
+
+// Bots:UseOwnerReagents (spells.cpp, DoCastSpell): a bot has no bags, what its spell consumes comes out of its owner's. True when the rule is off, the spell
+// needs nothing, it's a bard's song, or the owner has every component (a pet spell's, when pets use none).
+bool Bot::OwnerHasReagentsFor(uint16 spell_id)
+{
+	if (!RuleB(Bots, UseOwnerReagents) || !IsValidSpell(spell_id) || IsBardSong(spell_id)) {
+		return true;
+	}
+
+	Mob* owner_mob = GetBotOwner();
+	Client* owner = owner_mob && owner_mob->IsClient() ? owner_mob->CastToClient() : nullptr;
+	if (!owner) {
+		return true;
+	}
+
+	const bool pet = IsEffectInSpell(spell_id, SpellEffect::SummonPet) || IsEffectInSpell(spell_id, SpellEffect::NecPet);
+	if (pet && !RuleB(Character, PetsUseReagents)) {
+		return true;
+	}
+
+	for (int t = 0; t < 4; t++) {
+		const int component = spells[spell_id].component[t];
+		if (component == -1) {
+			continue;
+		}
+		if (owner->GetInv().HasItem(component, spells[spell_id].component_count[t], invWhereWorn | invWherePersonal) == -1) {
+			return false;
+		}
 	}
 
 	return true;
