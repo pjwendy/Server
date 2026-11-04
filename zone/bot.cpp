@@ -15,6 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
+#include <limits>
 #include "bot.h"
 
 #include "common/data_verification.h"
@@ -2974,7 +2975,8 @@ void Bot::DoAttackRounds(Mob* target, int hand) {
 namespace {
 	constexpr float  DRAG_REACH        = 8.0f;     // close enough to take hold of a corpse
 	constexpr float  DRAG_HOME         = 12.0f;    // back beside the owner: let go
-	constexpr uint32 DRAG_GIVE_UP_MS   = 240000;   // a fetch that takes longer than this is given up
+	constexpr uint32 DRAG_STALL_MS     = 180000;   // a fetch is given up when it has got no nearer for this long (no limit on how long a long way takes: the operator, 4 Nov)
+	constexpr float  DRAG_PROGRESS     = 25.0f;    // nearer than the best so far by this much is getting somewhere
 	constexpr uint32 DRAG_FEIGN_MS     = 10000;    // lying feigned at least this long ...
 	constexpr float  DRAG_SAFE         = 80.0f;    // ... and till nothing this near hates us
 	constexpr uint32 DRAG_SCAN_MS      = 1000;
@@ -2986,7 +2988,8 @@ void Bot::StartCorpseDrag(uint16 corpse_id)
 {
 	m_drag_corpse_id = corpse_id;
 	m_drag_holding   = false;
-	m_drag_give_up_timer.Start(DRAG_GIVE_UP_MS);
+	m_drag_best = std::numeric_limits<float>::max();
+	m_drag_give_up_timer.Start(DRAG_STALL_MS);
 	m_drag_scan_timer.Start(DRAG_SCAN_MS);
 	SetPullFlag(false);
 	SetPullingFlag(false);
@@ -3173,11 +3176,13 @@ bool Bot::CorpseDragProcess(Client* owner)
 		return false;
 	}
 	if (IsCasting()) {
-		return true;  // (a feign on its way)
+		m_drag_give_up_timer.Start(DRAG_STALL_MS);  // (a feign on its way: not a stall)
+		return true;
 	}
 
 	// lying feigned: still, till the time's up and nothing near is after us
 	if (GetFeigned()) {
+		m_drag_give_up_timer.Start(DRAG_STALL_MS);  // (waiting for it to be safe is not a stall)
 		if (m_drag_feign_timer.Enabled() && !m_drag_feign_timer.Check(false)) {
 			return true;
 		}
@@ -3207,7 +3212,12 @@ bool Bot::CorpseDragProcess(Client* owner)
 	}
 
 	if (!m_drag_holding) {
-		if (DistanceNoZ(m_Position, corpse->GetPosition()) > DRAG_REACH) {
+		const float to_corpse = DistanceNoZ(m_Position, corpse->GetPosition());
+		if (to_corpse + DRAG_PROGRESS < m_drag_best) {
+			m_drag_best = to_corpse;
+			m_drag_give_up_timer.Start(DRAG_STALL_MS);  // (nearer: still on its way, however long it takes)
+		}
+		if (to_corpse > DRAG_REACH) {
 			const auto &p = corpse->GetPosition();
 			if (sneaking) {
 				WalkTo(p.x, p.y, p.z);
@@ -3222,6 +3232,8 @@ bool Bot::CorpseDragProcess(Client* owner)
 			return false;
 		}
 		m_drag_holding = true;
+		m_drag_best    = std::numeric_limits<float>::max();
+		m_drag_give_up_timer.Start(DRAG_STALL_MS);
 		RaidGroupSay(fmt::format("I have {}; bringing it back.", corpse->GetCleanName()).c_str());
 	}
 
@@ -3229,7 +3241,12 @@ bool Bot::CorpseDragProcess(Client* owner)
 	if (DistanceSquaredNoZ(m_Position, corpse->GetPosition()) > RuleR(Character, DragCorpseDistance)) {
 		corpse->DragTo(owner, this);
 	}
-	if (DistanceNoZ(m_Position, owner->GetPosition()) > DRAG_HOME) {
+	const float to_owner = DistanceNoZ(m_Position, owner->GetPosition());
+	if (to_owner + DRAG_PROGRESS < m_drag_best) {
+		m_drag_best = to_owner;
+		m_drag_give_up_timer.Start(DRAG_STALL_MS);
+	}
+	if (to_owner > DRAG_HOME) {
 		const auto &p = owner->GetPosition();
 		if (sneaking) {
 			WalkTo(p.x, p.y, p.z);

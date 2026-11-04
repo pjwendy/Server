@@ -32,7 +32,7 @@ void bot_command_corpse_drag(Client* c, const Seperator* sep)
 		p.notes = {
 			"- Out on its own the bot is seen as a player is: what it passes may aggro on it.",
 			"- A rogue goes hidden and sneaking; a monk, necromancer or shadowknight feigns death when something comes for it, and gets up once nothing near hates it.",
-			"- It gives up after four minutes."
+			"- It takes as long as the way takes: it gives up only when it gets no nearer for three minutes (stuck, or no way there)."
 		};
 		p.example_format = { fmt::format("{} [stop | id <corpse spawn id>] [actionable]", sep->arg[0]) };
 		p.examples_one = { "To send a bot named Sneaky for your targeted corpse:", fmt::format("{} byname Sneaky", sep->arg[0]) };

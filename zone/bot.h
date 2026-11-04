@@ -1193,6 +1193,7 @@ private:
 	Timer m_auto_save_timer;
 
 	uint16 m_drag_corpse_id = 0;      // the corpse we were sent for (^corpsedrag)
+	float  m_drag_best = 0.0f;        // the nearest we have got to where we are going (the corpse, then our owner): the give-up timer starts again each time it improves
 	bool   m_drag_holding   = false;  // ... and it's in tow
 	Timer  m_drag_give_up_timer;      // no corpse back by then: let it go
 	Timer  m_drag_feign_timer;        // lying feigned at least this long
