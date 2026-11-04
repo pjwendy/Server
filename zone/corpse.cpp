@@ -36,6 +36,7 @@
 #include "zone/raids.h"
 #include "zone/string_ids.h"
 #include "zone/worldserver.h"
+#include "zone/headless/headless_client_manager.h"
 
 #include <iostream>
 
@@ -270,7 +271,8 @@ Corpse::Corpse(Client *c, int32 rez_exp, KilledByTypes in_killed_by) : Mob(
 		m_consented_raid_id = r ? r->GetID() : 0;
 	}
 
-	m_consented_guild_id = c->AutoConsentGuildEnabled() ? c->GuildID() : 0;
+	// (a headless character's guild may move its corpse: its guildmates' bots drag it to where they camp to raise it)
+	m_consented_guild_id = (c->AutoConsentGuildEnabled() || (RuleB(HeadlessClients, ConsentGuildCorpses) && HeadlessClientManager::IsHeadless(c))) ? c->GuildID() : 0;
 
 	m_is_corpse_changed         = true;
 	m_rezzed_experience         = rez_exp;

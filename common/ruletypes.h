@@ -1190,6 +1190,7 @@ RULE_STRING(HeadlessClients, BlockedZones, "", "Comma-delimited zone short names
 RULE_REAL(HeadlessClients, JumpHeight, 4.5, "How high a headless character's jump goes, in units above where it jumps from, as the client's physics has it (the RoF2 client's, measured: a 4.8 peak). 0: headless characters don't jump. puppeteer's navmesh sweep reads it too, for the ledges and gaps it links with a jump")
 RULE_REAL(HeadlessClients, JumpDistance, 45.0, "How far across a headless character's running jump goes, in units, landing level, as the client's physics has it (the RoF2 client's, measured: 55 at run speed). 0: headless characters don't jump")
 RULE_BOOL(HeadlessClients, Drowning, true, "Headless characters run out of air under water and drown, as the client works it out (it reports drowning itself with OP_EnvDamage, and the server trusts it)")
+RULE_BOOL(HeadlessClients, ConsentGuildCorpses, true, "A headless character's corpse may be moved (dragged) by its guild, as /consent guild: a guildmate's bots can bring it to where they stand to resurrect it there")
 RULE_BOOL(HeadlessClients, AllowBots, true, "Headless characters may spawn and command bots (also requires Bots:Enabled)")
 RULE_BOOL(HeadlessClients, AllowMercenaries, true, "Headless characters may hire mercenaries (also requires Mercs:AllowMercs)")
 RULE_BOOL(HeadlessClients, AllowGroupWithPlayers, true, "Headless characters may group and raid with real players")

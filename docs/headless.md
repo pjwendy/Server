@@ -159,6 +159,8 @@ would wake.
 
 A group member in the character's stream carries its buffs too (`GroupMember.buffs`; the character's own are `buffs`), for a view of what the group has on it.
 
+A headless character's corpse is consented to its guild (rule `HeadlessClients:ConsentGuildCorpses`, on by default; as `/consent guild`): a guildmate may drag it, and so may the guildmate's bots (`^corpsedrag`), to where they are camped to resurrect it there.
+
 ## What a headless character can do
 
 | Command | |
