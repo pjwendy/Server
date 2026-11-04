@@ -157,6 +157,8 @@ even a mob it cons grey to. They are worked out by the server's own aggro rules 
 seen (invisible), line of sight and the chance are left to the character, so a route can keep out of the radii of what is hostile and a pull can count what it
 would wake.
 
+A group member in the character's stream carries its buffs too (`GroupMember.buffs`; the character's own are `buffs`), for a view of what the group has on it.
+
 ## What a headless character can do
 
 | Command | |

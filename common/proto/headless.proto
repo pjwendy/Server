@@ -527,6 +527,7 @@ message GroupMember {
   uint32 spawn_id = 2; // 0 if not in this zone
   bool   leader   = 3;
   bool   bot      = 4; // an EQEmu bot
+  repeated Buff buffs = 5; // what is on them now (empty if they are not in this zone)
 }
 
 message ZoneInfo {

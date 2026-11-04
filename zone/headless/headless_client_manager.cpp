@@ -1955,6 +1955,19 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			gm->set_spawn_id(mob ? mob->GetID() : 0);
 			gm->set_leader(group->IsLeader(group->membername[i]));
 			gm->set_bot(mob && mob->IsBot());
+			if (mob && mob != me) {
+				if (Buffs_Struct *mb = mob->GetBuffs()) {
+					for (int b = 0; b < mob->GetMaxTotalSlots(); ++b) {
+						if (!IsValidSpell(mb[b].spellid)) {
+							continue;
+						}
+						auto *buff = gm->add_buffs();
+						buff->set_spell_id(mb[b].spellid);
+						buff->set_name(SpellName(mb[b].spellid));
+						buff->set_ticks(mb[b].ticsremaining);
+					}
+				}
+			}
 		}
 	}
 
