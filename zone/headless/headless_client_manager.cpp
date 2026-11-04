@@ -1796,7 +1796,7 @@ void HeadlessClientManager::OnStreamDestroyed(const std::string &session_id, boo
 	safe_delete(pack);
 }
 
-void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob)
+void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob, Client *me)
 {
 	out->set_id(mob->GetID());
 	out->set_name(mob->GetCleanName());
@@ -1823,6 +1823,31 @@ void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob)
 	out->set_mana_pct(mob->GetMaxMana() > 0 ? static_cast<uint32>(std::lround(mob->GetManaRatio())) : 0);
 	out->set_casting_spell_id(mob->IsCasting() ? mob->CastingSpellID() : 0);
 	out->set_status(SpawnStatusOf(mob));
+
+	// what it does about us, by the rules of Mob::CheckWillAggro (its faction toward the character, the level rules), without the parts that change at once
+	// (our invisibility, line of sight, the quarter chance of a threatening look): the character works those out
+	if (me && mob->IsNPC() && !mob->GetOwner() && mob->GetAggroRange() > 0.0f) {
+		out->set_aggro_range(mob->GetAggroRange());
+		out->set_assist_range(mob->GetAssistRange());
+		uint32 aggro = 0;
+		const FACTION_VALUE faction = me->GetReverseFactionCon(mob);
+		if (faction == FACTION_SCOWLS) {
+			aggro |= 1;
+		}
+		else if (faction == FACTION_THREATENINGLY) {
+			aggro |= 2;
+		}
+		const bool grey_aggro = mob->AlwaysAggro() ||
+			(RuleB(Aggro, UseLevelAggro) ? (mob->GetLevel() >= RuleI(Aggro, MinAggroLevel) || mob->GetBodyType() == BodyType::Undead)
+			                             : ((RuleB(Aggro, UndeadAlwaysAggro) && mob->GetBodyType() == BodyType::Undead) || mob->GetINT() <= RuleI(Aggro, IntAggroThreshold)));
+		if (grey_aggro) {
+			aggro |= 4;
+		}
+		out->set_aggro(aggro);
+	}
+	else if (mob->IsNPC() && !mob->GetOwner()) {
+		out->set_assist_range(mob->GetAssistRange());
+	}
 }
 
 void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot)
@@ -2074,7 +2099,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			}
 		}
 
-		FillSpawn(snapshot ? frame.mutable_snapshot()->add_spawns() : frame.mutable_delta()->add_spawns_changed(), mob);
+		FillSpawn(snapshot ? frame.mutable_snapshot()->add_spawns() : frame.mutable_delta()->add_spawns_changed(), mob, me);
 		session.seen[id] = SeenSpawn{
 			mob->GetX(), mob->GetY(), mob->GetZ(), mob->GetHeading(), hp_pct, mob->GetLevel(), mob->GetCleanName(),
 			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u, mana_pct, casting, status

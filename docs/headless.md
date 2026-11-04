@@ -151,6 +151,12 @@ Category `Bots` (the fork's own rule):
 
 Set it with `INSERT INTO rule_values (ruleset_id, rule_name, rule_value) VALUES (1, 'Bots:StrategicCombat', 'true') ON DUPLICATE KEY UPDATE rule_value = 'true'` and `#rules reload` (or a restart).
 
+A spawn that is an NPC carries what it does about the character (`aggro_range`, `assist_range`, `aggro`): the radius it notices the character in, the radius in
+which it calls others to help, and bits for hostile on sight (its faction toward the character scowls), may aggro (threatening: a quarter chance), and aggros
+even a mob it cons grey to. They are worked out by the server's own aggro rules (`Mob::CheckWillAggro`) when the spawn is sent; whether the character is
+seen (invisible), line of sight and the chance are left to the character, so a route can keep out of the radii of what is hostile and a pull can count what it
+would wake.
+
 ## What a headless character can do
 
 | Command | |

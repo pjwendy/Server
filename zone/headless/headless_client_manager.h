@@ -123,7 +123,7 @@ private:
 	void SendResult(const std::string &session_id, uint32 command_id, const std::string &error);
 
 	void Publish(const std::string &session_id, bool snapshot);
-	void FillSpawn(eqheadless::Spawn *out, Mob *mob);
+	void FillSpawn(eqheadless::Spawn *out, Mob *mob, Client *me = nullptr);
 	void SendFrame(const std::string &session_id, const eqheadless::ServerFrame &frame);
 	void SendSpawned(const std::string &session_id, uint32 spawn_id, const std::string &error);
 	void SendZoneEvent(const std::string &session_id, int status, uint32 zone_id, const std::string &detail);

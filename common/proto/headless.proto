@@ -395,6 +395,11 @@ message Spawn {
   uint32    secondary  = 18; // ... and in its secondary
   uint32    casting_spell_id = 19; // the spell it is casting, 0 if none (to interrupt a caster)
   uint32    status     = 20; // what is on it: 1 mezzed, 2 rooted, 4 stunned, 8 feared or fleeing, 16 charmed (to know a mob is parked, and that a root has broken)
+  // what an NPC does about us (the character this stream is for), by the server's own aggro rules (Mob::CheckWillAggro): to route round it and to pull without waking it
+  float     aggro_range  = 21; // the radius it notices us in (a sphere round it); 0 for what never aggros (a pet, a merchant's guard that doesn't)
+  float     assist_range = 22; // the radius in which it calls others to help (Mob::GetAssistRange: its assist radius, else its aggro radius)
+  uint32    aggro        = 23; // bits, for an NPC with an aggro range: 1 hostile on sight (its faction toward us scowls: KOS), 2 may aggro (threatening: a quarter chance each look),
+                               // 4 aggros even a character it cons grey to (always-aggro, undead, or at its level of aggro: the rule Aggro:MinAggroLevel). Invisible, we are not seen.
 }
 
 message Self {
