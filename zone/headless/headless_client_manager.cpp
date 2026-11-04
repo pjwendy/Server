@@ -1158,11 +1158,26 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			}
 			const bool ours = rezzer && ((rezzer->IsBot() && rezzer->CastToBot()->GetBotOwner() == me) ||
 										 (me->GetGroup() && me->GetGroup()->IsGroupMember(rezzer)));
+			// ... or a bot of a guildmate's (the leader's partner, whose group went to the corpse and stands guard by it
+			// while we come back to it: the puppeteer's pairs, 4 Nov). Taken from wherever we are, the corpse's zone or not:
+			// the rezzer isn't in this zone then, so its owner's guild comes from the database
+			bool partner = false;
+			if (!ours && me->GuildID() != GUILD_NONE) {
+				if (rezzer && rezzer->IsBot()) {
+					Mob *owner = rezzer->CastToBot()->GetBotOwner();
+					partner = owner && owner->IsClient() && owner != me && owner->CastToClient()->GuildID() == me->GuildID();
+				} else if (!rezzer) {
+					auto r = database.QueryDatabase(fmt::format(
+						"SELECT m.guild_id FROM bot_data b JOIN guild_members m ON m.char_id = b.owner_id "
+						"WHERE b.name = '{}' AND b.owner_id != {} LIMIT 1", Strings::Escape(rez.rezzer_name), me->CharacterID()));
+					partner = r.Success() && r.RowCount() && Strings::ToUnsignedInt(r.begin()[0]) == me->GuildID();
+				}
+			}
 			const bool near = rez.zone_id == zone->GetZoneID() && rez.instance_id == zone->GetInstanceID() &&
 				glm::length(glm::vec2(rez.x - me->GetX(), rez.y - me->GetY())) <= REZ_NEAR;
-			rez.action = (ours && near) ? ResurrectionActions::Accept : ResurrectionActions::Decline;
+			rez.action = ((ours && near) || partner) ? ResurrectionActions::Accept : ResurrectionActions::Decline;
 			LogHeadlessClient("[{}] rez from [{}] ([{}]) for [{}]: {}", me->GetCleanName(), rez.rezzer_name,
-				spells[rez.spellid].name, rez.corpse_name, rez.action == ResurrectionActions::Accept ? "accepted"
+				spells[rez.spellid].name, rez.corpse_name, rez.action == ResurrectionActions::Accept ? (partner ? "accepted (a guildmate's bot)" : "accepted")
 				: !ours ? "declined (not ours)" : "declined (the corpse isn't here by us)");
 			auto answer = new EQApplicationPacket(OP_RezzAnswer, sizeof(Resurrect_Struct));
 			memcpy(answer->pBuffer, &rez, sizeof(Resurrect_Struct));
