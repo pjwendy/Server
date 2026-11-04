@@ -158,6 +158,8 @@ seen (invisible), line of sight and the chance are left to the character, so a r
 would wake.
 
 A group member in the character's stream carries its buffs too (`GroupMember.buffs`; the character's own are `buffs`), for a view of what the group has on it.
+An NPC that is fighting, or has the character on its hate list, carries the spells on it (`Spawn.buffs`: our slows, roots, mezzes and damage over time, with the ticks
+left), sent again when the set changes (a tick alone is not a change), so a fight can be watched and replayed.
 
 A headless character's corpse is consented to its guild (rule `HeadlessClients:ConsentGuildCorpses`, on by default; as `/consent guild`): a guildmate may drag it, and so may the guildmate's bots (`^corpsedrag`), to where they are camped to resurrect it there.
 
