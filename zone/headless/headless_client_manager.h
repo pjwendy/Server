@@ -80,6 +80,7 @@ private:
 		uint32 mana_pct;
 		uint32 casting_spell_id = 0;
 		uint32 status = 0;
+		uint64 buff_sig = 0; // which spells are on it (and about when they end)
 	};
 
 	struct Session {

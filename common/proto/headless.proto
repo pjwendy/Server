@@ -400,6 +400,7 @@ message Spawn {
   float     assist_range = 22; // the radius in which it calls others to help (Mob::GetAssistRange: its assist radius, else its aggro radius)
   uint32    aggro        = 23; // bits, for an NPC with an aggro range: 1 hostile on sight (its faction toward us scowls: KOS), 2 may aggro (threatening: a quarter chance each look),
                                // 4 aggros even a character it cons grey to (always-aggro, undead, or at its level of aggro: the rule Aggro:MinAggroLevel). Invisible, we are not seen.
+  repeated Buff buffs      = 24; // what is on it (our slows, roots, mezzes, damage over time...), for an NPC that is fighting or has us on its hate list: what a fight is doing to it
 }
 
 message Self {

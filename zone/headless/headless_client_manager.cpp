@@ -109,6 +109,29 @@ namespace {
 			   (mob->IsCharmed() ? 16u : 0u);
 	}
 
+	// the spells on an NPC that is fighting (or has the character on its hate list): what a fight is doing to it
+	bool ShowsBuffs(Mob *mob, Client *me)
+	{
+		return mob && mob->IsNPC() && !mob->IsCorpse() && !mob->GetOwner() && (mob->IsEngaged() || (me && mob->CastToNPC()->IsOnHatelist(me)));
+	}
+
+	// a signature of those spells: which, and about when they end (to the minute), so a change is sent and a tick is not
+	uint64 BuffSigOf(Mob *mob, Client *me)
+	{
+		uint64 sig = 0;
+		if (!ShowsBuffs(mob, me)) {
+			return sig;
+		}
+		if (Buffs_Struct *b = mob->GetBuffs()) {
+			for (int i = 0; i < mob->GetMaxTotalSlots(); ++i) {
+				if (IsValidSpell(b[i].spellid)) {
+					sig = sig * 1000003ull + b[i].spellid * 31ull + static_cast<uint64>(std::max(0, b[i].ticsremaining) / 10);
+				}
+			}
+		}
+		return sig;
+	}
+
 	eqheadless::SpawnType SpawnTypeOf(Mob *mob)
 	{
 		if (mob->IsCorpse()) {
@@ -1848,6 +1871,19 @@ void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob, Client *
 	else if (mob->IsNPC() && !mob->GetOwner()) {
 		out->set_assist_range(mob->GetAssistRange());
 	}
+	if (ShowsBuffs(mob, me)) {
+		if (Buffs_Struct *mb = mob->GetBuffs()) {
+			for (int i = 0; i < mob->GetMaxTotalSlots(); ++i) {
+				if (!IsValidSpell(mb[i].spellid)) {
+					continue;
+				}
+				auto *buff = out->add_buffs();
+				buff->set_spell_id(mb[i].spellid);
+				buff->set_name(SpellName(mb[i].spellid));
+				buff->set_ticks(mb[i].ticsremaining);
+			}
+		}
+	}
 }
 
 void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot)
@@ -2099,6 +2135,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		const uint32 mana_pct = mob->GetMaxMana() > 0 ? static_cast<uint32>(std::lround(mob->GetManaRatio())) : 0;
 		const uint32 casting  = mob->IsCasting() ? mob->CastingSpellID() : 0;
 		const uint32 status   = SpawnStatusOf(mob);
+		const uint64 buff_sig = BuffSigOf(mob, me);
 		auto seen = session.seen.find(id);
 		const bool is_new = seen == session.seen.end();
 		if (!is_new) {
@@ -2107,7 +2144,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 				std::fabs(s.z - mob->GetZ()) < MOVE_EPSILON && s.heading == mob->GetHeading() &&
 				s.hp_pct == hp_pct && s.level == mob->GetLevel() && s.name == mob->GetCleanName() &&
 				s.target_id == (mob->GetTarget() ? mob->GetTarget()->GetID() : 0) && s.mana_pct == mana_pct &&
-				s.casting_spell_id == casting && s.status == status) {
+				s.casting_spell_id == casting && s.status == status && s.buff_sig == buff_sig) {
 				return;
 			}
 		}
@@ -2115,7 +2152,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		FillSpawn(snapshot ? frame.mutable_snapshot()->add_spawns() : frame.mutable_delta()->add_spawns_changed(), mob, me);
 		session.seen[id] = SeenSpawn{
 			mob->GetX(), mob->GetY(), mob->GetZ(), mob->GetHeading(), hp_pct, mob->GetLevel(), mob->GetCleanName(),
-			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u, mana_pct, casting, status
+			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u, mana_pct, casting, status, buff_sig
 		};
 		changed = true;
 	};
