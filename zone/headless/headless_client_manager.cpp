@@ -1426,12 +1426,42 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 			session.loot_queue.clear();
 			session.loot_names.clear();
 			if (e && e->IsCorpse()) {
-				for (const auto *item : e->CastToCorpse()->GetLootItems()) {
+				// in the order a player loots their own corpse (the operator, 5 Nov): what was worn first (it goes straight back on, into the
+				// empty worn slots, and takes no room), then the bags (each needs an empty top-level slot, and brings what's in it), then the
+				// rest (into the bags, now they're there). Last, anything lore we already have: the server refuses it and ends the loot there
+				// (ResetLooter), so put first it cost everything after it (Grakk, eq3: a Rhino Beetle Horn kept three worn items on its
+				// corpse for 210 tries)
+				const auto &all = e->CastToCorpse()->GetLootItems();
+				auto lore_held = [&](const LootItem *item, const EQ::ItemData *data) {
+					if (data && me->CheckLoreConflict(data)) {
+						return true;
+					}
+					if (!data || !data->IsClassBag() || item->equip_slot < EQ::invslot::GENERAL_BEGIN || item->equip_slot > EQ::invslot::GENERAL_END) {
+						return false;
+					}
+					for (const auto *in : all) {  // (a bag's things come with it: one lore one we have and the bag is refused)
+						if (in && EQ::InventoryProfile::CalcSlotId(in->equip_slot) == item->equip_slot && in != item) {
+							const auto *d = database.GetItem(in->item_id);
+							if (d && me->CheckLoreConflict(d)) {
+								return true;
+							}
+						}
+					}
+					return false;
+				};
+				std::vector<std::tuple<int, int16, std::string>> order;
+				for (const auto *item : all) {
 					if (!item || item->lootslot < EQ::invslot::CORPSE_BEGIN || item->lootslot > EQ::invslot::CORPSE_END) {
 						continue;
 					}
 					const auto *data = database.GetItem(item->item_id);
-					session.loot_queue.emplace_back(item->lootslot, data ? data->Name : fmt::format("item {}", item->item_id));
+					const bool worn = item->equip_slot >= EQ::invslot::EQUIPMENT_BEGIN && item->equip_slot <= EQ::invslot::EQUIPMENT_END;
+					const int rank = lore_held(item, data) ? 3 : worn ? 0 : (data && data->IsClassBag()) ? 1 : 2;
+					order.emplace_back(rank, item->lootslot, data ? data->Name : fmt::format("item {}", item->item_id));
+				}
+				std::stable_sort(order.begin(), order.end(), [](const auto &a, const auto &b) { return std::get<0>(a) < std::get<0>(b); });
+				for (const auto &[rank, slot, name] : order) {
+					session.loot_queue.emplace_back(slot, name);
 				}
 			}
 			// one item every LOOT_ITEM_MS, then close the corpse and say what we got (the event
