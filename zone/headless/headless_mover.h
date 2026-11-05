@@ -160,6 +160,8 @@ private:
 	static const std::vector<Jump> &Links(const std::string &kind);
 	// the step to m_path[i] climbs (or drops down) a ladder: up and down as well as across, off the floor
 	bool OnLadder(size_t i) const;
+	// the route's portal links (the zone navmesh's own ladders and drops, flagged as teleports), climbed as ladders
+	std::vector<Jump> m_climbs;
 	// the zone's teleport pads (maps/nav/<zone>.teleports.json: a zone point into the zone itself, Erudin's
 	// between the upper city and the harbour): a link from beside the pad to where it puts you
 	static const std::vector<Jump> &Teleports();

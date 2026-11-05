@@ -102,6 +102,9 @@ namespace {
 	constexpr uint32 SLEEPER_ZONE = 128, SLEEPER_AIR = 127, DRANIK_CATACOMBS_ZONE = 330, DRANIK_AIR = 256;
 	// the mover takes the links added for headless characters (PathingHeadless) as well as the zone's own
 	constexpr int    MOVER_FLAGS         = PathingNotDisabled | PathingHeadless;
+	constexpr float  PORTAL_CLIMB_FLAT   = 60.0f; // a navmesh portal link no further across than this is a ladder or a drop (PlanRoute)
+	constexpr float  PORTAL_CLIMB_UP     = 120.0f; // ... and no higher than this (512 of the 912 in the stock navmeshes; Charasis' pits
+	                                               // and Ssraeshza's 258-unit one stay teleporters)
 	// a route's step is a swim link's when its ends are this near the link's
 	constexpr float  SWIM_MATCH          = 3.0f;
 	constexpr float  FLOOR_BELOW_NAV     = 6.0f;  // the map's floor this far under the route: look for the navmesh's
@@ -163,6 +166,7 @@ HeadlessMover::~HeadlessMover() = default;
 bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destination, bool through_zone_lines)
 {
 	m_path.clear();
+	m_climbs.clear();
 	m_stop_at_end = false;
 	m_lift_phase = LiftPhase::None;
 	if (zone->HeadlessPathing()) {
@@ -214,9 +218,17 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 				break; // PlanWithLift has the path
 			}
 			if (node.teleport) {
-				// a zone line (or teleporter): walk up to it, and into it when zoning
-				if (through_zone_lines) {
-					m_path.push_back(node.pos);
+				// the pathfinder's "teleport": an off-mesh link the zone's navmesh flags a portal, its two ends the last two steps
+				// (the marker itself has no place). In the stock navmeshes those are the map makers' ladders and drops, a few
+				// units across and up or down (all eleven of Upper Guk's: NPCs are put at the other end, and the route stopped
+				// here as at a zone line, with the rest of it dropped: Velthrin turned back and forth between two ladders' feet,
+				// Bifar and the survey never got below the first floor, 5 November). A short one is climbed, as a ladder; a long one
+				// is a teleporter: the route ends at it, as before (zone lines aren't links: a walk into one is the walk's end)
+				const size_t n = m_path.size();
+				if (n >= 2 && Flat(m_path[n - 2], m_path[n - 1]) <= PORTAL_CLIMB_FLAT &&
+					std::fabs(m_path[n - 2].z - m_path[n - 1].z) <= PORTAL_CLIMB_UP) {
+					m_climbs.push_back({m_path[n - 2], m_path[n - 1]});
+					continue;
 				}
 				m_stop_at_end = true;
 				break;
@@ -425,6 +437,13 @@ bool HeadlessMover::OnLadder(size_t i) const
 		return false;
 	}
 	auto same = [](const glm::vec3 &a, const glm::vec3 &b) { return glm::length(a - b) < SWIM_MATCH; };
+	if (i > 0) {
+		for (const auto &c : m_climbs) {  // (a portal link of the zone's navmesh, climbed as a ladder: PlanRoute)
+			if (same(m_path[i], c.to) && same(m_path[i - 1], c.from)) {
+				return true;
+			}
+		}
+	}
 	for (const auto &l : Ladders()) {
 		if (!same(m_path[i], l.to)) {
 			continue;
@@ -543,7 +562,7 @@ void HeadlessMover::SwimOnSurface(const glm::vec3 &start)
 	};
 	// a link's ends stay put (a ladder out of the water, a pad, a jump: the steps are known by them)
 	auto link_end = [&](const glm::vec3 &p) {
-		for (const auto *links : {&Ladders(), &Teleports(), &Jumps()}) {
+		for (const auto *links : {&Ladders(), &Teleports(), &Jumps(), static_cast<const std::vector<Jump> *>(&m_climbs)}) {
 			for (const auto &l : *links) {
 				if (glm::length(p - l.from) < SWIM_MATCH || glm::length(p - l.to) < SWIM_MATCH) {
 					return true;
