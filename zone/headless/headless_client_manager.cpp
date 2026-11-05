@@ -1272,7 +1272,13 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 				}
 			}
 			// ... or a GM's: a resurrection by a GM (#castspell of a rez on the corpse: the operator's own character, status 255) is accepted from anywhere
-			if (!partner && !ours && rezzer && rezzer->IsClient() && rezzer->CastToClient()->GetGM()) {
+			bool gm_rezzer = rezzer && rezzer->IsClient() && rezzer->CastToClient()->GetGM();
+			if (!partner && !ours && !rezzer) {  // (not in this zone: the GM's account status from the database)
+				auto r = database.QueryDatabase(fmt::format(
+					"SELECT a.status FROM character_data c JOIN account a ON a.id = c.account_id WHERE c.name = '{}' LIMIT 1", Strings::Escape(rez.rezzer_name)));
+				gm_rezzer = r.Success() && r.RowCount() && Strings::ToInt(r.begin()[0]) >= AccountStatus::GMAdmin;
+			}
+			if (!partner && !ours && gm_rezzer) {
 				rez.action = ResurrectionActions::Accept;
 				LogHeadlessClient("[{}] rez from [{}] ([{}]) for [{}]: accepted (a GM's)", me->GetCleanName(), rez.rezzer_name, spells[rez.spellid].name, rez.corpse_name);
 				auto answer = new EQApplicationPacket(OP_RezzAnswer, sizeof(Resurrect_Struct));
