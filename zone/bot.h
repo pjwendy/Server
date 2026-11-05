@@ -1115,6 +1115,8 @@ public:
 	uint32 m_fight_check_at = 0;      // when the fight checks (feign, the pet) last ran
 	bool FeignHoldProcess();
 	void DragAggroScan();
+	bool DragDangerNear();
+	void DragMoveTo(float x, float y, float z);
 
 	// Try Combat Methods
 	bool TryEvade(Mob* tar);
@@ -1200,6 +1202,8 @@ private:
 	Timer  m_drag_feign_reuse_timer;  // a feign's reuse (the skill's, or the spell's recast)
 	bool   m_feign_hold = false;      // ^feign: lying feigned till it is safe
 	Timer  m_drag_scan_timer;         // the proximity scan a player's client runs
+	bool   m_drag_can_sneak = false;  // a rogue with Sneak and Hide: it sneaks (hidden if it can) where a mob would see it, and runs elsewhere
+	Timer  m_drag_sneak_timer;        // a failed sneak, tried again after this
 
 	Timer m_combat_jitter_timer;
 

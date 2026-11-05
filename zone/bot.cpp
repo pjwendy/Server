@@ -2980,6 +2980,8 @@ namespace {
 	constexpr uint32 DRAG_FEIGN_MS     = 10000;    // lying feigned at least this long ...
 	constexpr float  DRAG_SAFE         = 80.0f;    // ... and till nothing this near hates us
 	constexpr uint32 DRAG_SCAN_MS      = 1000;
+	constexpr float  DRAG_SNEAK_MARGIN = 60.0f;    // a rogue sneaks within a hostile mob's aggro range and this much more; elsewhere it runs
+	constexpr uint32 DRAG_SNEAK_RETRY_MS = 5000;   // a failed sneak is tried again after this
 	constexpr uint16 SPELL_FEIGN_DEATH = 366;      // necromancer 16, shadowknight 24
 	constexpr uint16 SPELL_COMATOSE    = 3685;     // both 52
 }
@@ -2999,14 +3001,62 @@ void Bot::StartCorpseDrag(uint16 corpse_id)
 	WipeHateList();
 	SetTarget(nullptr);
 	InterruptSpell();
-	// a rogue goes hidden and sneaking, as a player rogue goes for a corpse
-	if (GetClass() == Class::Rogue && GetSkill(EQ::skills::SkillHide) && GetSkill(EQ::skills::SkillSneak)) {
-		const float hide_chance = ((GetSkill(EQ::skills::SkillHide) / 250.0f) + .25f) * 100;
-		sneaking = zone->random.Real(0, 100) < GetSkill(EQ::skills::SkillSneak) + 25;
-		hidden   = sneaking && zone->random.Real(0, 100) < hide_chance;
-		if (hidden) {
-			SendAppearancePacket(AppearanceType::Invisibility, 1);
+	// a rogue sneaks (and hides) as a player rogue going for a corpse does: past the mobs that would see it, at a walk, and at a run where
+	// none are near (sneaking the whole way, Thuevin took 12 minutes over 7,600 units of empty Scarlet Desert, 5 Nov: 10 a second, not 24)
+	m_drag_can_sneak = GetClass() == Class::Rogue && GetSkill(EQ::skills::SkillHide) && GetSkill(EQ::skills::SkillSneak);
+	m_drag_sneak_timer.Disable();
+}
+
+// a hostile mob near enough to see us: within its aggro range (and a margin) and of a faction that would attack us
+bool Bot::DragDangerNear()
+{
+	for (auto &close_mob : GetCloseMobList()) {
+		Mob *mob = close_mob.second;
+		if (!mob || !mob->IsNPC() || mob->GetOwner() || mob->IsCorpse() || mob->GetHP() <= 0) {
+			continue;
 		}
+		const float range = mob->GetAggroRange();
+		if (range <= 0.0f) {
+			continue;
+		}
+		if (DistanceNoZ(m_Position, mob->GetPosition()) > range + DRAG_SNEAK_MARGIN || std::abs(mob->GetZ() - GetZ()) > range + DRAG_SNEAK_MARGIN) {
+			continue;
+		}
+		if (GetReverseFactionCon(mob) >= FACTION_THREATENINGLY) {  // (threatening or scowling: it attacks)
+			return true;
+		}
+	}
+	return false;
+}
+
+// on the way (to the corpse, or back with it): sneaking and hidden near danger, running elsewhere
+void Bot::DragMoveTo(float x, float y, float z)
+{
+	if (m_drag_can_sneak) {
+		if (DragDangerNear()) {
+			if (!sneaking && (!m_drag_sneak_timer.Enabled() || m_drag_sneak_timer.Check(false))) {
+				const float hide_chance = ((GetSkill(EQ::skills::SkillHide) / 250.0f) + .25f) * 100;
+				sneaking = zone->random.Real(0, 100) < GetSkill(EQ::skills::SkillSneak) + 25;
+				hidden   = sneaking && zone->random.Real(0, 100) < hide_chance;
+				if (hidden) {
+					SendAppearancePacket(AppearanceType::Invisibility, 1);
+				}
+				m_drag_sneak_timer.Start(DRAG_SNEAK_RETRY_MS);
+			}
+		}
+		else if (sneaking || hidden) {
+			sneaking = false;  // (a rogue runs only unhidden)
+			if (hidden) {
+				hidden = false;
+				SendAppearancePacket(AppearanceType::Invisibility, 0);
+			}
+		}
+	}
+	if (sneaking) {
+		WalkTo(x, y, z);
+	}
+	else {
+		RunTo(x, y, z);
 	}
 }
 
@@ -3219,12 +3269,7 @@ bool Bot::CorpseDragProcess(Client* owner)
 		}
 		if (to_corpse > DRAG_REACH) {
 			const auto &p = corpse->GetPosition();
-			if (sneaking) {
-				WalkTo(p.x, p.y, p.z);
-			}
-			else {
-				RunTo(p.x, p.y, p.z);
-			}
+			DragMoveTo(p.x, p.y, p.z);
 			return true;
 		}
 		if (!corpse->DragTo(owner, this)) {
@@ -3248,12 +3293,7 @@ bool Bot::CorpseDragProcess(Client* owner)
 	}
 	if (to_owner > DRAG_HOME) {
 		const auto &p = owner->GetPosition();
-		if (sneaking) {
-			WalkTo(p.x, p.y, p.z);
-		}
-		else {
-			RunTo(p.x, p.y, p.z);
-		}
+		DragMoveTo(p.x, p.y, p.z);
 		return true;
 	}
 	corpse->DragTo(owner, owner);
