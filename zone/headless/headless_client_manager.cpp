@@ -1271,6 +1271,15 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 					partner = r.Success() && r.RowCount() && Strings::ToUnsignedInt(r.begin()[0]) == me->GuildID();
 				}
 			}
+			// ... or a GM's: a resurrection by a GM (#castspell of a rez on the corpse: the operator's own character, status 255) is accepted from anywhere
+			if (!partner && !ours && rezzer && rezzer->IsClient() && rezzer->CastToClient()->GetGM()) {
+				rez.action = ResurrectionActions::Accept;
+				LogHeadlessClient("[{}] rez from [{}] ([{}]) for [{}]: accepted (a GM's)", me->GetCleanName(), rez.rezzer_name, spells[rez.spellid].name, rez.corpse_name);
+				auto answer = new EQApplicationPacket(OP_RezzAnswer, sizeof(Resurrect_Struct));
+				memcpy(answer->pBuffer, &rez, sizeof(Resurrect_Struct));
+				it->second.stream->Inject(answer);
+				return;
+			}
 			const bool near = rez.zone_id == zone->GetZoneID() && rez.instance_id == zone->GetInstanceID() &&
 				glm::length(glm::vec2(rez.x - me->GetX(), rez.y - me->GetY())) <= REZ_NEAR;
 			rez.action = ((ours && near) || partner) ? ResurrectionActions::Accept : ResurrectionActions::Decline;
