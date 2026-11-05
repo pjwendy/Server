@@ -213,24 +213,25 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 		if (!through_zone_lines && std::fabs(destination.z - start.z) >= LIFT_MIN_CLIMB) {
 			via_lift = PlanWithLift(start, destination, walkable ? direct : -1.0f);
 		}
-		for (auto &node : route) {
+		for (auto it = route.begin(); it != route.end(); ++it) {
+			const auto &node = *it;
 			if (via_lift) {
 				break; // PlanWithLift has the path
 			}
 			if (node.teleport) {
-				// the pathfinder's "teleport": an off-mesh link the zone's navmesh flags a portal, its two ends the last two steps
-				// (the marker itself has no place). In the stock navmeshes those are the map makers' ladders and drops, a few
-				// units across and up or down (all eleven of Upper Guk's: NPCs are put at the other end, and the route stopped
-				// here as at a zone line, with the rest of it dropped: Velthrin turned back and forth between two ladders' feet,
-				// Bifar and the survey never got below the first floor, 5 November). A short one is climbed, as a ladder; a long one
-				// is a teleporter: the route ends at it, as before (zone lines aren't links: a walk into one is the walk's end)
-				// (a route that starts on the link has only its far end: its near end is where we stand. Eboola, surveying Upper
-				// Guk from a ladder's foot, stopped there)
-				const size_t     n    = m_path.size();
-				const glm::vec3 &from = n >= 2 ? m_path[n - 2] : start;
-				if (n >= 1 && Flat(from, m_path[n - 1]) <= PORTAL_CLIMB_FLAT && std::fabs(from.z - m_path[n - 1].z) <= PORTAL_CLIMB_UP) {
-					m_climbs.push_back({from, m_path[n - 1]});
-					continue;
+				// the pathfinder's "teleport": the step before this marker starts an off-mesh link the zone's navmesh flags a
+				// portal, and the step after it ends it (the marker itself has no place). In the stock navmeshes those are the map
+				// makers' ladders and drops, a few units across and up or down (all of Upper Guk's: NPCs are put at the other end,
+				// and the route stopped here as at a zone line, with the rest of it dropped: Velthrin turned back and forth between
+				// two ladders' feet, Bifar and the survey never got below the first floor, 5 November). A short one is climbed, as
+				// a ladder; a long one is a teleporter: the route ends at it, as before (zone lines aren't links: a walk into one is
+				// the walk's end)
+				const auto       next = std::next(it);
+				const glm::vec3 &from = m_path.empty() ? start : m_path.back();  // (a route that starts on the link: where we stand)
+				if (next != route.end() && !next->teleport && Flat(from, next->pos) <= PORTAL_CLIMB_FLAT &&
+					std::fabs(from.z - next->pos.z) <= PORTAL_CLIMB_UP) {
+					m_climbs.push_back({from, next->pos});
+					continue;  // (its far end is the next step)
 				}
 				m_stop_at_end = true;
 				break;
