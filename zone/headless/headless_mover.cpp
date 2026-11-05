@@ -224,10 +224,12 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 				// here as at a zone line, with the rest of it dropped: Velthrin turned back and forth between two ladders' feet,
 				// Bifar and the survey never got below the first floor, 5 November). A short one is climbed, as a ladder; a long one
 				// is a teleporter: the route ends at it, as before (zone lines aren't links: a walk into one is the walk's end)
-				const size_t n = m_path.size();
-				if (n >= 2 && Flat(m_path[n - 2], m_path[n - 1]) <= PORTAL_CLIMB_FLAT &&
-					std::fabs(m_path[n - 2].z - m_path[n - 1].z) <= PORTAL_CLIMB_UP) {
-					m_climbs.push_back({m_path[n - 2], m_path[n - 1]});
+				// (a route that starts on the link has only its far end: its near end is where we stand. Eboola, surveying Upper
+				// Guk from a ladder's foot, stopped there)
+				const size_t     n    = m_path.size();
+				const glm::vec3 &from = n >= 2 ? m_path[n - 2] : start;
+				if (n >= 1 && Flat(from, m_path[n - 1]) <= PORTAL_CLIMB_FLAT && std::fabs(from.z - m_path[n - 1].z) <= PORTAL_CLIMB_UP) {
+					m_climbs.push_back({from, m_path[n - 1]});
 					continue;
 				}
 				m_stop_at_end = true;
@@ -437,11 +439,10 @@ bool HeadlessMover::OnLadder(size_t i) const
 		return false;
 	}
 	auto same = [](const glm::vec3 &a, const glm::vec3 &b) { return glm::length(a - b) < SWIM_MATCH; };
-	if (i > 0) {
-		for (const auto &c : m_climbs) {  // (a portal link of the zone's navmesh, climbed as a ladder: PlanRoute)
-			if (same(m_path[i], c.to) && same(m_path[i - 1], c.from)) {
-				return true;
-			}
+	for (const auto &c : m_climbs) {  // (a portal link of the zone's navmesh, climbed as a ladder: PlanRoute)
+		if (same(m_path[i], c.to) &&
+			(i > 0 ? same(m_path[i - 1], c.from) : glm::length(m_pos - c.from) <= glm::length(c.to - c.from) + SWIM_MATCH)) {
+			return true;
 		}
 	}
 	for (const auto &l : Ladders()) {
