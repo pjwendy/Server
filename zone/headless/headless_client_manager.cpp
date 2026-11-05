@@ -969,6 +969,56 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			stream->Inject(app);
 			return "";
 		}
+		case eqheadless::Command::kCoin: {
+			// as the bank window: a coin move a type at a time (OP_MoveCoin, inventory 1 <-> bank 2); the server's handler wants a banker beside us
+			const auto &cc = cmd.coin();
+			uint32 distance = 0;
+			NPC *banker = entity_list.GetClosestBanker(me, distance);
+			if (!banker || distance > USE_NPC_RANGE2) {
+				return "no banker beside us";
+			}
+			const auto &pp = me->GetPP();
+			const uint32 have[4] = {
+				cc.to_bank() ? pp.platinum : pp.platinum_bank, cc.to_bank() ? pp.gold : pp.gold_bank,
+				cc.to_bank() ? pp.silver : pp.silver_bank, cc.to_bank() ? pp.copper : pp.copper_bank};
+			const uint32 types[4] = {COINTYPE_PP, COINTYPE_GP, COINTYPE_SP, COINTYPE_CP};
+			const uint64 worth[4] = {1000, 100, 10, 1};
+			uint64 left = cc.copper();
+			uint64 take[4] = {0, 0, 0, 0};
+			for (int k = 0; k < 4 && left; ++k) {  // whole coins, the biggest first, no more than asked
+				take[k] = std::min<uint64>(have[k], left / worth[k]);
+				left -= take[k] * worth[k];
+			}
+			if (left && !cc.to_bank()) {
+				// a withdrawal short in small coin: one more of the smallest coin there is still, to pay with (the change stays carried)
+				for (int k = 3; k >= 0 && left; --k) {
+					if (take[k] < have[k] && worth[k] >= left) {
+						take[k] += 1;
+						left = 0;
+					}
+				}
+				for (int k = 3; k >= 0 && left; --k) {
+					const uint64 more = std::min<uint64>(have[k] - take[k], (left + worth[k] - 1) / worth[k]);
+					take[k] += more;
+					left = more * worth[k] >= left ? 0 : left - more * worth[k];
+				}
+			}
+			for (int k = 0; k < 4; ++k) {
+				if (!take[k]) {
+					continue;
+				}
+				auto app = new EQApplicationPacket(OP_MoveCoin, sizeof(MoveCoin_Struct));
+				auto *mc = reinterpret_cast<MoveCoin_Struct *>(app->pBuffer);
+				mc->from_slot = cc.to_bank() ? 1 : 2;
+				mc->to_slot   = cc.to_bank() ? 2 : 1;
+				mc->cointype1 = types[k];
+				mc->cointype2 = types[k];
+				mc->amount    = static_cast<int32>(take[k]);
+				stream->Inject(app);
+			}
+			LogHeadlessClient("[{}] coin {} the bank: [{}] copper's worth asked", me->GetCleanName(), cc.to_bank() ? "to" : "from", cc.copper());
+			return "";
+		}
 		case eqheadless::Command::kMoveItem: {
 			const auto &mv = cmd.move_item();
 			if (!me->GetInv().GetItem(mv.from_slot())) {
@@ -2035,6 +2085,8 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 	self->set_gold(me->GetPP().gold);
 	self->set_silver(me->GetPP().silver);
 	self->set_copper(me->GetPP().copper);
+	self->set_bank_copper(static_cast<uint64>(me->GetPP().platinum_bank) * 1000 + static_cast<uint64>(me->GetPP().gold_bank) * 100 +
+		static_cast<uint64>(me->GetPP().silver_bank) * 10 + me->GetPP().copper_bank);
 	if (Group *group = me->GetGroup()) {
 		for (int i = 0; i < MAX_GROUP_MEMBERS; ++i) {
 			if (!group->membername[i][0]) {

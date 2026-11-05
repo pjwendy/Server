@@ -120,6 +120,9 @@ message MerchantCommand { uint32 npc_id = 1; bool open = 2; }
 message GiveCommand     { uint32 npc_id = 1; int32 slot = 2; uint32 quantity = 3; repeated GiveItem more = 4; }
 message GiveItem        { int32 slot = 1; uint32 quantity = 2; }
 message BuyCommand      { uint32 npc_id = 1; uint32 merchant_slot = 2; uint32 quantity = 3; }
+// coin between what we carry and our bank, beside a banker, as the client's bank window does: this much (in copper's worth; the coins
+// picked platinum first, then gold, silver and copper, as far as they go), to the bank or from it
+message CoinCommand     { bool to_bank = 1; uint64 copper = 2; }
 message SellCommand     { uint32 npc_id = 1; int32 slot = 2; uint32 quantity = 3; } // slot: inventory slot
 // pick an item up and put it down elsewhere (equip it, put a bag in a slot, bank it); swaps with
 // what's there. Bank slots (2000+) need a banker within reach, as in the client.
@@ -197,6 +200,7 @@ message Command {
     CloseObjectCommand    close_object    = 34;
     CombineCommand        combine         = 35;
     BuyAaCommand          buy_aa          = 36;
+    CoinCommand           coin            = 37;
   }
 }
 
@@ -447,6 +451,7 @@ message Self {
   uint32          air        = 38; // seconds of air left under water (full whenever you can breathe)
   uint32          max_air    = 39; // seconds of air at most (Stamina, Lung Capacity); at none, you drown
   uint32          gender     = 40; // 0 male, 1 female, 2 neutral
+  uint64          bank_copper = 41; // the coin in our bank, in copper's worth (CoinCommand moves it)
 }
 
 message Gem {
