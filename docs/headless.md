@@ -315,3 +315,4 @@ Some crossings are no zone line: an invisible NPC by a dock has a quest script (
 
 `maps/nav/boats.json` (puppeteer's `tools/build_boats.py` reads the scripts and the spawn points) lists them: the zone, the box, the zone it moves you to and where. The mover keeps round every box (a circle round it) except the one a `zone_to` is for; a `zone_to` to a zone with no zone line walks to the middle of the box of the nearest boat to it, and the script does the rest (no zone change request is made). A walk of your own (`move_to`) never enters one when there is a way round.
 
+A headless character accepts a resurrection by a **GM** (a rezzer whose account status is 100 or more), from wherever the GM is: a GM can raise a corpse of one of these characters with `#castspell` on it, and the character is put at the corpse as for a cleric's rez.
