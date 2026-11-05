@@ -1432,33 +1432,6 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 				// (ResetLooter), so put first it cost everything after it (Grakk, eq3: a Rhino Beetle Horn kept three worn items on its
 				// corpse for 210 tries)
 				const auto &all = e->CastToCorpse()->GetLootItems();
-				// our own corpse, and a lore item on it we carry another of: the one we carry goes, and the corpse's comes back. A lore item
-				// is only looked for on us, not on our corpses, so after a death a second one is easily had (looted again, bought, handed back
-				// by a bot: 39 such corpses on 5 Nov, Ilvara's Frozen Mantle among them). The same item only, and not one with augments in it:
-				// another of the same lore group may be a better one (that one is still left for last)
-				Corpse *own = e->CastToCorpse();
-				if (own->IsPlayerCorpse() && own->GetCharID() == me->CharacterID()) {
-					for (const auto *item : all) {  // (a bag's things too: they come with the bag, which is refused for one of them)
-						if (!item) {
-							continue;
-						}
-						const auto *data = database.GetItem(item->item_id);
-						if (!data || !data->LoreFlag || data->LoreGroup != -1) {
-							continue;
-						}
-						const int16 held = me->GetInv().HasItem(data->ID, 0, ~invWhereSharedBank);
-						if (held == INVALID_INDEX || held == EQ::invslot::slotCursor) {
-							continue;
-						}
-						auto *inst = me->GetInv().GetItem(held);
-						if (!inst || inst->IsAugmented() || inst->GetID() != data->ID) {
-							continue;
-						}
-						LogInfo("[Headless Client] [{}] destroying the [{}] we carry (slot [{}]): its twin on our corpse is lore, and comes back",
-							me->GetCleanName(), data->Name, held);
-						me->DeleteItemInInventory(held, 0, true);
-					}
-				}
 				auto lore_held = [&](const LootItem *item, const EQ::ItemData *data) {
 					if (data && me->CheckLoreConflict(data)) {
 						return true;
