@@ -1010,6 +1010,31 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			mi->to_slot         = EQ::invslot::TRADE_BEGIN;
 			mi->number_in_stack = gv.quantity() ? gv.quantity() : (inst->IsStackable() ? std::max<int16>(1, inst->GetCharges()) : 0);
 			stream->Inject(mv);
+			// the rest of a hand-in of several, each into the next trade slot by way of the cursor (as the client does: the server
+			// takes nothing into a trade but from the cursor), so the NPC's script sees them all in the one trade
+			int16 next = EQ::invslot::TRADE_BEGIN + 1;
+			for (const auto &more : gv.more()) {
+				if (next > EQ::invslot::TRADE_END) {
+					break;
+				}
+				const EQ::ItemInstance *m = me->GetInv().GetItem(more.slot());
+				if (!m || !m->GetItem() || more.slot() == EQ::invslot::slotCursor) {
+					continue;
+				}
+				const int16 count = more.quantity() ? more.quantity() : (m->IsStackable() ? std::max<int16>(1, m->GetCharges()) : 0);
+				auto up = new EQApplicationPacket(OP_MoveItem, sizeof(MoveItem_Struct));
+				auto *u = reinterpret_cast<MoveItem_Struct *>(up->pBuffer);
+				u->from_slot = more.slot();
+				u->to_slot = EQ::invslot::slotCursor;
+				u->number_in_stack = count;
+				stream->Inject(up);
+				auto in = new EQApplicationPacket(OP_MoveItem, sizeof(MoveItem_Struct));
+				auto *t = reinterpret_cast<MoveItem_Struct *>(in->pBuffer);
+				t->from_slot = EQ::invslot::slotCursor;
+				t->to_slot = next++;
+				t->number_in_stack = count;
+				stream->Inject(in);
+			}
 			auto ok = new EQApplicationPacket(OP_TradeAcceptClick, sizeof(TradeAccept_Struct));
 			reinterpret_cast<TradeAccept_Struct *>(ok->pBuffer)->from_mob_id = me->GetID();
 			stream->Inject(ok);
