@@ -15,7 +15,14 @@
 	You should have received a copy of the GNU General Public License
 	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
+// dtNavMesh::connectExtOffMeshLinks is private: this file reaches it to join long off-mesh links (ConnectFarOffMeshLinks, below). The class's
+// layout is the same either way; only this translation unit sees it public
+#define private public
+#include "recastnavigation/DetourNavMesh.h"
+#undef private
 #include "pathfinder_nav_mesh.h"
+#include <set>
+#include <tuple>
 
 namespace {
 	constexpr unsigned char AVOID_AREA = 12;     // an area no navmesh has: the polygons a route keeps out of
@@ -508,6 +515,42 @@ void PathfinderNavmesh::Clear()
 	}
 }
 
+// Detour joins an off-mesh link's far end to the navmesh only in its own tile or a neighbouring one: a longer link (a teleport pad across a city,
+// 375 units in Erudin; 233 of them in eleven zones: Skyshrine's, the Plane of Thunder's, Felwithe's...) led nowhere, and the zone's parts it
+// joins were cut off from each other (Serthos, 6 Nov, in Erudin's palace landing with no way back into the city). Each such link is joined
+// here to the tile its far end lies in, by Detour's own routine. Returns the links looked at.
+static int ConnectFarOffMeshLinks(dtNavMesh *mesh)
+{
+	std::set<std::tuple<const dtMeshTile *, const dtMeshTile *, int>> done;
+	int joined = 0;
+	for (int i = 0; i < mesh->getMaxTiles(); ++i) {
+		dtMeshTile *tile = const_cast<dtMeshTile *>(static_cast<const dtNavMesh *>(mesh)->getTile(i));
+		if (!tile || !tile->header) {
+			continue;
+		}
+		for (int k = 0; k < tile->header->offMeshConCount; ++k) {
+			const dtOffMeshConnection &con = tile->offMeshCons[k];
+			if (con.side == 0xff) {
+				continue;  // (ends in its own tile)
+			}
+			int tx = 0, ty = 0;
+			mesh->calcTileLoc(&con.pos[3], &tx, &ty);
+			if (std::abs(tx - tile->header->x) <= 1 && std::abs(ty - tile->header->y) <= 1) {
+				continue;  // (a neighbour: Detour joined it)
+			}
+			const dtMeshTile *ends[32];
+			const int n = mesh->getTilesAt(tx, ty, ends, 32);
+			for (int j = 0; j < n; ++j) {
+				if (done.insert({ends[j], tile, con.side}).second) {
+					mesh->connectExtOffMeshLinks(const_cast<dtMeshTile *>(ends[j]), tile, dtOppositeTile(con.side));
+				}
+			}
+			++joined;
+		}
+	}
+	return joined;
+}
+
 void PathfinderNavmesh::Load(const std::string &path)
 {
 	Clear();
@@ -599,7 +642,8 @@ void PathfinderNavmesh::Load(const std::string &path)
 			m_impl->nav_mesh->addTile(data, data_size, DT_TILE_FREE_DATA, tile_ref, 0);
 		}
 
-		LogInfo("Loaded Navmesh V[{}] file [{}]", version, path.c_str());
+		const int far_links = ConnectFarOffMeshLinks(m_impl->nav_mesh);
+		LogInfo("Loaded Navmesh V[{}] file [{}] ({} long off-mesh links joined at their far end)", version, path.c_str(), far_links);
 	}
 }
 
