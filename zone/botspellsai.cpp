@@ -567,6 +567,14 @@ bool Bot::BotCastHeal(Mob* tar, uint8 bot_class, BotSpell& bot_spell, uint16 spe
 bool Bot::AIDoSpellCast(int32 i, Mob* tar, int32 mana_cost, uint32* oDontDoAgainBefore) {
 	bool result = false;
 
+	// every spell the AI starts, whatever chose it: one whose components its owner doesn't carry isn't started (CastChecks has this for the
+	// spells it vets, but a pet came by BotCastPet, which goes straight here: Fizzwick, an enchanter, kept trying to summon its pet without
+	// the reagent, 6 Nov). A commanded cast still goes ahead, to say what's missing
+	if (!IsCommandedSpell() && !OwnerHasReagentsFor(AIBot_spells[i].spellid)) {
+		LogBotSpellChecksDetail("{} says, 'Not casting {}: the owner lacks its reagents.'", GetCleanName(), GetSpellName(AIBot_spells[i].spellid));
+		return false;
+	}
+
 	// manacost has special values, -1 is no mana cost, -2 is instant cast (no mana)
 	int32 manaCost = mana_cost;
 
