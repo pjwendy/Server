@@ -1023,6 +1023,12 @@ public:
 	int16 PackSlotFor(const EQ::ItemInstance& inst);     // where it would go, or INVALID_INDEX: no room
 	bool PackPut(int16 slot_id, const EQ::ItemInstance& inst);
 	int PackRoom();
+	// A bot's bank (^bank): the bank's 24 slots and the bags in them, at a banker only, kept for its owner as its pack is
+	static bool IsBankSlot(int16 slot_id);
+	std::vector<int16> BankSlots();                      // every bank slot there is now (the bags' too)
+	int16 BankSlotFor(const EQ::ItemInstance& inst);     // where it would go, or INVALID_INDEX: no room
+	bool BankPut(int16 slot_id, const EQ::ItemInstance& inst);
+	int BankRoom();
 	std::map<uint16, uint32> GetBotItemSlots();
 	uint32 GetBotItemBySlot(uint16 slot_id);
 	int16 HasBotItem(uint32 item_id);

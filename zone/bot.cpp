@@ -4102,6 +4102,105 @@ bool Bot::IsPackSlot(int16 slot_id)
 		   EQ::ValueWithin(slot_id, EQ::invbag::GENERAL_BAGS_BEGIN, EQ::invbag::GENERAL_BAGS_END);
 }
 
+bool Bot::IsBankSlot(int16 slot_id)
+{
+	return EQ::ValueWithin(slot_id, EQ::invslot::BANK_BEGIN, EQ::invslot::BANK_END) ||
+		   EQ::ValueWithin(slot_id, EQ::invbag::BANK_BAGS_BEGIN, EQ::invbag::BANK_BAGS_END);
+}
+
+// the slots of a store (the pack: the general slots; the bank: the bank's) and the bags in them
+static std::vector<int16> StoreSlots(const EQ::InventoryProfile& inv, int16 first, int16 last)
+{
+	std::vector<int16> out;
+	for (int16 g = first; g <= last; ++g) {
+		out.push_back(g);
+		const auto* bag = inv.GetItem(g);
+		if (bag && bag->IsClassBag()) {
+			for (uint8 i = EQ::invbag::SLOT_BEGIN; i < bag->GetItem()->BagSlots; ++i) {
+				out.push_back(EQ::InventoryProfile::CalcSlotId(g, i));
+			}
+		}
+	}
+	return out;
+}
+
+// where an item goes in a store: onto a stack of the same with room, into a bag that takes its size, else an empty top slot
+static int16 StoreSlotFor(const EQ::InventoryProfile& inv, const EQ::ItemInstance& inst, int16 first, int16 last)
+{
+	const auto* item = inst.GetItem();
+	if (!item) {
+		return INVALID_INDEX;
+	}
+	if (inst.IsStackable()) {
+		for (int16 slot : StoreSlots(inv, first, last)) {
+			const auto* have = inv.GetItem(slot);
+			if (have && have->GetID() == inst.GetID() && have->GetCharges() + inst.GetCharges() <= item->StackSize) {
+				return slot;
+			}
+		}
+	}
+	if (!inst.IsClassBag()) {
+		for (int16 g = first; g <= last; ++g) {
+			const auto* bag = inv.GetItem(g);
+			if (!bag || !bag->IsClassBag() || bag->GetItem()->BagSize < item->Size) {
+				continue;
+			}
+			for (uint8 i = EQ::invbag::SLOT_BEGIN; i < bag->GetItem()->BagSlots; ++i) {
+				const int16 slot = EQ::InventoryProfile::CalcSlotId(g, i);
+				if (!inv.GetItem(slot)) {
+					return slot;
+				}
+			}
+		}
+	}
+	for (int16 g = first; g <= last; ++g) {
+		if (!inv.GetItem(g)) {
+			return g;
+		}
+	}
+	return INVALID_INDEX;
+}
+
+std::vector<int16> Bot::BankSlots()
+{
+	return StoreSlots(m_inv, EQ::invslot::BANK_BEGIN, EQ::invslot::BANK_END);
+}
+
+int16 Bot::BankSlotFor(const EQ::ItemInstance& inst)
+{
+	return StoreSlotFor(m_inv, inst, EQ::invslot::BANK_BEGIN, EQ::invslot::BANK_END);
+}
+
+bool Bot::BankPut(int16 slot_id, const EQ::ItemInstance& inst)
+{
+	if (!GetBotID() || !IsBankSlot(slot_id)) {
+		return false;
+	}
+	auto* have = m_inv.GetItem(slot_id);
+	if (have) {  // a stack of the same: added to it
+		if (have->GetID() != inst.GetID() || !inst.IsStackable()) {
+			return false;
+		}
+		have->SetCharges(have->GetCharges() + inst.GetCharges());
+		return database.botdb.SaveItemBySlot(this, slot_id, have);
+	}
+	if (!database.botdb.SaveItemBySlot(this, slot_id, &inst)) {
+		return false;
+	}
+	return m_inv.PutItem(slot_id, inst) != EQ::invslot::SLOT_INVALID;
+}
+
+int Bot::BankRoom()
+{
+	int room = 0;
+	for (int16 slot : BankSlots()) {
+		if (!m_inv.GetItem(slot)) {
+			++room;
+		}
+	}
+	return room;
+}
+
 std::vector<int16> Bot::PackSlots()
 {
 	std::vector<int16> out;

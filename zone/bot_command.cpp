@@ -123,6 +123,7 @@ int bot_command_init(void)
 		bot_command_add("copysettings", "Copies settings from one bot to another", AccountStatus::Player, bot_command_copy_settings) ||
 		bot_command_add("defaultsettings", "Restores a bot back to default settings", AccountStatus::Player, bot_command_default_settings) ||
 		bot_command_add("pack", "Your bot carries things for you: give it what's on your cursor, list its pack, take things back", AccountStatus::Player, bot_command_pack) ||
+		bot_command_add("bank", "Your bot banks for you: from its pack into its bank and back, at a banker", AccountStatus::Player, bot_command_bank) ||
 		bot_command_add("corpsedrag", "Sends a bot to drag your targeted corpse back to you", AccountStatus::Player, bot_command_corpse_drag) ||
 		bot_command_add("depart", "Orders a bot to open a magical doorway to a specified destination", AccountStatus::Player, bot_command_depart) ||
 		bot_command_add("enforcespellsettings", "Toggles your Bot to cast only spells in their spell settings list.", AccountStatus::Player, bot_command_enforce_spell_list) ||

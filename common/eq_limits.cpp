@@ -460,7 +460,7 @@ static const EQ::inventory::LookupEntry inventory_static_lookup_entries[EQ::vers
 	/*[MobVersion::Bot] =*/
 	EQ::inventory::LookupEntry(
 		EQ::inventory::LookupEntry::InventoryTypeSize_Struct(
-			EQ::invtype::POSSESSIONS_SIZE, /*InvTypePossessionsSize,*/	EntityLimits::Bot::INULL,	EntityLimits::Bot::INULL,
+			EQ::invtype::POSSESSIONS_SIZE, /*InvTypePossessionsSize,*/	EQ::invtype::BANK_SIZE, /*a bot banks for its owner (^bank)*/	EntityLimits::Bot::INULL,
 			EntityLimits::Bot::invtype::TRADE_SIZE,							EntityLimits::Bot::INULL,	EntityLimits::Bot::INULL,
 			EntityLimits::Bot::INULL,										EntityLimits::Bot::INULL,	EntityLimits::Bot::INULL,
 			EntityLimits::Bot::INULL,										EntityLimits::Bot::INULL,	EntityLimits::Bot::INULL, /*InvTypeCorpseSize,*/
