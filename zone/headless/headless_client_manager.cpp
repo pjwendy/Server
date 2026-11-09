@@ -1238,6 +1238,31 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			stream->Inject(app);
 			return "";
 		}
+		case eqheadless::Command::kBuffRemove: {
+			// as the client's buff window (OP_BuffRemoveRequest): the server lets a client click off beneficial buffs on itself and its own bots
+			const uint32 id = cmd.buff_remove().spawn_id();
+			Mob *who = id ? entity_list.GetMob(id) : me;
+			if (!who) {
+				return fmt::format("no spawn with id {}", id);
+			}
+			if (who != me && !(who->IsBot() && who->GetOwner() == me)) {
+				return fmt::format("{} is neither you nor one of your bots", who->GetCleanName());
+			}
+			const uint32 slot = cmd.buff_remove().slot();
+			if (slot >= static_cast<uint32>(who->GetMaxTotalSlots()) || !IsValidSpell(who->GetSpellIDFromSlot(slot))) {
+				return fmt::format("{} has no buff in slot {}", who->GetCleanName(), slot);
+			}
+			const uint16 spell = who->GetSpellIDFromSlot(slot);
+			if (!IsBeneficialSpell(spell) || spells[spell].no_remove) {
+				return fmt::format("{} can't be clicked off", SpellName(spell));
+			}
+			auto app = new EQApplicationPacket(OP_BuffRemoveRequest, sizeof(BuffRemoveRequest_Struct));
+			auto *br = reinterpret_cast<BuffRemoveRequest_Struct *>(app->pBuffer);
+			br->SlotID   = slot;
+			br->EntityID = who->GetID();
+			stream->Inject(app);
+			return "";
+		}
 		case eqheadless::Command::kRaidInvite: {
 			// as the client's raid window invite (OP_RaidInvite, which the server routes to Handle_OP_RaidCommand; RaidCommandInvite): a bot goes straight in (Bot::ProcessRaidInvite),
 			// a player is asked (OP_RaidUpdate action 20; a headless one answers it in OnOutgoing)
@@ -2155,6 +2180,7 @@ void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob, Client *
 				buff->set_spell_id(mb[i].spellid);
 				buff->set_name(SpellName(mb[i].spellid));
 				buff->set_ticks(mb[i].ticsremaining);
+				buff->set_slot(i);
 			}
 		}
 	}
@@ -2217,6 +2243,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			buff->set_spell_id(buffs[i].spellid);
 			buff->set_name(SpellName(buffs[i].spellid));
 			buff->set_ticks(buffs[i].ticsremaining);
+			buff->set_slot(i);
 		}
 	}
 	for (auto &[id, mob] : entity_list.GetMobList()) {
@@ -2285,6 +2312,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 						buff->set_spell_id(mb[b].spellid);
 						buff->set_name(SpellName(mb[b].spellid));
 						buff->set_ticks(mb[b].ticsremaining);
+						buff->set_slot(b);
 					}
 				}
 			}
@@ -2402,6 +2430,18 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		brs->set_fire(b->GetFR());
 		brs->set_poison(b->GetPR());
 		brs->set_disease(b->GetDR());
+		if (Buffs_Struct *bb = b->GetBuffs()) {
+			for (int i = 0; i < b->GetMaxTotalSlots(); ++i) {
+				if (!IsValidSpell(bb[i].spellid)) {
+					continue;
+				}
+				auto *buff = bg->add_buffs();
+				buff->set_spell_id(bb[i].spellid);
+				buff->set_name(SpellName(bb[i].spellid));
+				buff->set_ticks(bb[i].ticsremaining);
+				buff->set_slot(i);
+			}
+		}
 		for (int16 slot = EQ::invslot::EQUIPMENT_BEGIN; slot <= EQ::invslot::EQUIPMENT_END; ++slot) {
 			const EQ::ItemInstance *inst = b->GetBotItem(slot);
 			if (inst && inst->GetItem()) {

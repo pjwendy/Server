@@ -173,6 +173,9 @@ message AugmentCommand     { int32 item_slot = 1; uint32 aug_index = 2; uint32 a
 // invited by a guildmate (or a GM) accepts by itself, as a rez is accepted; anyone else's invite is left unanswered.
 // RaidRemove: take a member out of the raid (the leader's right; empty name: leave it yourself).
 // RaidMove: put a member in raid group 0-11, or out of every group (12 or more), as dragging a name in the raid window.
+// click a beneficial buff off yourself or one of your bots, by its slot (Buff.slot), as the client's buff window (OP_BuffRemoveRequest).
+// spawn_id 0: yourself. A raid pads its buff windows with junk buffs first (a dispel takes the first slot it can).
+message BuffRemoveCommand  { uint32 spawn_id = 1; uint32 slot = 2; }
 message RaidInviteCommand  { string name = 1; }
 message RaidRemoveCommand  { string name = 1; }
 message RaidMoveCommand    { string name = 1; uint32 group = 2; }
@@ -221,6 +224,7 @@ message Command {
     RaidInviteCommand     raid_invite     = 39;
     RaidRemoveCommand     raid_remove     = 40;
     RaidMoveCommand       raid_move       = 41;
+    BuffRemoveCommand     buff_remove     = 42;
   }
 }
 
@@ -487,6 +491,7 @@ message Buff {
   uint32 spell_id = 1;
   string name     = 2;
   int32  ticks    = 3; // 6s ticks left; -1 permanent
+  uint32 slot     = 4; // its slot in the buff window (0 first): a dispel takes the first it can, and a new buff goes in the first free one
 }
 
 message BookSpell {
@@ -553,6 +558,7 @@ message BotGear {
   uint32        race_bit  = 6; // its bit in Item.races
   repeated Item equipment = 7; // slot is the worn slot
   Resists       resists   = 8; // its resists now (gear and buffs)
+  repeated Buff buffs     = 9; // what is on it now, with each buff's slot (seen in a raid too, where Self.group is empty)
 }
 
 // a character's or a bot's resists (what a raid target's spells are checked against: a dragon's breath against cold, its fear against magic)
