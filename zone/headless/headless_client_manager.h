@@ -31,7 +31,7 @@
 #include <vector>
 
 class Client;
-namespace EQ { struct ItemData; }
+namespace EQ { struct ItemData; class ItemInstance; }
 class EQApplicationPacket;
 class Mob;
 class NullStream;
@@ -132,6 +132,7 @@ private:
 	bool AnswerZoneRequest(const std::string &session_id); // false: not in the zone yet
 	void AnswerZoneRequestSoon(const std::string &session_id, uint32 every_ms, int max_tries);
 	static void FillItem(eqheadless::Item *out, const EQ::ItemData *item, Mob *holder);
+	static void FillItem(eqheadless::Item *out, const EQ::ItemInstance *inst, Mob *holder); // + its sockets and what is in them
 
 	std::map<std::string, Session> m_sessions; // session id -> session
 };

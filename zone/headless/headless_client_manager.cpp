@@ -493,6 +493,25 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			LogHeadlessClient("[{}] combining in slot [{}]", me->GetCleanName(), cmd.combine().container_slot());
 			return "";
 		}
+		case eqheadless::Command::kAugment: {
+			// the client's augment window: OP_AugmentItem (Client::Handle_OP_AugmentItem does the rules, the swap and the distiller). The
+			// augment to insert is on the cursor already (MoveItem); the answer is chat and the item's new augments in the inventory frame
+			const auto &ag = cmd.augment();
+			if (ag.action() > AugmentActions::Destroy || ag.aug_index() >= EQ::invaug::SOCKET_COUNT) {
+				return "no such augment action or socket";
+			}
+			auto app = new EQApplicationPacket(OP_AugmentItem, sizeof(AugmentItem_Struct));
+			auto *au = reinterpret_cast<AugmentItem_Struct *>(app->pBuffer);
+			memset(au, 0, sizeof(AugmentItem_Struct));
+			au->container_slot = ag.item_slot();
+			au->augment_slot   = ag.solvent_slot();
+			au->augment_index  = ag.aug_index();
+			au->augment_action = ag.action();
+			stream->Inject(app);
+			LogHeadlessClient("[{}] augment: item slot [{}] socket [{}] action [{}] distiller slot [{}]", me->GetCleanName(), ag.item_slot(),
+							  ag.aug_index(), ag.action(), ag.solvent_slot());
+			return "";
+		}
 		case eqheadless::Command::kBuyAa: {
 			// as the client's AA window: a point spent on the next rank of an ability (the server checks the level, the price, the prerequisites)
 			const int rank_id = static_cast<int>(cmd.buy_aa().rank_id());
@@ -2178,7 +2197,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 	eqheadless::Inventory inventory;
 	auto add_item = [&inventory, me](int16 slot, const EQ::ItemInstance *inst) {
 		auto *item = inventory.add_items();
-		FillItem(item, inst->GetItem(), me);
+		FillItem(item, inst, me);
 		item->set_slot(slot);
 		item->set_charges(inst->GetCharges());
 	};
@@ -2221,7 +2240,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 			const EQ::ItemInstance *inst = b->GetBotItem(slot);
 			if (inst && inst->GetItem()) {
 				auto *it = bg->add_equipment();
-				FillItem(it, inst->GetItem(), b);
+				FillItem(it, inst, b);
 				it->set_slot(slot);
 				it->set_charges(inst->GetCharges());
 			}
@@ -2326,6 +2345,30 @@ void HeadlessClientManager::SendFrame(const std::string &session_id, const eqhea
 	safe_delete(pack);
 }
 
+void HeadlessClientManager::FillItem(eqheadless::Item *out, const EQ::ItemInstance *inst, Mob *me)
+{
+	// (an item as it is: its own data, and what is in its sockets)
+	const EQ::ItemData *item = inst->GetItem();
+	FillItem(out, item, me);
+	bool sockets = false;
+	for (int i = 0; i < EQ::invaug::SOCKET_COUNT; ++i) {
+		sockets = sockets || item->AugSlotType[i] != 0;
+	}
+	if (!sockets) {
+		return;
+	}
+	bool any = false;
+	for (int i = 0; i < EQ::invaug::SOCKET_COUNT; ++i) {
+		out->add_aug_sockets(item->AugSlotType[i]);
+		const uint32 id = inst->GetAugmentItemID(i);
+		any = any || id != 0;
+		out->add_augs(id);
+	}
+	if (!any) {
+		out->clear_augs();
+	}
+}
+
 void HeadlessClientManager::FillItem(eqheadless::Item *out, const EQ::ItemData *item, Mob *me)
 {
 	out->set_item_id(item->ID);
@@ -2359,6 +2402,11 @@ void HeadlessClientManager::FillItem(eqheadless::Item *out, const EQ::ItemData *
 	out->set_usable(me && item->IsEquipable(me->GetBaseRace(), me->GetClass()) && item->ReqLevel <= me->GetLevel());
 	out->set_classes(item->Classes);
 	out->set_races(item->Races);
+	if (item->ItemType == EQ::item::ItemTypeAugmentation) {
+		out->set_aug_type(item->AugType);
+		out->set_aug_restrict(item->AugRestrict);
+		out->set_aug_distiller(item->AugDistiller);
+	}
 	if (item->ItemType == EQ::item::ItemTypeSpell && IsValidSpell(item->Scroll.Effect)) {
 		out->set_scroll_spell(item->Scroll.Effect);
 		if (me && IsPlayerClass(me->GetClass())) {

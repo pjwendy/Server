@@ -160,6 +160,14 @@ message CorpseDragCommand { uint32 corpse_id = 1; bool drop = 2; } // /corpse dr
 message ClickObjectCommand { uint32 object_id = 1; } // open a world container by its object table id (the server checks the distance), as a click on it
 message CloseObjectCommand {}                        // close the container opened
 message BuyAaCommand       { uint32 rank_id = 1; } // buy one rank of an alternate advancement ability with a point, as the client's AA window does (aa_ranks.id: the rank bought, one at a time); refused with why when it can't be bought
+// Augments, as the client's own window does it (OP_AugmentItem): put the augment on the cursor first (MoveItem to slot 33), then Augment.
+// item_slot is the item to be augmented, worn or carried (not banked): an equipment slot, a general slot or a slot in a bag. aug_index is
+// the socket, 0-5. action: 0 insert the augment on the cursor, 1 remove the augment in the socket safely (it comes to the cursor; the
+// augment's own distiller, Item.aug_distiller, must be in solvent_slot, unless that is 0), 2 swap (insert the cursor's augment, the old one
+// comes to the cursor; the distiller as for remove), 3 destroy the augment in the socket. solvent_slot: where the distiller is, or -1.
+// The answer is chat, and the item's new Item.augs in the next inventory frame. The server checks the socket's type against the augment's
+// Item.aug_type (bit n-1 of it: socket type n) and that the augment's worn slots overlap the item's.
+message AugmentCommand     { int32 item_slot = 1; uint32 aug_index = 2; uint32 action = 3; int32 solvent_slot = 4; }
 message CombineCommand     { int32 container_slot = 1; } // combine what is in a container: an inventory bag's slot, or 1000 (SLOT_TRADESKILL_EXPERIMENT_COMBINE) for the world container opened; the answer is chat (the skill-ups and the product land in the inventory)
 
 message Command {
@@ -201,6 +209,7 @@ message Command {
     CombineCommand        combine         = 35;
     BuyAaCommand          buy_aa          = 36;
     CoinCommand           coin            = 37;
+    AugmentCommand        augment         = 38;
   }
 }
 
@@ -513,6 +522,12 @@ message Item {
   uint32 scroll_level = 33; // ... and the level our class can learn it at (0: not our class)
   uint32 bag_wr    = 34; // containers: weight reduction, percent
   uint32 bag_type  = 35; // containers: EQ bag type (0-8 storage: bag, chest, quiver...; 9 and up tradeskill: mixing bowl, kiln...)
+  // augments (AugmentCommand). The stats above are the item's own; an augment's are its own, added where it sits.
+  uint32 aug_type     = 36; // an augment: the socket types it fits, a bitmask (bit n-1: type n); 0 for anything else
+  uint32 aug_restrict = 37; // an augment: what it may go in (0 anything, 1 armour, 2 weapons, 3 one-handed, 4 two-handed ... EQ's list)
+  uint32 aug_distiller = 38; // an augment: the item that removes it without destroying it (0: no distiller needed)
+  repeated uint32 aug_sockets = 39; // an item with sockets: the type of each of its six (0: no socket there); empty if it has none
+  repeated uint32 augs        = 40; // an item with sockets: the item id in each of the six (0: empty); only on items that have one in
 }
 
 // our EQEmu bots and what they wear; we equip them (^inventorygive)
