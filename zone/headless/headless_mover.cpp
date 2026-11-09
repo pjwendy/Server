@@ -17,6 +17,8 @@
 */
 #include "zone/headless/headless_mover.h"
 
+#include <unordered_map>
+
 #include "common/eq_constants.h"
 #include "common/eq_packet_structs.h"
 #include "common/eqemu_logsys.h"
@@ -58,6 +60,11 @@ namespace {
 	constexpr float  DOOR_LOOKAHEAD    = 15.0f;
 	constexpr float  DOOR_HEIGHT_RANGE = 20.0f;
 	constexpr uint64 DOOR_WAIT_MS      = 3000;
+	// a door another headless character clicked this long ago or less is opening: waited for, not clicked again. A click toggles a door (open
+	// when shut, shut when open: Doors::HandleClick), and two leaders walking in step through Permafrost's door 39 clicked it in the same
+	// instant: it opened and shut, and both gave up ("didn't open"), the first raid scouts with them, 9 Nov
+	constexpr uint64 DOOR_SHARED_MS    = 2500;
+	std::unordered_map<uint32, uint64> g_door_clicked;  // door entity id -> when a headless character last clicked it
 	// a partial route counts if it ends this close to where we were going (mobs stand a little
 	// off the navmesh)
 	constexpr float  PARTIAL_OK        = 20.0f;
@@ -1479,6 +1486,17 @@ bool HeadlessMover::HandleDoors(uint64 now)
 			Stop(Result::Locked);
 			return true;
 		}
+
+		// clicked a moment ago by another of us: it's opening, wait for it rather than shut it again
+		auto &clicked = g_door_clicked[door->GetEntityID()];
+		if (now - clicked < DOOR_SHARED_MS) {
+			m_door_entity  = door->GetEntityID();
+			m_door_wait_ms = clicked + DOOR_WAIT_MS;
+			SendUpdate(m_pos, me->GetHeading(), 0);
+			LogHeadlessClient("[{}] door [{}] ({}) just clicked by another: waiting for it", me->GetCleanName(), door->GetDoorID(), door->GetDoorName());
+			return true;
+		}
+		clicked = now;
 
 		// click it, as a player would; the server checks distance, keys and locks
 		auto app = new EQApplicationPacket(OP_ClickDoor, sizeof(ClickDoor_Struct));
