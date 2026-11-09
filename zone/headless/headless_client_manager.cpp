@@ -2227,6 +2227,14 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 	}
 	self->set_race_bit(GetPlayerRaceBit(me->GetBaseRace()));
 	{
+		auto *rs = self->mutable_resists();
+		rs->set_magic(me->GetMR());
+		rs->set_cold(me->GetCR());
+		rs->set_fire(me->GetFR());
+		rs->set_poison(me->GetPR());
+		rs->set_disease(me->GetDR());
+	}
+	{
 		const double here = me->GetEXPForLevel(me->GetLevel()), next = me->GetEXPForLevel(me->GetLevel() + 1);
 		const double pct  = next > here ? (me->GetEXP() - here) * 100.0 / (next - here) : 0.0;
 		self->set_exp_pct(static_cast<float>(std::clamp(pct, 0.0, 100.0)));
@@ -2388,6 +2396,12 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		bg->set_race_id(b->GetBaseRace());
 		bg->set_level(b->GetLevel());
 		bg->set_race_bit(GetPlayerRaceBit(b->GetBaseRace()));
+		auto *brs = bg->mutable_resists();
+		brs->set_magic(b->GetMR());
+		brs->set_cold(b->GetCR());
+		brs->set_fire(b->GetFR());
+		brs->set_poison(b->GetPR());
+		brs->set_disease(b->GetDR());
 		for (int16 slot = EQ::invslot::EQUIPMENT_BEGIN; slot <= EQ::invslot::EQUIPMENT_END; ++slot) {
 			const EQ::ItemInstance *inst = b->GetBotItem(slot);
 			if (inst && inst->GetItem()) {

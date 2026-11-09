@@ -473,6 +473,7 @@ message Self {
   uint32          gender     = 40; // 0 male, 1 female, 2 neutral
   uint64          bank_copper = 41; // the coin in our bank, in copper's worth (CoinCommand moves it)
   repeated RaidMember raid    = 42; // the raid we are in, everyone in it (ourselves too); empty when not in one
+  Resists         resists    = 43; // our resists now: base, gear, buffs and AAs, as the client's inventory window shows them
 }
 
 message Gem {
@@ -551,7 +552,11 @@ message BotGear {
   uint32        level     = 5;
   uint32        race_bit  = 6; // its bit in Item.races
   repeated Item equipment = 7; // slot is the worn slot
+  Resists       resists   = 8; // its resists now (gear and buffs)
 }
+
+// a character's or a bot's resists (what a raid target's spells are checked against: a dragon's breath against cold, its fear against magic)
+message Resists { int32 magic = 1; int32 cold = 2; int32 fire = 3; int32 poison = 4; int32 disease = 5; }
 
 message OwnedBots { repeated BotGear bots = 1; }
 

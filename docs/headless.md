@@ -158,6 +158,7 @@ seen (invisible), line of sight and the chance are left to the character, so a r
 would wake.
 
 A group member in the character's stream carries its buffs too (`GroupMember.buffs`; the character's own are `buffs`), for a view of what the group has on it.
+`Self.resists` and each `BotGear.resists` are the character's and its bots' resists now (magic, cold, fire, poison, disease: base, gear, buffs and AAs, as the inventory window shows them), for raid readiness.
 In a raid, `Self.raid` lists everyone in it, the character too (`RaidMember`: name, spawn id or 0 when in another zone, raid group 0-11 or `0xFFFFFFFF` for none, group and raid leader, bot, class, level); `Self.group` is then empty, as the raid's groups take the place of groups.
 An NPC that is fighting, or has the character on its hate list, carries the spells on it (`Spawn.buffs`: our slows, roots, mezzes and damage over time, with the ticks
 left), sent again when the set changes (a tick alone is not a change), so a fight can be watched and replayed.
