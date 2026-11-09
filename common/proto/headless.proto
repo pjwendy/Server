@@ -168,6 +168,14 @@ message BuyAaCommand       { uint32 rank_id = 1; } // buy one rank of an alterna
 // The answer is chat, and the item's new Item.augs in the next inventory frame. The server checks the socket's type against the augment's
 // Item.aug_type (bit n-1 of it: socket type n) and that the augment's worn slots overlap the item's.
 message AugmentCommand     { int32 item_slot = 1; uint32 aug_index = 2; uint32 action = 3; int32 solvent_slot = 4; }
+// raids, as the client's raid window. RaidInvite: a player (ungrouped, or a group's leader: the whole group comes in) or one of your bots
+// (ungrouped, or leading a bot group), into your raid; with none, it makes one with you (and your group) in it. A headless character
+// invited by a guildmate (or a GM) accepts by itself, as a rez is accepted; anyone else's invite is left unanswered.
+// RaidRemove: take a member out of the raid (the leader's right; empty name: leave it yourself).
+// RaidMove: put a member in raid group 0-11, or out of every group (12 or more), as dragging a name in the raid window.
+message RaidInviteCommand  { string name = 1; }
+message RaidRemoveCommand  { string name = 1; }
+message RaidMoveCommand    { string name = 1; uint32 group = 2; }
 message CombineCommand     { int32 container_slot = 1; } // combine what is in a container: an inventory bag's slot, or 1000 (SLOT_TRADESKILL_EXPERIMENT_COMBINE) for the world container opened; the answer is chat (the skill-ups and the product land in the inventory)
 
 message Command {
@@ -210,6 +218,9 @@ message Command {
     BuyAaCommand          buy_aa          = 36;
     CoinCommand           coin            = 37;
     AugmentCommand        augment         = 38;
+    RaidInviteCommand     raid_invite     = 39;
+    RaidRemoveCommand     raid_remove     = 40;
+    RaidMoveCommand       raid_move       = 41;
   }
 }
 
@@ -461,6 +472,7 @@ message Self {
   uint32          max_air    = 39; // seconds of air at most (Stamina, Lung Capacity); at none, you drown
   uint32          gender     = 40; // 0 male, 1 female, 2 neutral
   uint64          bank_copper = 41; // the coin in our bank, in copper's worth (CoinCommand moves it)
+  repeated RaidMember raid    = 42; // the raid we are in, everyone in it (ourselves too); empty when not in one
 }
 
 message Gem {
@@ -551,6 +563,17 @@ message GroupMember {
   bool   leader   = 3;
   bool   bot      = 4; // an EQEmu bot
   repeated Buff buffs = 5; // what is on them now (empty if they are not in this zone)
+}
+
+message RaidMember {
+  string name        = 1;
+  uint32 spawn_id    = 2; // 0 if not in this zone
+  uint32 group       = 3; // raid group 0-11; 12 or more: in no group
+  bool   group_leader = 4;
+  bool   raid_leader = 5;
+  bool   bot         = 6; // an EQEmu bot
+  uint32 class_id    = 7;
+  uint32 level       = 8;
 }
 
 message ZoneInfo {

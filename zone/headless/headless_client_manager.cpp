@@ -35,6 +35,8 @@
 #include "zone/corpse.h"
 #include "zone/entity.h"
 #include "zone/groups.h"
+#include "zone/raids.h"
+#include "common/raid.h"
 #include "zone/object.h"
 #include "zone/headless/null_stream.h"
 #include "zone/worldserver.h"
@@ -1236,6 +1238,109 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			stream->Inject(app);
 			return "";
 		}
+		case eqheadless::Command::kRaidInvite: {
+			// as the client's raid window invite (OP_RaidInvite, which the server routes to Handle_OP_RaidCommand; RaidCommandInvite): a bot goes straight in (Bot::ProcessRaidInvite),
+			// a player is asked (OP_RaidUpdate action 20; a headless one answers it in OnOutgoing)
+			const std::string &name = cmd.raid_invite().name();
+			Mob *invitee = name.empty() ? me->GetTarget() : FindMobByName(name);
+			if (!invitee || invitee == me) {
+				return name.empty() ? "no target to invite" : fmt::format("no one named {} here", name);
+			}
+			Raid *raid = me->GetRaid();
+			if (raid && raid->IsRaidMember(invitee->GetName())) {
+				return fmt::format("{} is already in our raid", invitee->GetCleanName());
+			}
+			if (invitee->IsBot()) {
+				if (!RuleB(HeadlessClients, AllowBots)) {
+					return "bots are turned off for headless characters (HeadlessClients:AllowBots)";
+				}
+				Mob *owner = invitee->CastToBot()->GetBotOwner();
+				if (owner != me && !(raid && owner && raid->IsRaidMember(owner->GetName()))) {
+					return fmt::format("{} is not your bot, and its owner is not in our raid", invitee->GetCleanName());
+				}
+				if (invitee->IsRaidGrouped()) {
+					return fmt::format("{} is already in a raid", invitee->GetCleanName());
+				}
+			}
+			else if (invitee->IsClient()) {
+				if (!IsHeadless(invitee) && !RuleB(HeadlessClients, AllowGroupWithPlayers)) {
+					return "raiding with players is turned off for headless characters (HeadlessClients:AllowGroupWithPlayers)";
+				}
+				if (invitee->CastToClient()->HasRaid()) {
+					return fmt::format("{} is already in a raid", invitee->GetCleanName());
+				}
+			}
+			else {
+				return fmt::format("{} can't join a raid", invitee->GetCleanName());
+			}
+			if (Group *g = invitee->GetGroup()) {
+				if (g->IsGroupMember(me)) {
+					return fmt::format("{} is in our own group: a raid made by inviting another takes our group in with us", invitee->GetCleanName());
+				}
+				if (!g->IsLeader(invitee)) {
+					return fmt::format("{} is in a group but doesn't lead it: invite its leader", invitee->GetCleanName());
+				}
+			}
+			auto app = new EQApplicationPacket(OP_RaidInvite, sizeof(RaidGeneral_Struct));
+			auto *rg = reinterpret_cast<RaidGeneral_Struct *>(app->pBuffer);
+			rg->action = RaidCommandInvite;
+			strn0cpy(rg->player_name, invitee->GetName(), sizeof(rg->player_name));
+			strn0cpy(rg->leader_name, me->GetName(), sizeof(rg->leader_name));
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kRaidRemove: {
+			Raid *raid = me->GetRaid();
+			if (!raid) {
+				return "not in a raid";
+			}
+			const std::string name = cmd.raid_remove().name().empty() ? std::string(me->GetName()) : cmd.raid_remove().name();
+			const uint32 idx = raid->GetPlayerIndex(name.c_str());
+			if (idx >= MAX_RAID_MEMBERS) {
+				return fmt::format("{} is not in our raid", name);
+			}
+			if (name != me->GetName() && !raid->IsLeader(me->GetName())) {
+				return "only the raid's leader takes others out";
+			}
+			// RaidCommandDisband: leader_name is who goes, player_name who does it
+			auto app = new EQApplicationPacket(OP_RaidInvite, sizeof(RaidGeneral_Struct));
+			auto *rg = reinterpret_cast<RaidGeneral_Struct *>(app->pBuffer);
+			rg->action = RaidCommandDisband;
+			strn0cpy(rg->leader_name, raid->members[idx].member_name, sizeof(rg->leader_name));
+			strn0cpy(rg->player_name, me->GetName(), sizeof(rg->player_name));
+			stream->Inject(app);
+			return "";
+		}
+		case eqheadless::Command::kRaidMove: {
+			Raid *raid = me->GetRaid();
+			if (!raid) {
+				return "not in a raid";
+			}
+			if (!raid->IsLeader(me->GetName())) {
+				return "only the raid's leader moves members between groups";
+			}
+			const std::string &name = cmd.raid_move().name();
+			const uint32 idx = raid->GetPlayerIndex(name.c_str());
+			if (idx >= MAX_RAID_MEMBERS) {
+				return fmt::format("{} is not in our raid", name);
+			}
+			const uint32 group = cmd.raid_move().group() < MAX_RAID_GROUPS ? cmd.raid_move().group() : RAID_GROUPLESS;
+			if (raid->members[idx].group_number == group) {
+				return "";
+			}
+			if (group != RAID_GROUPLESS && raid->GroupCount(group) >= MAX_GROUP_MEMBERS) {
+				return fmt::format("raid group {} is full", group + 1);
+			}
+			// RaidCommandMoveGroup: leader_name is who moves, parameter the group (12 and up: out of every group)
+			auto app = new EQApplicationPacket(OP_RaidInvite, sizeof(RaidGeneral_Struct));
+			auto *rg = reinterpret_cast<RaidGeneral_Struct *>(app->pBuffer);
+			rg->action = RaidCommandMoveGroup;
+			strn0cpy(rg->leader_name, raid->members[idx].member_name, sizeof(rg->leader_name));
+			strn0cpy(rg->player_name, me->GetName(), sizeof(rg->player_name));
+			rg->parameter = group;
+			stream->Inject(app);
+			return "";
+		}
 		default:
 			return "unknown command";
 	}
@@ -1313,6 +1418,36 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 				: !ours ? "declined (not ours)" : "declined (the corpse isn't here by us)");
 			auto answer = new EQApplicationPacket(OP_RezzAnswer, sizeof(Resurrect_Struct));
 			memcpy(answer->pBuffer, &rez, sizeof(Resurrect_Struct));
+			it->second.stream->Inject(answer);
+			return;
+		}
+		case OP_RaidUpdate: {
+			// a raid invite (RaidGeneral_Struct, action 20; raidSetLeader, also 20, is a larger packet): the client's half is the
+			// accept box. Accepted from a guildmate (the guild's raids: one group per leader, BL-008/009) or a GM; anyone else's
+			// is left unanswered, as a player ignoring the box
+			Client *me = it->second.stream->GetClient();
+			if (!me || app->size != sizeof(RaidGeneral_Struct)) {
+				return;
+			}
+			const auto *rg = reinterpret_cast<const RaidGeneral_Struct *>(app->pBuffer);
+			if (rg->action != 20) {
+				return;
+			}
+			const std::string inviter_name(rg->leader_name, strnlen(rg->leader_name, sizeof(rg->leader_name)));
+			Client *inviter = entity_list.GetClientByName(inviter_name.c_str());
+			const bool guildmate = inviter && me->GuildID() != GUILD_NONE && inviter->GuildID() == me->GuildID();
+			const bool gm = inviter && inviter->GetGM();
+			if (!guildmate && !gm) {
+				LogHeadlessClient("[{}] raid invite from [{}]: left unanswered (not a guildmate)", me->GetCleanName(), inviter_name);
+				return;
+			}
+			LogHeadlessClient("[{}] raid invite from [{}]: accepted ({})", me->GetCleanName(), inviter_name, guildmate ? "a guildmate" : "a GM");
+			// RaidCommandAcceptInvite: player_name is who invited, leader_name who accepts
+			auto answer = new EQApplicationPacket(OP_RaidInvite, sizeof(RaidGeneral_Struct));
+			auto *ra = reinterpret_cast<RaidGeneral_Struct *>(answer->pBuffer);
+			ra->action = RaidCommandAcceptInvite;
+			strn0cpy(ra->player_name, inviter->GetName(), sizeof(ra->player_name));
+			strn0cpy(ra->leader_name, me->GetName(), sizeof(ra->leader_name));
 			it->second.stream->Inject(answer);
 			return;
 		}
@@ -2145,6 +2280,23 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 					}
 				}
 			}
+		}
+	}
+	if (Raid *raid = me->GetRaid()) {
+		for (const auto &rm : raid->members) {
+			if (!rm.member_name[0]) {
+				continue;
+			}
+			auto *r   = self->add_raid();
+			Mob  *mob = rm.member ? static_cast<Mob *>(rm.member) : (rm.is_bot ? static_cast<Mob *>(entity_list.GetBotByBotName(rm.member_name)) : nullptr);
+			r->set_name(rm.member_name);
+			r->set_spawn_id(mob ? mob->GetID() : 0);
+			r->set_group(rm.group_number < MAX_RAID_GROUPS ? rm.group_number : RAID_GROUPLESS);
+			r->set_group_leader(rm.is_group_leader);
+			r->set_raid_leader(rm.is_raid_leader);
+			r->set_bot(rm.is_bot);
+			r->set_class_id(rm._class);
+			r->set_level(rm.level);
 		}
 	}
 

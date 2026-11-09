@@ -158,6 +158,7 @@ seen (invisible), line of sight and the chance are left to the character, so a r
 would wake.
 
 A group member in the character's stream carries its buffs too (`GroupMember.buffs`; the character's own are `buffs`), for a view of what the group has on it.
+In a raid, `Self.raid` lists everyone in it, the character too (`RaidMember`: name, spawn id or 0 when in another zone, raid group 0-11 or `0xFFFFFFFF` for none, group and raid leader, bot, class, level); `Self.group` is then empty, as the raid's groups take the place of groups.
 An NPC that is fighting, or has the character on its hate list, carries the spells on it (`Spawn.buffs`: our slows, roots, mezzes and damage over time, with the ticks
 left), sent again when the set changes (a tick alone is not a change), so a fight can be watched and replayed.
 
@@ -188,6 +189,7 @@ A headless character's corpse is consented to its guild (rule `HeadlessClients:C
 | `click_door` | Click a door in this zone by its door id (0-255), as the client does: a teleporter or a Plane of Knowledge book zones you where it goes. The server checks the distance, keys and locks. |
 | `click_object`, `close_object`, `combine` | Tradeskills: open a world container (oven, forge, loom, brew barrel, kiln, pottery wheel...) by its object table id, as a click does (the server checks the distance); the items go in with `move_item` to its slots (4000 on); `combine` is the Combine button, for the world container (slot 1000) or an inventory bag's slot. The server does the recipe and the skill roll. |
 | `invite`, `disband` | Invite to the group (the character's own bots, or real players if allowed), leave it. |
+| `raid_invite`, `raid_remove`, `raid_move` | Raids, as the client's raid window (`OP_RaidInvite`, which the server hands to `Handle_OP_RaidCommand`). `raid_invite` a player who is ungrouped or leads a group (the whole group comes in) or one of the character's bots (or a bot whose owner is already in the raid), making a raid with the character and its group if it has none; a bot goes straight in (`Bot::ProcessRaidInvite`), a player is asked. `raid_remove` takes a member out (the raid leader's right; an empty name leaves the raid). `raid_move` puts a member in raid group 0-11, or in none (12 and up). A headless character answers a raid invite by itself, as it answers a rez: accepted from a guildmate or a GM, left unanswered from anyone else. |
 
 `CommandResult.ok` means the server accepted the command. What happens next (the spell lands, the
 mob dies, the walk arrives) comes back as state and events, just as a player sees it on screen.
