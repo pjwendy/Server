@@ -1229,6 +1229,20 @@ bool Mob::SpellEffect(Mob* caster, uint16 spell_id, float partial, int level_ove
 						}
 						SummonedItem = database.CreateItem(spell.base_value[i], charges);
 					}
+				} else if (IsBot()) {
+					// a bot has no bags of its own: what its spell makes goes to its owner's cursor, as its components come out of the
+					// owner's bags (Bots:UseOwnerReagents). Before this the item was lost: an enchanter bot's Enchant Platinum took the
+					// owner's Platinum Bar and gave nothing back
+					Mob    *owner_mob = CastToBot()->GetBotOwner();
+					Client *owner     = owner_mob && owner_mob->IsClient() ? owner_mob->CastToClient() : nullptr;
+					if (owner) {
+						if (owner->CheckLoreConflict(item)) {
+							owner->DuplicateLoreMessage(spell.base_value[i]);
+						} else {
+							int charges = item->Stackable ? std::min<int>(spell.formula[i], item->StackSize) : (item->MaxCharges ? item->MaxCharges : 1);
+							owner->SummonItem(spell.base_value[i], std::max(1, charges));
+						}
+					}
 				}
 
 				break;
