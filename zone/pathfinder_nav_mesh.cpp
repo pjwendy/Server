@@ -295,8 +295,27 @@ IPathfinder::IPath PathfinderNavmesh::FindPath(const glm::vec3 &start, const glm
 	dtPolyRef end_ref;
 	glm::vec3 ext(10.0f, 200.0f, 10.0f);
 
-	m_impl->query->findNearestPoly(&current_location[0], &ext[0], &filter, &start_ref, 0);
-	m_impl->query->findNearestPoly(&dest_location[0], &ext[0], &filter, &end_ref, 0);
+	// the nearest polygon in that tall, narrow box can be a floor far over or under the point: a tree's platform 200 over a spawn point
+	// beside its trunk, where the ground's polygons start more than 10 out (Jaggedpine's Lady Fianya: every route "the nearest it gets is"
+	// the platform, 11 Nov). Then a polygon at the point's own level, a little further out, is the floor meant
+	constexpr float LEVEL_DZ    = 25.0f;
+	constexpr float LEVEL_REACH = 40.0f;
+	auto snap = [&](const glm::vec3 &at, dtPolyRef &ref) {
+		glm::vec3 got = at;
+		ref = 0;
+		m_impl->query->findNearestPoly(&at[0], &ext[0], &filter, &ref, &got[0]);
+		if (!ref || std::fabs(got.y - at.y) <= LEVEL_DZ) {
+			return;
+		}
+		const glm::vec3 level(LEVEL_REACH, LEVEL_DZ, LEVEL_REACH);
+		dtPolyRef  same = 0;
+		glm::vec3  there = at;
+		if (dtStatusSucceed(m_impl->query->findNearestPoly(&at[0], &level[0], &filter, &same, &there[0])) && same) {
+			ref = same;
+		}
+	};
+	snap(current_location, start_ref);
+	snap(dest_location, end_ref);
 
 	if (!start_ref || !end_ref) {
 		return IPath();
