@@ -172,7 +172,11 @@ IPathfinder::IPath PathfinderNavmesh::FindRoute(const glm::vec3 &start, const gl
 		m_impl->query = dtAllocNavMeshQuery();
 	}
 
-	m_impl->query->init(m_impl->nav_mesh, RuleI(Pathing, MaxNavmeshNodes));
+	// (a headless character's route searches more: Jaggedpine's player navmesh, fine-grained, ran 16384 nodes out on a 5,000-unit walk, and
+	// the search's best was the tree platform straight over Lady Fianya's spawn, 180 up: never there, 11 Nov. NPCs keep the rule's)
+	constexpr int HEADLESS_NODES = 65535;
+	m_impl->query->init(m_impl->nav_mesh, (flags & PathingHeadless) ? std::max(RuleI(Pathing, MaxNavmeshNodes), HEADLESS_NODES)
+		: RuleI(Pathing, MaxNavmeshNodes));
 	glm::vec3 current_location(start.x, start.z, start.y);
 	glm::vec3 dest_location(end.x, end.z, end.y);
 
