@@ -118,6 +118,11 @@ Spawn2::~Spawn2()
 uint32 Spawn2::resetTimer()
 {
 	uint32 rspawn = m_respawn_time * 1000;
+	// the server's own pace (the operator, 11 Nov: "quicker respawns so less waiting"): Zone:RespawnMultiplier, 0.5 on the guild's servers
+	const float respawn_multiplier = RuleR(Zone, RespawnMultiplier);
+	if (respawn_multiplier > 0.0f && respawn_multiplier != 1.0f) {
+		rspawn = std::max<uint32>(10000, static_cast<uint32>(rspawn * respawn_multiplier));
+	}
 
 	if (variance_ != 0) {
 		int var_over_2 = (variance_ * 1000) / 2;
