@@ -195,8 +195,27 @@ IPathfinder::IPath PathfinderNavmesh::FindRoute(const glm::vec3 &start, const gl
 	dtPolyRef end_ref;
 	glm::vec3 ext(5.0f, 100.0f, 5.0f);
 
-	m_impl->query->findNearestPoly(&current_location[0], &ext[0], &filter, &start_ref, 0);
-	m_impl->query->findNearestPoly(&dest_location[0], &ext[0], &filter, &end_ref, 0);
+	// (the headless characters' routes come here, not FindPath: the same snap to a floor at the point's own level, also when the narrow box
+	// finds no polygon at all. Jaggedpine's Lady Fianya: the spawn point is more than 5 from the ground's polygons, and the route went to
+	// the platform 180 over it, after the fix went into FindPath only, 11 Nov)
+	constexpr float LEVEL_DZ    = 25.0f;
+	constexpr float LEVEL_REACH = 40.0f;
+	auto snap = [&](const glm::vec3 &at, dtPolyRef &ref) {
+		glm::vec3 got = at;
+		ref = 0;
+		m_impl->query->findNearestPoly(&at[0], &ext[0], &filter, &ref, &got[0]);
+		if (ref && std::fabs(got.y - at.y) <= LEVEL_DZ) {
+			return;
+		}
+		const glm::vec3 level(LEVEL_REACH, LEVEL_DZ, LEVEL_REACH);
+		dtPolyRef  same = 0;
+		glm::vec3  there = at;
+		if (dtStatusSucceed(m_impl->query->findNearestPoly(&at[0], &level[0], &filter, &same, &there[0])) && same) {
+			ref = same;
+		}
+	};
+	snap(current_location, start_ref);
+	snap(dest_location, end_ref);
 
 	if (!start_ref || !end_ref) {
 		return IPath();
