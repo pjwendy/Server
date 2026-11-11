@@ -270,6 +270,14 @@ bool HeadlessMover::PlanRoute(const glm::vec3 &start, const glm::vec3 &destinati
 			}
 		}
 		if (!via_lift && (m_path.empty() || stuck || short_of_it)) {
+			if (mobs) {
+				// no way round the mobs at all (a tunnel full of them: every way out of the Echo Caverns' south went through 25 that
+				// would aggro, and Malcor stood "427 units short" of every zone line, 11 Nov): past them, as for a way round too deep
+				Client *me = m_stream->GetClient();
+				LogHeadlessClient("[{}] no way round [{}] mobs to [{:.1f}, {:.1f}, {:.1f}]: past them instead", me ? me->GetCleanName() : "?",
+					mobs, destination.x, destination.y, destination.z);
+				return past_them();
+			}
 			if (short_of_it) {
 				LogHeadlessClient(
 					"[{}] no full route to [{:.1f}, {:.1f}, {:.1f}]: the nearest it gets is [{:.1f}, {:.1f}, {:.1f}]",
