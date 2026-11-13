@@ -97,6 +97,7 @@ namespace {
 	constexpr float  HEAD_SHARE          = 0.75f;   // the head is this share of the character's size above it
 	constexpr float  SURFACE_STEP        = 10.0f;   // a route through water looked at this often for the floor, to swim above it
 	constexpr float  SURFACE_UP          = 2000.0f; // a surface further up than this isn't one to swim to (Dagnor's Cauldron's lake is 350 deep)
+	constexpr float  WADE_BELOW          = 20.0f;   // a floor this far below a dry step of the route is under a walkway, not a wade
 	// a route may keep the head under water for at most this share of a full breath at a stretch: the
 	// runner's breath watch (soldiers/breath.py) comes up at half, and a route it breaks off for air is
 	// planned again the same way. The navmesh has lake floors, and Dagnor's Cauldron's is 350 down: walks
@@ -631,8 +632,17 @@ void HeadlessMover::SwimOnSurface(const glm::vec3 &start)
 			const float len = glm::length(p - from);
 			const int   n   = static_cast<int>(std::ceil(len / SURFACE_STEP));
 			for (int k = 1; k < n; ++k) {
-				const glm::vec3 s = from + (p - from) * (static_cast<float>(k) / n);
-				take(glm::vec3(s.x, s.y, FloorBelow(glm::vec3(s.x, s.y, std::max(from.z, p.z)))), true);
+				const glm::vec3 s     = from + (p - from) * (static_cast<float>(k) / n);
+				const float     floor = FloorBelow(glm::vec3(s.x, s.y, std::max(from.z, p.z)));
+				// over water, not in it: a step whose own place on the route is dry, with the floor the zone's map knows far below it,
+				// is on a walkway or a bridge the map hasn't (the navmesh has it): not a wade. The Plane of Tranquility's walkway to the
+				// Plane of Knowledge's book runs 280 above a lake the map has under it, and every step was "lifted" to that lake's
+				// surface: Grukmar swam off the navmesh down there and was petitioned out twice on 13 Nov
+				float top = 0.0f;
+				if (floor < s.z - WADE_BELOW && !WaterTop(s, top)) {
+					continue;
+				}
+				take(glm::vec3(s.x, s.y, floor), true);
 			}
 		}
 		from = p;
