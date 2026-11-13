@@ -10378,15 +10378,11 @@ bool Bot::CastChecks(uint16 spell_id, Mob* tar, uint16 spell_type, bool precheck
 		return false;
 	}
 
+	// (an instant spell (no duration) never takes a buff slot, so nothing on the target can block it: the stack check ran for every spell type but the
+	// heals, and refused a shaman's Cannibalize whenever Clarity (its mana slot) or Chloroplast/Regrowth (its health slot) was on it: thousands of
+	// "Ability failed to cast" a day, a cast in ten getting through. The real cast (SpellOnTarget) only checks stacking for buffs.)
 	if (
-		(
-			RequiresStackCheck(spell_type) ||
-			(
-				!RequiresStackCheck(spell_type) &&
-				CalcBuffDuration(this, tar, spell_id) != 0
-			)
-		)
-		&&
+		CalcBuffDuration(this, tar, spell_id) != 0 &&
 		tar->CanBuffStack(spell_id, GetLevel(), true) < 0
 	) {
 		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} on {} due to !CanBuffStack.'", GetCleanName(), GetSpellName(spell_id), tar->GetCleanName());
