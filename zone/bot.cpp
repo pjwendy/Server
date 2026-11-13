@@ -11819,6 +11819,33 @@ uint16 Bot::GetDefaultSpellTypeAEOrGroupTargetCount(uint16 spell_type, uint8 sta
 }
 
 uint16 Bot::GetDefaultSpellTypeAnnounceCast(uint16 spell_type, uint8 stance) {
+	// headless fork: the routine casts (buffs, pet buffs, heals, nukes, DoTs, slows, snares, stuns) aren't announced by default: a group's bots buff
+	// and heal all day, and "Casting Alacrity [Pet Buff] on Nororric`s pet." from each of them buried what mattered in the leader's chat. Kept: the
+	// ones a player watches for (mez, charm, cures, rez, escapes and ports, corpse summoning, fear, lull). A bot's own setting (^spellannouncecasts)
+	// still overrides this.
+	switch (spell_type) {
+		case BotSpellTypes::Mez:
+		case BotSpellTypes::AEMez:
+		case BotSpellTypes::Charm:
+		case BotSpellTypes::Cure:
+		case BotSpellTypes::GroupCures:
+		case BotSpellTypes::PetCures:
+		case BotSpellTypes::Resurrect:
+		case BotSpellTypes::Escape:
+		case BotSpellTypes::Succor:
+		case BotSpellTypes::Teleport:
+		case BotSpellTypes::BindAffinity:
+		case BotSpellTypes::SendHome:
+		case BotSpellTypes::SummonCorpse:
+		case BotSpellTypes::Fear:
+		case BotSpellTypes::AEFear:
+		case BotSpellTypes::Lull:
+		case BotSpellTypes::AELull:
+			break;
+		default:
+			return 0;
+	}
+
 	switch (GetClass()) {
 		case Class::Bard:
 			switch (spell_type) {
