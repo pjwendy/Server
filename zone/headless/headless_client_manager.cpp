@@ -935,6 +935,8 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			// as the client: open the corpse, and once the server has listed its items (it echoes
 			// the request back), loot them all and close it (OnOutgoing does that half)
 			session.loot_corpse = id;
+			session.loot_peek   = cmd.loot().peek();
+			session.loot_only.assign(cmd.loot().only().begin(), cmd.loot().only().end());
 			std::fill(std::begin(session.loot_coin), std::end(session.loot_coin), 0);
 			stream->Inject(Uint32Packet(OP_LootRequest, id));
 			return "";
@@ -1891,8 +1893,19 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 				}
 				std::stable_sort(order.begin(), order.end(), [](const auto &a, const auto &b) { return std::get<0>(a) < std::get<0>(b); });
 				for (const auto &[rank, slot, name] : order) {
+					if (session.loot_peek) {
+						break;
+					}
+					if (!session.loot_only.empty()) {  // (LootCommand.only: each name taken once)
+						auto want = std::find(session.loot_only.begin(), session.loot_only.end(), name);
+						if (want == session.loot_only.end()) {
+							continue;
+						}
+						session.loot_only.erase(want);
+					}
 					session.loot_queue.emplace_back(slot, name);
 				}
+				session.loot_only.clear();
 			}
 			// one item every LOOT_ITEM_MS, then close the corpse and say what we got (the event
 			// waits for that, so the SDK sees the corpse as it is afterwards)
@@ -1943,7 +1956,11 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 							ev->add_items(n);
 						}
 					}
+					for (const auto &n : left) {  // (and what wasn't asked for: a peek's, an only's)
+						ev->add_left(n);
+					}
 					ss.loot_corpse = 0;
+					ss.loot_peek   = false;
 					ss.loot_queue.clear();
 					ss.loot_names.clear();
 					t->Stop(); // (the next loot replaces it: deleting it here would delete what's running us)

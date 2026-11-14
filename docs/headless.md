@@ -177,7 +177,7 @@ A headless character's corpse is consented to its guild (rule `HeadlessClients:C
 | `zone_to` | Walk to the zone line for a neighbouring zone and through it; or, where no zone line has a walk, to a **boat** to that zone (see below). |
 | `cast`, `stop_cast`, `memorize`, `scribe` | Cast from a gem, interrupt, memorise a spell, scribe a scroll into the book. |
 | `consider` | `/consider` a spawn: its con colour and faction standing. |
-| `loot` | Loot a corpse (everything the character may take). |
+| `loot` | Loot a corpse (everything the character may take; `peek`: take nothing, see what's on it in `left`; `only`: just these item names). |
 | `merchant`, `buy`, `sell` | Open a merchant's window, buy, sell. |
 | `move_item` | Move items between slots, bags and the bank: equip, unequip, or put something on the cursor to hand to one of the character's bots with `^inventorygive`. |
 | `ability` | A combat ability as the client's buttons send it: kick, bash, backstab, the monk strikes, frenzy, intimidation and taunt on the target; sneak, hide and feign death on yourself. |

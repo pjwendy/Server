@@ -104,7 +104,9 @@ message StopCastCommand {}                                          // interrupt
 // spell_id 0 forgets the gem.
 message MemorizeCommand { uint32 gem = 1; uint32 spell_id = 2; }
 message ConsiderCommand { uint32 spawn_id = 1; }                    // the answer is a ConsiderEvent
-message LootCommand     { uint32 corpse_id = 1; }                   // loot everything; answer: LootEvent
+// loot everything; answer: LootEvent. peek: take nothing, only see what's on it (LootEvent.left; the coin is taken, as opening it does);
+// only: take just these items (a name each, the rest left on it): a raid's drops shared out by upgrade
+message LootCommand     { uint32 corpse_id = 1; bool peek = 2; repeated string only = 3; }
 // walk to this zone's zone line for `zone` (a short name from ZoneInfo.exits) and through it, as a
 // player does; a ZoneEvent follows. Plain MoveTo stops at zone lines instead.
 // walk through a zone line to a neighbouring zone: the one with the shortest walk from here, or the
@@ -333,7 +335,7 @@ message LootEvent {
   uint32          gold      = 6;
   uint32          silver    = 7;
   uint32          copper    = 8;
-  repeated string left      = 9; // what's still on it (no room for it, or it wouldn't come)
+  repeated string left      = 9; // what's still on it (no room for it, it wouldn't come, or it wasn't asked for: peek, only)
 }
 
 message MerchantEvent {
