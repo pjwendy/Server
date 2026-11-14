@@ -28,6 +28,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class Client;
@@ -61,6 +62,8 @@ public:
 	void HandleSpawn(ServerPacket *pack);   // ServerOP_HeadlessSpawn
 	void HandleDespawn(ServerPacket *pack); // ServerOP_HeadlessDespawn
 	void HandleCommand(ServerPacket *pack); // ServerOP_HeadlessCommand
+	void HandleHold(ServerPacket *pack);    // ServerOP_HeadlessHold: the SDK went away; freeze the character and its fights
+	void HandleResume(ServerPacket *pack);  // ServerOP_HeadlessResume: the SDK is back; unfreeze, send a Snapshot
 
 	// called by NullStream
 	void ReportSpawned(const std::string &session_id, uint32 spawn_id);
@@ -116,7 +119,24 @@ private:
 		std::string                              last_book;      // serialized SpellBook last sent
 		std::string                              last_inventory; // serialized Inventory last sent
 		std::string                              last_bots;      // serialized OwnedBots last sent
+		// held (HeadlessClients:HoldSeconds): the SDK is gone for now; the character, its bots and pets and every NPC in a
+		// fight with them are frozen (Freeze), looked at again every HOLD_TICK_MS for anything that joins
+		bool                                     held = false;
+		std::unique_ptr<EQ::Timer>               hold_timer;
+		std::unordered_set<uint16>               frozen;         // entity ids this session froze
 	};
+
+	// a mob frozen by a hold: how many held sessions froze it, and what to give back when the last lets go
+	struct Frozen {
+		int  holds      = 0;
+		bool was_invul  = false;
+		bool was_paused = false; // a bot's AI
+	};
+
+	void FreezeAround(Session &session, Client *me); // freeze me, mine and what fights us (again: newcomers)
+	void Freeze(Session &session, Mob *mob);
+	void Unfreeze(Session &session);                  // give back what this session froze
+	std::unordered_map<uint16, Frozen> m_frozen;
 
 	// returns "" when accepted, otherwise why not
 	std::string Execute(const std::string &session_id, Session &session, Client *me, const eqheadless::Command &cmd);

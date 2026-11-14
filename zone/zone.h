@@ -209,6 +209,14 @@ public:
 	bool                                          headless_pathing_loaded = false;
 	// where headless characters find their way: their own navmesh if the zone has one, else the zone's
 	IPathfinder *HeadlessPathing();
+	// the navmeshes (and the headless mover's side files) reloaded when their files change, so that a navmesh fix
+	// needs no zone restart: looked at every NAV_WATCH_MS, reloaded once a change has held still for one look
+	// (never a half-written file)
+	void ReloadNavmeshes();
+	std::string NavFilesSignature();
+	Timer       nav_watch_timer{10000};
+	std::string nav_watch_loaded; // the files' signature as loaded
+	std::string nav_watch_seen;   // ... and at the last look
 	std::vector<NPC_Emote_Struct *>               npc_emote_list;
 	LinkedList<Spawn2 *>                          spawn2_list;
 	LinkedList<ZonePoint *>                       zone_point_list;

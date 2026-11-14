@@ -105,7 +105,11 @@ public:
 	static int MaxAir(Client *me);
 	static bool CanBreathe(Client *me);
 
+	// the zone's side files (swims, jumps, ladders, teleports) read again on their next use: Zone::ReloadNavmeshes
+	static void ForgetZoneFiles() { ++s_files_generation; }
+
 private:
+	inline static uint32_t s_files_generation = 0;
 	void Tick();
 	void Breathe(); // once a second
 	void Go(Client *me, const glm::vec3 &start); // m_path planned: stand up and start walking it

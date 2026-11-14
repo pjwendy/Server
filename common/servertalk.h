@@ -302,6 +302,8 @@
 #define ServerOP_HeadlessFrame   0x6404 // zone -> world: a serialized eqheadless.ServerFrame for the session's SDK
 #define ServerOP_HeadlessCommand 0x6405 // world -> zone: a serialized eqheadless.Command (ServerHeadlessFrame_Struct)
 #define ServerOP_HeadlessZoning  0x6406 // zone -> world: the character left for another zone; spawn it there
+#define ServerOP_HeadlessHold    0x6407 // world -> zone: the session's SDK disconnected; hold the character, frozen, until it's back (HeadlessClients:HoldSeconds)
+#define ServerOP_HeadlessResume  0x6408 // world -> zone: the SDK is back on a held session; unfreeze and send it a Snapshot
 
 enum {
 	CZUpdateType_Character,
@@ -509,7 +511,7 @@ struct ServerHeadlessSpawned_Struct {
 	char   error[128];
 };
 
-struct ServerHeadlessSession_Struct { // ServerOP_HeadlessDespawn / ServerOP_HeadlessGone
+struct ServerHeadlessSession_Struct { // ServerOP_HeadlessDespawn / Gone / Hold / Resume
 	char session_id[40];
 };
 

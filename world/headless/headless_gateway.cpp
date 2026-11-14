@@ -161,9 +161,83 @@ void HeadlessGateway::OnDisconnect(Session *s)
 {
 	LogHeadlessClient("Connection [{}] from [{}] closed", s->id, s->remote);
 
+	// in game, the SDK going away is most often its program restarting: the character is held, frozen, for it to
+	// come back to (HeadlessClients:HoldSeconds) rather than logged out among whatever it was fighting
+	if (!s->closing && Hold(s)) {
+		return;
+	}
+
 	// the character stays in the zone until the zone hears the session is gone
 	SendDespawn(s);
 	m_sessions.erase(s->id); // destroys s
+}
+
+bool HeadlessGateway::Hold(Session *s)
+{
+	const int hold = RuleI(HeadlessClients, HoldSeconds);
+	if (hold <= 0 || s->phase != Phase::InGame || !ZSList::Instance()->FindByID(s->zone_server_id)) {
+		return false;
+	}
+
+	SendSessionOp(s, ServerOP_HeadlessHold);
+	s->held          = true;
+	s->held_until_ms = NowMs() + uint64(hold) * 1000;
+	s->connection.reset();
+	s->buffer.clear();
+	LogInfo("Headless session [{}] lost its SDK; holding [{}] frozen in [{}] for up to {}s", s->id, s->character, ZoneName(s->zone_id, true), hold);
+	return true;
+}
+
+bool HeadlessGateway::Resume(Session *s)
+{
+	Session *h = nullptr;
+	for (auto &[id, other] : m_sessions) {
+		if (other.get() != s && other->held && !other->forget && other->character_id == s->character_id && other->account_id == s->account_id) {
+			h = other.get();
+			break;
+		}
+	}
+	if (!h) {
+		return false;
+	}
+
+	// the held session (the id the zone knows) takes the new connection; the handshake's session goes
+	h->connection = s->connection;
+	s->connection.reset();
+	h->connection->OnRead(
+		[this, h](EQ::Net::TCPConnection *, const unsigned char *data, size_t length) {
+			OnRead(h, data, length);
+		}
+	);
+	h->connection->OnDisconnect([this, h](EQ::Net::TCPConnection *) { OnDisconnect(h); });
+	h->remote        = s->remote;
+	h->buffer        = std::move(s->buffer); // (anything the SDK sent after its Hello: read with the next frame)
+	h->held          = false;
+	h->held_until_ms = 0;
+	h->rate_tokens   = -1;
+	Forget(s);
+
+	LogInfo("Headless session [{}] resumed for [{}] from [{}]", h->id, h->character, h->remote);
+	if (h->phase != Phase::InGame) {
+		return true; // (it moved on while held: its Welcome comes when the zone has it, HandleSpawned)
+	}
+
+	SendSessionOp(h, ServerOP_HeadlessResume); // the zone unfreezes it and sends a Snapshot, after this Welcome
+	eqheadless::ServerFrame frame;
+	auto *welcome = frame.mutable_welcome();
+	welcome->set_session_id(h->id);
+	welcome->set_spawn_id(h->spawn_id);
+	welcome->set_protocol_version(eqheadless::PROTOCOL_VERSION_CURRENT);
+	welcome->set_resumed(true);
+	Send(h, frame);
+	return true;
+}
+
+void HeadlessGateway::Forget(Session *s)
+{
+	s->closing = true;
+	s->forget  = true;
+	s->held    = false;
 }
 
 void HeadlessGateway::OnTick()
@@ -173,6 +247,13 @@ void HeadlessGateway::OnTick()
 
 	for (auto &[id, session] : m_sessions) {
 		Session *s = session.get();
+		if (s->held && now > s->held_until_ms) {
+			// nobody came back for it: the zone puts it at the safe point and logs it out (HandleDespawn)
+			LogInfo("Headless session [{}]: nobody came back for [{}]; logging it out", s->id, s->character);
+			SendDespawn(s);
+			Forget(s);
+			continue;
+		}
 		if (s->closing || s->phase == Phase::Handshake) {
 			continue;
 		}
@@ -209,6 +290,10 @@ void HeadlessGateway::OnTick()
 			default:
 				break;
 		}
+	}
+
+	for (auto it = m_sessions.begin(); it != m_sessions.end();) {
+		it = it->second->forget ? m_sessions.erase(it) : std::next(it);
 	}
 }
 
@@ -337,6 +422,11 @@ void HeadlessGateway::HandleHello(Session *s, const eqheadless::Hello &hello)
 	s->ls_id        = row[5] ? row[5] : "";
 	s->lsaccount_id = Strings::ToUnsignedInt(row[6]);
 	s->admin        = static_cast<int16>(Strings::ToInt(row[7]));
+
+	// its character held from a connection that went away (HoldSeconds): this connection takes that session over
+	if (Resume(s)) {
+		return;
+	}
 
 	// limits; this session isn't counted yet
 	const int max_total = RuleI(HeadlessClients, MaxTotal);
@@ -471,6 +561,19 @@ void HeadlessGateway::TrySpawn(Session *s)
 		s->wid,
 		s->id
 	);
+}
+
+void HeadlessGateway::SendSessionOp(Session *s, uint16 opcode)
+{
+	auto *zs = ZSList::Instance()->FindByID(s->zone_server_id);
+	if (!zs) {
+		return;
+	}
+
+	auto pack = std::make_unique<ServerPacket>(opcode, sizeof(ServerHeadlessSession_Struct));
+	auto *d = reinterpret_cast<ServerHeadlessSession_Struct *>(pack->pBuffer);
+	strn0cpy(d->session_id, s->id.c_str(), sizeof(d->session_id));
+	zs->SendPacket(pack.get());
 }
 
 void HeadlessGateway::SendDespawn(Session *s)
@@ -640,6 +743,9 @@ void HeadlessGateway::SendBody(Session *s, const char *body, size_t length)
 	out.push_back(static_cast<char>(n & 0xFF));
 	out.append(body, length);
 
+	if (!s->connection) {
+		return; // held: no SDK to send to (it gets a Snapshot when it's back)
+	}
 	s->connection->Write(out.data(), out.size());
 }
 
@@ -663,6 +769,10 @@ void HeadlessGateway::Refuse(Session *s, eqheadless::RefusedReason reason, const
 void HeadlessGateway::CloseSoon(Session *s)
 {
 	if (s->close_timer) {
+		return;
+	}
+	if (!s->connection) {
+		Forget(s); // held: nothing to close
 		return;
 	}
 

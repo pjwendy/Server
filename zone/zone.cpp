@@ -40,6 +40,7 @@
 #include "common/rulesys.h"
 #include "common/seperator.h"
 #include "common/serverinfo.h"
+#include "common/path_manager.h"
 #include "common/strings.h"
 #include "zone/dynamic_zone.h"
 #include "zone/guild_mgr.h"
@@ -56,6 +57,11 @@
 #include "zone/water_map.h"
 #include "zone/worldserver.h"
 #include "zone/zone_config.h"
+#ifdef EQEMU_HEADLESS
+#include "zone/headless/headless_mover.h"
+#endif
+
+#include <sys/stat.h>
 #include "zone/zone_reload.h"
 
 #include <cfloat>
@@ -1151,6 +1157,7 @@ bool Zone::Init(bool is_static) {
 	zonemap  = Map::LoadMapFile(map_name);
 	watermap = WaterMap::LoadWaterMapfile(map_name);
 	pathing  = IPathfinder::Load(map_name);
+	nav_watch_loaded = nav_watch_seen = NavFilesSignature();
 
 	LogInfo("Loading timezone data");
 	zone_time.setEQTimeZone(content_db.GetZoneTimezone(zoneid, GetInstanceVersion()));
@@ -1522,6 +1529,14 @@ uint32 Zone::CountAuth() {
 
 bool Zone::Process() {
 	spawn_conditions.Process();
+
+	if (nav_watch_timer.Check()) {
+		const std::string sig = NavFilesSignature();
+		if (sig != nav_watch_loaded && sig == nav_watch_seen) {
+			ReloadNavmeshes(); // changed, and still since the last look
+		}
+		nav_watch_seen = sig;
+	}
 
 	if (spawn2_timer.Check()) {
 		LinkedListIterator<Spawn2 *> iterator(spawn2_list);
@@ -3304,9 +3319,44 @@ void Zone::ReloadMaps()
 {
 	zonemap  = Map::LoadMapFile(map_name);
 	watermap = WaterMap::LoadWaterMapfile(map_name);
-	pathing  = IPathfinder::Load(map_name);
+	ReloadNavmeshes();
+}
+
+void Zone::ReloadNavmeshes()
+{
+	// (every route is asked of zone->pathing / HeadlessPathing() when it's made, and none keeps the pointer: the old
+	// ones can go; ReloadMaps used to leak the old navmesh)
+	auto *old = pathing;
+	pathing   = IPathfinder::Load(map_name);
+	safe_delete(old);
 	safe_delete(headless_pathing);
 	headless_pathing_loaded = false;
+#ifdef EQEMU_HEADLESS
+	HeadlessMover::ForgetZoneFiles();
+#endif
+	nav_watch_loaded = nav_watch_seen = NavFilesSignature();
+	LogInfo("Reloaded the navmeshes of [{}]", GetShortName());
+}
+
+std::string Zone::NavFilesSignature()
+{
+	const std::string dir = fmt::format("{}/maps/nav", PathManager::Instance()->GetServerPath());
+	const std::string files[] = {
+		fmt::format("{}/{}.nav", dir, map_name),
+		fmt::format("{}/headless/{}.nav", dir, map_name),
+		fmt::format("{}/{}.swims.json", dir, GetShortName()),
+		fmt::format("{}/{}.jumps.json", dir, GetShortName()),
+		fmt::format("{}/{}.ladders.json", dir, GetShortName()),
+		fmt::format("{}/{}.teleports.json", dir, GetShortName()),
+	};
+	std::string sig;
+	struct stat st;
+	for (const auto &f : files) {
+		sig += stat(f.c_str(), &st) == 0
+			? fmt::format("{}.{}:{};", (long long) st.st_mtim.tv_sec, (long) st.st_mtim.tv_nsec, (long long) st.st_size)
+			: "-;";
+	}
+	return sig;
 }
 
 IPathfinder *Zone::HeadlessPathing()

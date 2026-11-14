@@ -86,6 +86,12 @@ private:
 		bool        zoning         = false; // moving to zone_id; keep the online record
 		uint64      deadline_ms    = 0; // for WaitingForZone / Spawning
 
+		// held: the SDK disconnected in game and the zone keeps the character frozen (HeadlessClients:HoldSeconds) for
+		// a new connection's Hello for the same character to take over (Resume); no connection meanwhile
+		bool        held           = false;
+		uint64      held_until_ms  = 0;
+		bool        forget         = false; // to be removed at the next tick (Forget)
+
 		// HeadlessClients:CommandRateLimit token bucket
 		double rate_tokens     = -1; // < 0 until first use
 		uint64 rate_refill_ms  = 0;
@@ -102,6 +108,10 @@ private:
 	void TrySpawn(Session *s);
 	ZoneServer *ZoneServerFor(const Session *s) const; // its zone (or instance), if it's up
 	void SendDespawn(Session *s);
+	void SendSessionOp(Session *s, uint16 opcode); // a ServerHeadlessSession_Struct to its zone
+	bool Hold(Session *s);   // the SDK went away in game: keep the character, frozen; false if it can't be held
+	bool Resume(Session *s); // s's (verified) Hello takes over a held session of its character; true if it did
+	void Forget(Session *s); // a session with no connection (held) removed, soon (not under an iteration of m_sessions)
 	void ForwardCommand(Session *s, const eqheadless::Command &cmd);
 	bool TakeRateToken(Session *s);
 

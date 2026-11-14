@@ -59,6 +59,8 @@ extern Zone        *zone;
 
 namespace {
 	constexpr uint64 PUBLISH_INTERVAL_MS = 250;
+	constexpr uint64 HOLD_TICK_MS        = 1000;  // a held session looks for new fights this often
+	constexpr int    HOLD_STUN_MS        = 30000; // a hold's stun, renewed every tick: it wears off by itself if the hold is lost
 	constexpr uint64 MOVEMENT_HISTORY_MS = 1000;
 	// smaller position changes aren't worth a delta
 	constexpr float  MOVE_EPSILON        = 0.25f;
@@ -328,12 +330,171 @@ void HeadlessClientManager::HandleDespawn(ServerPacket *pack)
 	// saved and removed on its next Process() (client_process.cpp, CLIENT_KICKED)
 	LogHeadlessClient("Session [{}] ended; logging its character out", it->first);
 	it->second.publish_timer.reset();
+	const bool was_held = it->second.held;
+	Unfreeze(it->second);
 	if (auto *me = it->second.stream->GetClient()) {
+		if (was_held) {
+			// a hold ran out (its program didn't come back): out at the zone's safe point, not in the fight it was frozen in
+			const auto safe = zone->GetSafePoint();
+			LogInfo("Held character [{}] not taken back; logging out at the safe point ({:.0f}, {:.0f}, {:.0f})", me->GetCleanName(), safe.x, safe.y, safe.z);
+			me->GMMove(safe.x, safe.y, safe.z, safe.w);
+		}
 		me->Kick("headless session ended");
 	}
 	else {
 		it->second.stream->Close();
 	}
+}
+
+void HeadlessClientManager::HandleHold(ServerPacket *pack)
+{
+	if (pack->size != sizeof(ServerHeadlessSession_Struct)) {
+		LogError("Wrong size on ServerOP_HeadlessHold: got [{}] expected [{}]", pack->size, sizeof(ServerHeadlessSession_Struct));
+		return;
+	}
+
+	auto *h = reinterpret_cast<ServerHeadlessSession_Struct *>(pack->pBuffer);
+	const std::string session_id = SessionID(h->session_id, sizeof(h->session_id));
+	auto it = m_sessions.find(session_id);
+	if (it == m_sessions.end() || !it->second.stream || it->second.held) {
+		return;
+	}
+	Client *me = it->second.stream->GetClient();
+	if (!me) {
+		return;
+	}
+
+	Session &session = it->second;
+	session.held = true;
+	if (session.mover) {
+		session.mover->Stop(HeadlessMover::Result::Stopped);
+	}
+	if (me->IsCasting()) {
+		me->InterruptSpell();
+	}
+	FreezeAround(session, me);
+	session.hold_timer = std::make_unique<EQ::Timer>(
+		HOLD_TICK_MS, true, [this, session_id](EQ::Timer *) {
+			auto s = m_sessions.find(session_id);
+			if (s != m_sessions.end() && s->second.held && s->second.stream && s->second.stream->GetClient()) {
+				FreezeAround(s->second, s->second.stream->GetClient());
+			}
+		}
+	);
+	LogInfo("Holding [{}] for its SDK: [{}] frozen", me->GetCleanName(), session.frozen.size());
+}
+
+void HeadlessClientManager::HandleResume(ServerPacket *pack)
+{
+	if (pack->size != sizeof(ServerHeadlessSession_Struct)) {
+		LogError("Wrong size on ServerOP_HeadlessResume: got [{}] expected [{}]", pack->size, sizeof(ServerHeadlessSession_Struct));
+		return;
+	}
+
+	auto *r = reinterpret_cast<ServerHeadlessSession_Struct *>(pack->pBuffer);
+	const std::string session_id = SessionID(r->session_id, sizeof(r->session_id));
+	auto it = m_sessions.find(session_id);
+	if (it == m_sessions.end()) {
+		return;
+	}
+
+	const size_t n = it->second.frozen.size();
+	Unfreeze(it->second);
+	auto *me = it->second.stream ? it->second.stream->GetClient() : nullptr;
+	LogInfo("Session [{}] resumed: [{}] back, [{}] unfrozen", session_id, me ? me->GetCleanName() : "?", n);
+	it->second.seen.clear();
+	it->second.last_self.clear();
+	it->second.last_book.clear();
+	it->second.last_inventory.clear();
+	it->second.last_bots.clear();
+	Publish(session_id, true); // world sent the Welcome first: this Snapshot follows it
+}
+
+void HeadlessClientManager::FreezeAround(Session &session, Client *me)
+{
+	// ours: the character, its pet, its bots and their pets
+	std::vector<Mob *> ours{me};
+	if (me->GetPet()) {
+		ours.push_back(me->GetPet());
+	}
+	for (auto *b : entity_list.GetBotsByBotOwnerCharacterID(me->CharacterID())) {
+		ours.push_back(b);
+		if (b->GetPet()) {
+			ours.push_back(b->GetPet());
+		}
+	}
+	for (auto *m : ours) {
+		Freeze(session, m);
+	}
+
+	// and every NPC in a fight with us: we're on its hate list, or it's on one of ours
+	std::unordered_set<uint16> mine;
+	for (auto *m : ours) {
+		mine.insert(m->GetID());
+	}
+	for (auto &[id, npc] : entity_list.GetNPCList()) {
+		if (!npc || mine.count(id) || !npc->IsEngaged()) {
+			continue;
+		}
+		for (auto *m : ours) {
+			if (npc->CheckAggro(m)) {
+				Freeze(session, npc);
+				break;
+			}
+		}
+	}
+	for (auto *m : ours) {
+		for (auto *e : m->GetHateList()) {
+			if (e && e->entity_on_hatelist && e->entity_on_hatelist->IsNPC() && !mine.count(e->entity_on_hatelist->GetID())) {
+				Freeze(session, e->entity_on_hatelist);
+			}
+		}
+	}
+}
+
+void HeadlessClientManager::Freeze(Session &session, Mob *mob)
+{
+	if (!mob) {
+		return;
+	}
+	const uint16 id = mob->GetID();
+	if (session.frozen.insert(id).second) {
+		auto &f = m_frozen[id];
+		if (f.holds++ == 0) {
+			f.was_invul  = mob->GetInvul();
+			f.was_paused = mob->IsBot() && mob->CastToBot()->GetPauseAI();
+			if (mob->IsCasting()) {
+				mob->InterruptSpell();
+			}
+		}
+	}
+	// (every tick: the stun renewed, so that it wears off by itself if the hold is ever lost)
+	mob->SetInvul(true);
+	mob->Stun(HOLD_STUN_MS);
+	if (mob->IsBot()) {
+		mob->CastToBot()->SetPauseAI(true);
+	}
+}
+
+void HeadlessClientManager::Unfreeze(Session &session)
+{
+	session.held = false;
+	session.hold_timer.reset();
+	for (uint16 id : session.frozen) {
+		auto f = m_frozen.find(id);
+		if (f == m_frozen.end() || --f->second.holds > 0) {
+			continue;
+		}
+		if (auto *mob = entity_list.GetMob(id)) {
+			mob->UnStun();
+			mob->SetInvul(f->second.was_invul);
+			if (mob->IsBot()) {
+				mob->CastToBot()->SetPauseAI(f->second.was_paused);
+			}
+		}
+		m_frozen.erase(f);
+	}
+	session.frozen.clear();
 }
 
 void HeadlessClientManager::HandleCommand(ServerPacket *pack)
@@ -2090,6 +2251,9 @@ void HeadlessClientManager::AnswerZoneRequestSoon(const std::string &session_id,
 void HeadlessClientManager::OnStreamDestroyed(const std::string &session_id, bool was_spawned)
 {
 	auto it = m_sessions.find(session_id);
+	if (it != m_sessions.end()) {
+		Unfreeze(it->second); // (kicked, killed or gone some other way while held: what it froze is given back)
+	}
 	const bool   zoning      = it != m_sessions.end() && it->second.zoning;
 	const uint32 zone_to     = zoning ? it->second.zone_to : 0;
 	const uint32 instance_to = zoning ? it->second.instance_to : 0;

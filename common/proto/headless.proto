@@ -29,6 +29,7 @@ message Welcome {
   string session_id       = 1;
   uint32 spawn_id         = 2;
   uint32 protocol_version = 3;
+  bool   resumed          = 4; // a held session taken over (HeadlessClients:HoldSeconds): the character, its bots and its fights are as they were
 }
 
 enum RefusedReason {

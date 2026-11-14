@@ -355,15 +355,17 @@ const std::vector<HeadlessMover::Boat> &HeadlessMover::Boats()
 
 const std::vector<HeadlessMover::Swim> &HeadlessMover::Swims()
 {
-	// the file doesn't change while a zone is up: read it once per zone
+	// read once per zone, and again after the zone's navmesh files changed (ForgetZoneFiles)
 	static std::vector<Swim> cached;
 	static std::string       cached_zone;
+	static uint32_t          cached_generation = 0;
 	const std::string name = zone->GetShortName();
-	if (name == cached_zone) {
+	if (name == cached_zone && cached_generation == s_files_generation) {
 		return cached;
 	}
 	cached.clear();
-	cached_zone = name;
+	cached_zone       = name;
+	cached_generation = s_files_generation;
 	std::ifstream in(fmt::format("{}/maps/nav/{}.swims.json", PathManager::Instance()->GetServerPath(), name));
 	if (!in) {
 		return cached;
@@ -402,15 +404,17 @@ const std::vector<HeadlessMover::Jump> &HeadlessMover::Ladders()
 
 const std::vector<HeadlessMover::Jump> &HeadlessMover::Links(const std::string &kind)
 {
-	// the file doesn't change while a zone is up: read it once per zone
+	// read once per zone, and again after the zone's navmesh files changed (ForgetZoneFiles)
 	static std::map<std::string, std::pair<std::string, std::vector<Jump>>> cache; // kind -> (zone, links)
+	static std::map<std::string, uint32_t> generations;                            // kind -> s_files_generation read at
 	auto &[cached_zone, cached] = cache[kind];
 	const std::string name = zone->GetShortName();
-	if (name == cached_zone) {
+	if (name == cached_zone && generations[kind] == s_files_generation) {
 		return cached;
 	}
 	cached.clear();
-	cached_zone = name;
+	cached_zone       = name;
+	generations[kind] = s_files_generation;
 	std::ifstream in(fmt::format("{}/maps/nav/{}.{}.json", PathManager::Instance()->GetServerPath(), name, kind));
 	if (!in) {
 		return cached;
