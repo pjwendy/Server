@@ -1099,11 +1099,12 @@ void MobMovementManager::UpdatePathGround(Mob *who, float x, float y, float z, M
 	opts.step_size   = RuleR(Pathing, NavmeshStepSize);
 	opts.offset      = who->GetZOffset();
 	opts.flags       = PathingNotDisabled ^ PathingZoneLine;
+	auto *pathing    = zone->PathingFor(who, opts.flags); // (a bot: its owner's navmesh, Bots:UseHeadlessNavmesh)
 
 	//This is probably pointless since the nav mesh tool currently sets zonelines to disabled anyway
 	auto partial = false;
 	auto stuck   = false;
-	auto route   = zone->pathing->FindPath(
+	auto route   = pathing->FindPath(
 		glm::vec3(who->GetX(), who->GetY(), who->GetZ()),
 		glm::vec3(x, y, z),
 		partial,
@@ -1240,10 +1241,11 @@ void MobMovementManager::UpdatePathUnderwater(Mob *who, float x, float y, float 
 	opts.step_size   = RuleR(Pathing, NavmeshStepSize);
 	opts.offset      = who->GetZOffset();
 	opts.flags       = PathingNotDisabled ^ PathingZoneLine;
+	auto *pathing    = zone->PathingFor(who, opts.flags);
 
 	auto partial = false;
 	auto stuck   = false;
-	auto route   = zone->pathing->FindPath(
+	auto route   = pathing->FindPath(
 		glm::vec3(who->GetX(), who->GetY(), who->GetZ()),
 		glm::vec3(x, y, z),
 		partial,

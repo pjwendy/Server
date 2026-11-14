@@ -206,6 +206,11 @@ same character in again, it takes the held session over: `Welcome.resumed` is se
 unfrozen as it was, and a Snapshot follows. If nobody comes back in time, the character is moved to its
 zone's safe point and logged out.
 
+Bots, and players' and bots' pets, find their way on the zone's headless navmesh where it has one
+(`Bots:UseHeadlessNavmesh`, on by default), so they follow their owner wherever the owner can walk,
+whether the owner is a headless character or a real client: over the doors, drops, bridges and jumps
+the headless navmesh has and the zone's own lacks. NPCs keep the zone's own navmesh.
+
 Zones reload their navmeshes (the zone's own, the headless one in `maps/nav/headless/`, and its swims,
 jumps, ladders and teleports) by themselves when the files change: a zone looks every 10 seconds and
 reloads once a change has stayed the same for one look. Installing a navmesh needs no zone restart.

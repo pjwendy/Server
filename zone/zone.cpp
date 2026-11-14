@@ -3359,6 +3359,19 @@ std::string Zone::NavFilesSignature()
 	return sig;
 }
 
+IPathfinder *Zone::PathingFor(Mob *who, int &flags)
+{
+	if (!who || !RuleB(Bots, UseHeadlessNavmesh)) {
+		return pathing;
+	}
+	Mob *owner = who->IsPet() ? who->GetOwner() : nullptr;
+	if (who->IsBot() || (owner && (owner->IsClient() || owner->IsBot()))) {
+		flags |= PathingHeadless; // (the headless navmesh's links carry it, and a bot shies from lava as a leader does)
+		return HeadlessPathing();
+	}
+	return pathing;
+}
+
 IPathfinder *Zone::HeadlessPathing()
 {
 	// loaded the first time a headless character needs it, so a zone none of them visits (or a server

@@ -304,7 +304,7 @@ IPathfinder::IPath PathfinderNavmesh::FindPath(const glm::vec3 &start, const glm
 	filter.setExcludeFlags((opts.flags & PathingHeadless) ? 0 : PathingHeadless);
 	filter.setAreaCost(0, opts.flag_cost[0]); //Normal
 	filter.setAreaCost(1, opts.flag_cost[1]); //Water
-	filter.setAreaCost(2, opts.flag_cost[2]); //Lava
+	filter.setAreaCost(2, (opts.flags & PathingHeadless) ? HEADLESS_LAVA_COST : opts.flag_cost[2]); //Lava (a bot on its owner's navmesh shies from it as the owner does)
 	filter.setAreaCost(4, opts.flag_cost[3]); //PvP
 	filter.setAreaCost(5, opts.flag_cost[4]); //Slime
 	filter.setAreaCost(6, opts.flag_cost[5]); //Ice

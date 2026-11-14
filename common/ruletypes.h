@@ -768,6 +768,7 @@ RULE_INT(Range, MaxDistanceToClickDoors, 100, "Max distance that a client can cl
 RULE_CATEGORY_END()
 
 RULE_CATEGORY(Bots)
+RULE_BOOL(Bots, UseHeadlessNavmesh, true, "Bots, and players' and bots' pets, find their way on the zone's headless navmesh (maps/nav/headless/<zone>.nav: the zone's own with the fixes for how a player really gets about: doors, drops, bridges, jumps) where it has one, so they follow their owner wherever the owner can walk; NPCs keep the zone's own. False: the zone's own for all")
 RULE_BOOL(Bots, Enabled, false, "Enable of disable bot functionality, default is false")
 RULE_BOOL(Bots, StrategicCombat, false, "Bots fight as a coordinated group does (fork): they spare what the group has parked, a mezzed or rooted mob, from the spells that would break it (a nuke on a rooted mob, any damage on a mezzed one, an area spell that would hit one) while anything else is still fighting. Default false: the stock bot AI")
 RULE_INT(Bots, BotExpansionSettings, 16383, "Sets the expansion settings for bot use. Defaults to all expansions enabled up to TSS")

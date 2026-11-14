@@ -3902,10 +3902,11 @@ bool NPC::CanPathTo(float x, float y, float z)
 	opts.step_size   = RuleR(Pathing, NavmeshStepSize);
 	opts.offset      = GetZOffset();
 	opts.flags       = PathingNotDisabled ^ PathingZoneLine;
+	auto *pathing    = zone->PathingFor(this, opts.flags); // (a bot or a pet: its owner's navmesh)
 
 	bool partial = false;
 	bool stuck   = false;
-	auto route   = zone->pathing->FindPath(
+	auto route   = pathing->FindPath(
 		glm::vec3(GetX(), GetY(), GetZ()),
 		glm::vec3(x, y, z),
 		partial,

@@ -209,6 +209,9 @@ public:
 	bool                                          headless_pathing_loaded = false;
 	// where headless characters find their way: their own navmesh if the zone has one, else the zone's
 	IPathfinder *HeadlessPathing();
+	// the navmesh a mob finds its way on, and the flags for it: a bot (or a player's or bot's pet) the headless one, so it follows its
+	// owner where the owner walks (Bots:UseHeadlessNavmesh); every NPC the zone's own
+	IPathfinder *PathingFor(Mob *who, int &flags);
 	// the navmeshes (and the headless mover's side files) reloaded when their files change, so that a navmesh fix
 	// needs no zone restart: looked at every NAV_WATCH_MS, reloaded once a change has held still for one look
 	// (never a half-written file)
