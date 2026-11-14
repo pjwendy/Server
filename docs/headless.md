@@ -142,6 +142,7 @@ Category `HeadlessClients`:
 | `DisplayTag` | `AI` | The suffix shown on headless characters (in their name plate and `/who`). |
 | `ShowDisplayTag` | `true` | Show `DisplayTag`. When false it's left off, and removed from characters that already carry it. They stay flagged as headless in the database either way. |
 | `CommandRateLimit` | `20` | Commands per second per character. More are refused. |
+| `HoldSeconds` | `300` | How long a character whose program disconnected is held, frozen with its fights, for the program to log in again and take it back. `0`: logged out at once. |
 
 Category `Bots` (the fork's own rule):
 
@@ -196,7 +197,17 @@ A headless character's corpse is consented to its guild (rule `HeadlessClients:C
 `CommandResult.ok` means the server accepted the command. What happens next (the spell lands, the
 mob dies, the walk arrives) comes back as state and events, just as a player sees it on screen.
 
-Ending a session logs the character out at once: it's saved and removed, with no linkdead time.
+Ending a session logs the character out at once: it's saved and removed, with no linkdead time. A
+program that goes away without ending it (its connection drops, or it restarts) is different: the
+character is **held** for `HoldSeconds`. The character, its pet, its bots and their pets, and every NPC
+in a fight with them are frozen (stunned and invulnerable, bots' AI paused). When the program logs the
+same character in again, it takes the held session over: `Welcome.resumed` is set, everything is
+unfrozen as it was, and a Snapshot follows. If nobody comes back in time, the character is moved to its
+zone's safe point and logged out.
+
+Zones reload their navmeshes (the zone's own, the headless one in `maps/nav/headless/`, and its swims,
+jumps, ladders and teleports) by themselves when the files change: a zone looks every 10 seconds and
+reloads once a change has stayed the same for one look. Installing a navmesh needs no zone restart.
 
 **What a character sees.** Combat text is made for it, as a client makes its own from the combat packets: `X hits Y for N points of damage.` (the verb by the kind of hit)
 and `X tries to hit Y, but misses!`, for what the character, its group, its bots and its pets do and take (spell damage arrives as the server's own messages). A

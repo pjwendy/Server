@@ -38,7 +38,8 @@ IPathfinder *IPathfinder::Load(const std::string &zone) {
 IPathfinder *IPathfinder::LoadHeadless(const std::string &zone) {
 	struct stat statbuffer;
 	std::string navmesh_path = fmt::format("{}/maps/nav/headless/{}.nav", PathManager::Instance()->GetServerPath(), zone);
-	if (stat(navmesh_path.c_str(), &statbuffer) == 0) {
+	// (an empty file is no navmesh: the zone's own is used, not a headless one with nothing in it)
+	if (stat(navmesh_path.c_str(), &statbuffer) == 0 && statbuffer.st_size > 0) {
 		return new PathfinderNavmesh(navmesh_path);
 	}
 
