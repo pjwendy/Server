@@ -60,6 +60,7 @@ namespace {
 	constexpr float  DOOR_LOOKAHEAD    = 15.0f;
 	constexpr float  DOOR_HEIGHT_RANGE = 20.0f;
 	constexpr uint64 DOOR_WAIT_MS      = 3000;
+	constexpr float  LEVER_REACH       = 40.0f; // a lever for the door ahead this near is pulled instead of the door
 	// a door another headless character clicked this long ago or less is opening: waited for, not clicked again. A click toggles a door (open
 	// when shut, shut when open: Doors::HandleClick), and two leaders walking in step through Permafrost's door 39 clicked it in the same
 	// instant: it opened and shut, and both gave up ("didn't open"), the first raid scouts with them, 9 Nov
@@ -1520,17 +1521,41 @@ bool HeadlessMover::HandleDoors(uint64 now)
 		}
 		clicked = now;
 
+		// a door some lever opens (another door whose trigger is this one: Permafrost's portcullis to the giants, PORT2814, has a
+		// TOGGLE on each side and doesn't open to a click of its own; the camps there walked into it all day, 13 Nov): the nearest
+		// lever is what a player clicks, and the lever's click opens the door (Doors::HandleClick passes it on)
+		Doors *lever = nullptr;
+		float lever_dist = LEVER_REACH;
+		for (auto &[lid, l] : entity_list.GetDoorsList()) {
+			if (!l || l == door || l->GetTriggerDoorID() != door->GetDoorID() || l->GetOpenType() == LIFT_OPEN_TYPE || l->HasDestinationZone()) {
+				continue;
+			}
+			const auto &lp = l->GetPosition();
+			const float d = glm::length(glm::vec3(lp.x - m_pos.x, lp.y - m_pos.y, lp.z - m_pos.z));
+			if (d < lever_dist) {
+				lever      = l;
+				lever_dist = d;
+			}
+		}
+		Doors *click = lever ? lever : door;
+
 		// click it, as a player would; the server checks distance, keys and locks
 		auto app = new EQApplicationPacket(OP_ClickDoor, sizeof(ClickDoor_Struct));
 		auto *cd = reinterpret_cast<ClickDoor_Struct *>(app->pBuffer);
-		cd->doorid    = door->GetDoorID();
+		cd->doorid    = click->GetDoorID();
 		cd->player_id = me->GetID();
 		m_stream->Inject(app);
 
-		m_door_entity  = door->GetEntityID();
+		m_door_entity  = door->GetEntityID(); // (waiting for the door itself to open, whichever was clicked)
 		m_door_wait_ms = now + DOOR_WAIT_MS;
 		SendUpdate(m_pos, me->GetHeading(), 0); // stop in front of it
-		LogHeadlessClient("[{}] clicking door [{}] ({})", me->GetCleanName(), door->GetDoorID(), door->GetDoorName());
+		if (lever) {
+			LogHeadlessClient("[{}] pulling lever [{}] ({}) for door [{}] ({})", me->GetCleanName(), lever->GetDoorID(), lever->GetDoorName(),
+				door->GetDoorID(), door->GetDoorName());
+		}
+		else {
+			LogHeadlessClient("[{}] clicking door [{}] ({})", me->GetCleanName(), door->GetDoorID(), door->GetDoorName());
+		}
 		return true;
 	}
 
