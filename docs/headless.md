@@ -197,8 +197,9 @@ A headless character's corpse is consented to its guild (rule `HeadlessClients:C
 `CommandResult.ok` means the server accepted the command. What happens next (the spell lands, the
 mob dies, the walk arrives) comes back as state and events, just as a player sees it on screen.
 
-Ending a session logs the character out at once: it's saved and removed, with no linkdead time. A
-program that goes away without ending it (its connection drops, or it restarts) is different: the
+Ending a session (a `Goodbye` frame: the SDK's `close()` sends one) logs the character out at once: it's
+saved and removed, with no linkdead time. A program that goes away without ending it (its connection
+drops, it crashes or it restarts) is different: the
 character is **held** for `HoldSeconds`. The character, its pet, its bots and their pets, and every NPC
 in a fight with them are frozen (stunned and invulnerable, bots' AI paused). When the program logs the
 same character in again, it takes the held session over: `Welcome.resumed` is set, everything is

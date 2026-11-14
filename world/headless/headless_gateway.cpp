@@ -309,6 +309,14 @@ void HeadlessGateway::HandleFrame(Session *s, const eqheadless::ClientFrame &fra
 		return;
 	}
 
+	if (frame.payload_case() == eqheadless::ClientFrame::kGoodbye) {
+		// a logout the program meant (it parks or rests the character): out now, not held for it to come back
+		LogInfo("Headless session [{}] said goodbye; logging [{}] out", s->id, s->character);
+		SendDespawn(s);
+		CloseSoon(s);
+		return;
+	}
+
 	if (frame.payload_case() == eqheadless::ClientFrame::kCommand && s->phase == Phase::InGame) {
 		ForwardCommand(s, frame.command());
 		return;

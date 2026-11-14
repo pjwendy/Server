@@ -383,10 +383,15 @@ message SkillEvent {
 }
 
 // client -> server
+// the program ends the session on purpose: the character is logged out, not held (HeadlessClients:HoldSeconds holds
+// a character only when its program went away without saying so: a crash or a restart)
+message Goodbye {}
+
 message ClientFrame {
   oneof payload {
     Hello   hello   = 1;
     Command command = 2;
+    Goodbye goodbye = 3;
   }
 }
 
