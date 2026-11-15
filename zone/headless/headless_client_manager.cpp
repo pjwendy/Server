@@ -937,6 +937,7 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			session.loot_corpse = id;
 			session.loot_peek   = cmd.loot().peek();
 			session.loot_only.assign(cmd.loot().only().begin(), cmd.loot().only().end());
+			session.loot_filtered = !session.loot_only.empty();
 			std::fill(std::begin(session.loot_coin), std::end(session.loot_coin), 0);
 			stream->Inject(Uint32Packet(OP_LootRequest, id));
 			return "";
@@ -1896,7 +1897,10 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 					if (session.loot_peek) {
 						break;
 					}
-					if (!session.loot_only.empty()) {  // (LootCommand.only: each name taken once)
+					// (LootCommand.only: each name taken once. Filtered by the flag, not by the list's being non-empty: the list is used up as
+					// it's matched, and the server's echo of the corpse came again for the same loot, found it empty and took everything: Ragnvald
+					// took Durgrim's Gold Plated Koshigatana with his own Orb of Tishan, Lord Nagafen's loot, eq1, 15 Nov)
+					if (session.loot_filtered) {
 						auto want = std::find(session.loot_only.begin(), session.loot_only.end(), name);
 						if (want == session.loot_only.end()) {
 							continue;

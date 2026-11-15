@@ -110,6 +110,7 @@ private:
 		std::deque<std::pair<int16, std::string>> loot_queue; // (loot slot, item name)
 		std::vector<std::string>                 loot_names;  // what we looted, for the event
 		std::vector<std::string>                 loot_only;   // take only these (a name each): LootCommand.only; empty for all
+		bool                                     loot_filtered = false; // this loot had an only list: what's not in it stays, even once the list is used up
 		bool                                     loot_peek = false; // take nothing: LootCommand.peek (what's on it comes back as left)
 		std::unique_ptr<EQ::Timer>               loot_timer;
 		// a zone change the server asked for (OP_RequestClientZoneChange) while we were still
