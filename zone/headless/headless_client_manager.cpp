@@ -1239,11 +1239,22 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			tr->to_mob_id   = npc->GetID();
 			tr->from_mob_id = me->GetID();
 			stream->Inject(rq);
+			// into a trade only from the cursor, and as the whole of what's on it (number_in_stack 0): a count into an empty trade slot is
+			// read as stacking onto what's there, and the server kicks ("Error stacking item in trade": twelve leaders handing Relm M`Loch
+			// a stackable Fuligan Soulstone, eq3, 15 Nov). A count is taken by the move onto the cursor (it splits the stack)
+			if (gv.slot() != EQ::invslot::slotCursor) {
+				auto cu = new EQApplicationPacket(OP_MoveItem, sizeof(MoveItem_Struct));
+				auto *c = reinterpret_cast<MoveItem_Struct *>(cu->pBuffer);
+				c->from_slot       = gv.slot();
+				c->to_slot         = EQ::invslot::slotCursor;
+				c->number_in_stack = gv.quantity() ? gv.quantity() : (inst->IsStackable() ? std::max<int16>(1, inst->GetCharges()) : 0);
+				stream->Inject(cu);
+			}
 			auto mv = new EQApplicationPacket(OP_MoveItem, sizeof(MoveItem_Struct));
 			auto *mi = reinterpret_cast<MoveItem_Struct *>(mv->pBuffer);
-			mi->from_slot       = gv.slot();
+			mi->from_slot       = EQ::invslot::slotCursor;
 			mi->to_slot         = EQ::invslot::TRADE_BEGIN;
-			mi->number_in_stack = gv.quantity() ? gv.quantity() : (inst->IsStackable() ? std::max<int16>(1, inst->GetCharges()) : 0);
+			mi->number_in_stack = 0;
 			stream->Inject(mv);
 			// the rest of a hand-in of several, each into the next trade slot by way of the cursor (as the client does: the server
 			// takes nothing into a trade but from the cursor), so the NPC's script sees them all in the one trade
@@ -1267,7 +1278,7 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				auto *t = reinterpret_cast<MoveItem_Struct *>(in->pBuffer);
 				t->from_slot = EQ::invslot::slotCursor;
 				t->to_slot = next++;
-				t->number_in_stack = count;
+				t->number_in_stack = 0;
 				stream->Inject(in);
 			}
 			auto ok = new EQApplicationPacket(OP_TradeAcceptClick, sizeof(TradeAccept_Struct));
