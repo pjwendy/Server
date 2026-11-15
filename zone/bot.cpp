@@ -6733,7 +6733,7 @@ bool Bot::DoFinishedSpellSingleTarget(uint16 spell_id, Mob* spellTarget, EQ::spe
 	if (
 		spellTarget &&
 		GetClass() != Class::Bard &&
-		(IsGrouped() || (IsRaidGrouped() && GetStoredRaid()->GetGroup(GetCleanName()) != RAID_GROUPLESS)) &&
+		(IsGrouped() || (IsRaidGrouped() && GetStoredRaid() && GetStoredRaid()->GetGroup(GetCleanName()) != RAID_GROUPLESS)) &&
 		(spellTarget->IsBot() || spellTarget->IsClient()) &&
 		(RuleB(Bots, GroupBuffing) || RuleB(Bots, RaidBuffing))
 	) {
