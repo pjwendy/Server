@@ -2380,6 +2380,23 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		return;
 	}
 
+	// a player turns to what it fights. A headless one faced only where it last walked, and a tank stood with its back to the boss: hit from
+	// behind, it can't parry, block, riposte or dodge (attack.cpp, InFront), and it was drawn swinging at nothing (Brunhild against Lord
+	// Nagafen, eq1, 14 Nov: 178 degrees off for minutes at a time)
+	if (session.mover && me->AutoAttackEnabled() && !me->IsFeared() && !me->IsStunned() && !me->IsMezzed() && !session.mover->Moving()) {
+		Mob *t = me->GetTarget();
+		if (t && t != me && !t->IsCorpse() && t->GetHP() > 0) {
+			const float want = me->CalculateHeadingToTarget(t->GetX(), t->GetY());
+			float off = std::fabs(want - me->GetHeading());
+			if (off > 256.0f) {
+				off = 512.0f - off;
+			}
+			if (off > 16.0f) { // (about 11 degrees)
+				session.mover->Face(want);
+			}
+		}
+	}
+
 	eqheadless::ServerFrame frame;
 	eqheadless::Self       *self = snapshot ? frame.mutable_snapshot()->mutable_me() : frame.mutable_delta()->mutable_me();
 

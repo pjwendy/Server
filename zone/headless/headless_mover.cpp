@@ -1234,6 +1234,15 @@ void HeadlessMover::Place(const glm::vec3 &pos, float heading)
 	SendUpdate(pos, heading, 0);
 }
 
+void HeadlessMover::Face(float heading)
+{
+	Client *me = m_stream->GetClient();
+	if (!me || Moving()) {
+		return;
+	}
+	SendUpdate(glm::vec3(me->GetX(), me->GetY(), me->GetZ()), heading, 0);
+}
+
 void HeadlessMover::Tick()
 {
 	Client *me = m_stream->GetClient();

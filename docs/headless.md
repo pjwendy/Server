@@ -160,6 +160,8 @@ would wake.
 
 A group member in the character's stream carries its buffs too (`GroupMember.buffs`; the character's own are `buffs`), for a view of what the group has on it.
 `Self.resists` and each `BotGear.resists` are the character's and its bots' resists now (magic, cold, fire, poison, disease: base, gear, buffs and AAs, as the inventory window shows them), for raid readiness. `Self.gear_resists` and `BotGear.gear_resists` are the same without buffs (base, gear and AAs): readiness adds the raid's own buffs to them, so a buff that happens to be on doesn't count twice.
+
+A headless player that is auto-attacking and standing still turns to face its target (more than about 11 degrees off; not while feared, stunned or mezzed), as a player does: before, it faced only where it last walked, and a tank hit from behind can't parry, block, riposte or dodge.
 In a raid, `Self.raid` lists everyone in it, the character too (`RaidMember`: name, spawn id or 0 when in another zone, raid group 0-11 or `0xFFFFFFFF` for none, group and raid leader, bot, class, level); `Self.group` is then empty, as the raid's groups take the place of groups.
 An NPC that is fighting, or has the character on its hate list, carries the spells on it (`Spawn.buffs`: our slows, roots, mezzes and damage over time, with the ticks
 left), sent again when the set changes (a tick alone is not a change), so a fight can be watched and replayed.

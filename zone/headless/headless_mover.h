@@ -78,6 +78,7 @@ public:
 	std::string Face(const glm::vec3 &point);
 	// accept a server-side move within the zone (#goto, summon), as the client does
 	void Place(const glm::vec3 &pos, float heading);
+	void Face(float heading); // turn where we stand (not while moving): a player faces what it fights
 	bool Moving() const { return m_moving; }
 	// where the last walk found the navmesh wanting: why it failed, or a gap it went round (for
 	// fixing the zone's navmesh: MoveEvent.nav). kind: "no_mesh_here", "no_mesh_there",
