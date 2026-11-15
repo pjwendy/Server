@@ -486,6 +486,7 @@ message Self {
   uint64          bank_copper = 41; // the coin in our bank, in copper's worth (CoinCommand moves it)
   repeated RaidMember raid    = 42; // the raid we are in, everyone in it (ourselves too); empty when not in one
   Resists         resists    = 43; // our resists now: base, gear, buffs and AAs, as the client's inventory window shows them
+  Resists         gear_resists = 44; // the same without our buffs (base, gear, AAs): what a raid's readiness counts, its own buffs added
 }
 
 message Gem {
@@ -567,6 +568,7 @@ message BotGear {
   repeated Item equipment = 7; // slot is the worn slot
   Resists       resists   = 8; // its resists now (gear and buffs)
   repeated Buff buffs     = 9; // what is on it now, with each buff's slot (seen in a raid too, where Self.group is empty)
+  Resists       gear_resists = 10; // its resists without its buffs (base, gear, AAs)
 }
 
 // a character's or a bot's resists (what a raid target's spells are checked against: a dragon's breath against cold, its fear against magic)

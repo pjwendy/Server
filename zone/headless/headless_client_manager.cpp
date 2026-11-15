@@ -2441,6 +2441,15 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		rs->set_fire(me->GetFR());
 		rs->set_poison(me->GetPR());
 		rs->set_disease(me->GetDR());
+		// without the buffs (a raid's readiness: a resist buff that happened to be on a tank counted, with the raid's own buffs on top,
+		// and the check flipped as it wore off, eq1's Lady Vox, 15 Nov)
+		auto *gr = self->mutable_gear_resists();
+		const StatBonuses *sb = me->GetSpellBonusesPtr();
+		gr->set_magic(me->GetMR() - sb->MR);
+		gr->set_cold(me->GetCR() - sb->CR);
+		gr->set_fire(me->GetFR() - sb->FR);
+		gr->set_poison(me->GetPR() - sb->PR);
+		gr->set_disease(me->GetDR() - sb->DR);
 	}
 	{
 		const double here = me->GetEXPForLevel(me->GetLevel()), next = me->GetEXPForLevel(me->GetLevel() + 1);
@@ -2611,6 +2620,13 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		brs->set_fire(b->GetFR());
 		brs->set_poison(b->GetPR());
 		brs->set_disease(b->GetDR());
+		auto *bgr = bg->mutable_gear_resists();
+		const StatBonuses *bsb = b->GetSpellBonusesPtr();
+		bgr->set_magic(b->GetMR() - bsb->MR);
+		bgr->set_cold(b->GetCR() - bsb->CR);
+		bgr->set_fire(b->GetFR() - bsb->FR);
+		bgr->set_poison(b->GetPR() - bsb->PR);
+		bgr->set_disease(b->GetDR() - bsb->DR);
 		if (Buffs_Struct *bb = b->GetBuffs()) {
 			for (int i = 0; i < b->GetMaxTotalSlots(); ++i) {
 				if (!IsValidSpell(bb[i].spellid)) {
