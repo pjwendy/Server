@@ -1317,6 +1317,11 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 				case EQ::skills::SkillFeignDeath:
 					stream->Inject(new EQApplicationPacket(OP_FeignDeath, 0));
 					return "";
+				case EQ::skills::SkillForage:
+					// the Forage button: Handle_OP_Forage checks the reuse timer and rolls the zone's forage table (the ranger's and druid's epic
+					// pieces are foraged: Ripened Heartfruit and the rest)
+					stream->Inject(new EQApplicationPacket(OP_Forage, 0));
+					return "";
 				case EQ::skills::SkillTaunt: {
 					if (!me->GetTarget()) {
 						return "no target to taunt";
