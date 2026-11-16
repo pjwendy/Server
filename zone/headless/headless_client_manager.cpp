@@ -529,6 +529,98 @@ void HeadlessClientManager::HandleCommand(ServerPacket *pack)
 	SendResult(session_id, cmd.id(), Execute(session_id, it->second, me, cmd));
 }
 
+// The trade window between two of our characters, as two players use it: A asks, B accepts the trade, A puts the item in and both
+// click Trade. Both sides are headless sessions here, so the manager plays B's part too (only for a character of A's guild: our own
+// leaders passing on gear they earned, the operator 16 Nov: "swap gear around"). The server's own trade code does the rest, its
+// no-drop and lore checks included. Each step a moment after the last: each client's packets are handled in its own Process.
+std::string HeadlessClientManager::GiveToPlayer(const std::string &session_id, Session &session, Client *me, Client *to, int16 slot,
+                                                uint32 quantity)
+{
+	const EQ::ItemInstance *inst = me->GetInv().GetItem(slot);
+	if (!inst || !inst->GetItem()) {
+		return fmt::format("nothing in slot {}", slot);
+	}
+	if (me->GuildID() == GUILD_NONE || to->GuildID() != me->GuildID()) {
+		return "they aren't in our guild";
+	}
+	std::string to_session;
+	for (auto &[sid, s] : m_sessions) {
+		if (s.stream && s.stream->GetClient() == to) {
+			to_session = sid;
+			break;
+		}
+	}
+	if (to_session.empty()) {
+		return "they aren't one of ours (a headless session)";
+	}
+	if (DistanceSquared(me->GetPosition(), to->GetPosition()) > USE_NPC_RANGE2) {
+		return "too far from them";
+	}
+	if (me->IsEngaged() || to->IsEngaged()) {
+		return "not while fighting";
+	}
+	if (me->trade->state != TradeNone || to->trade->state != TradeNone) {
+		return "a trade is already open";
+	}
+	if (!inst->IsDroppable(false)) {
+		return fmt::format("{} can't be traded (no drop)", inst->GetItem()->Name);
+	}
+	const uint16 a = me->GetID(), b = to->GetID();
+	auto rq = new EQApplicationPacket(OP_TradeRequest, sizeof(TradeRequest_Struct));
+	auto *tr = reinterpret_cast<TradeRequest_Struct *>(rq->pBuffer);
+	tr->to_mob_id = b;
+	tr->from_mob_id = a;
+	session.stream->Inject(rq);
+	auto ack = new EQApplicationPacket(OP_TradeRequestAck, sizeof(TradeRequest_Struct));
+	auto *ak = reinterpret_cast<TradeRequest_Struct *>(ack->pBuffer);
+	ak->to_mob_id = a;
+	ak->from_mob_id = b;
+	m_sessions[to_session].stream->Inject(ack);   // (B's trade starts both: Trade::Start)
+	const int16 count = quantity ? static_cast<int16>(quantity) : (inst->IsStackable() ? std::max<int16>(1, inst->GetCharges()) : 0);
+	const std::string name = inst->GetItem()->Name;
+	session.trade_timer = std::make_unique<EQ::Timer>(GIVE_STEP_MS, false, [this, session_id, to_session, slot, count, a, b, name](EQ::Timer *) {
+		auto s = m_sessions.find(session_id);
+		auto t = m_sessions.find(to_session);
+		if (s == m_sessions.end() || !s->second.stream || !s->second.stream->GetClient() || t == m_sessions.end() || !t->second.stream) {
+			return;
+		}
+		Client *me = s->second.stream->GetClient();
+		if (me->trade->state != Trading || me->trade->With() == nullptr || me->trade->With()->GetID() != b) {
+			LogHeadlessClient("[{}] the trade with [{}] didn't open", me->GetCleanName(), b);
+			return;
+		}
+		if (slot != EQ::invslot::slotCursor) {
+			auto cu = new EQApplicationPacket(OP_MoveItem, sizeof(MoveItem_Struct));
+			auto *c = reinterpret_cast<MoveItem_Struct *>(cu->pBuffer);
+			c->from_slot = slot;
+			c->to_slot = EQ::invslot::slotCursor;
+			c->number_in_stack = count;
+			s->second.stream->Inject(cu);
+		}
+		auto mv = new EQApplicationPacket(OP_MoveItem, sizeof(MoveItem_Struct));
+		auto *mi = reinterpret_cast<MoveItem_Struct *>(mv->pBuffer);
+		mi->from_slot = EQ::invslot::slotCursor;
+		mi->to_slot = EQ::invslot::TRADE_BEGIN;
+		mi->number_in_stack = 0;
+		s->second.stream->Inject(mv);
+		auto ok = new EQApplicationPacket(OP_TradeAcceptClick, sizeof(TradeAccept_Struct));
+		reinterpret_cast<TradeAccept_Struct *>(ok->pBuffer)->from_mob_id = a;
+		s->second.stream->Inject(ok);
+		t->second.trade_timer = std::make_unique<EQ::Timer>(GIVE_STEP_MS, false, [this, to_session, b, name](EQ::Timer *) {
+			auto t2 = m_sessions.find(to_session);
+			if (t2 == m_sessions.end() || !t2->second.stream || !t2->second.stream->GetClient()) {
+				return;
+			}
+			auto ok2 = new EQApplicationPacket(OP_TradeAcceptClick, sizeof(TradeAccept_Struct));
+			reinterpret_cast<TradeAccept_Struct *>(ok2->pBuffer)->from_mob_id = b;
+			t2->second.stream->Inject(ok2);
+			LogHeadlessClient("[{}] accepts [{}] in the trade", t2->second.stream->GetClient()->GetCleanName(), name);
+		});
+	});
+	LogHeadlessClient("[{}] trading [{}] to [{}]", me->GetCleanName(), name, to->GetCleanName());
+	return "";
+}
+
 std::string HeadlessClientManager::Execute(const std::string &session_id, Session &session, Client *me, const eqheadless::Command &cmd)
 {
 	NullStream *stream = session.stream;
@@ -1222,6 +1314,9 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			const auto &gv = cmd.give();
 			Mob *npc = entity_list.GetMob(gv.npc_id());
 			const EQ::ItemInstance *inst = me->GetInv().GetItem(gv.slot());
+			if (npc && npc->IsClient() && npc != me) {
+				return GiveToPlayer(session_id, session, me, npc->CastToClient(), gv.slot(), gv.quantity());
+			}
 			if (!npc || !npc->IsNPC()) {
 				return "that's not an NPC";
 			}

@@ -127,6 +127,7 @@ private:
 		bool                                     held = false;
 		std::unique_ptr<EQ::Timer>               hold_timer;
 		std::unordered_set<uint16>               frozen;         // entity ids this session froze
+		std::unique_ptr<EQ::Timer>               trade_timer;    // GiveToPlayer's next step (ours, or as the one given to)
 	};
 
 	// a mob frozen by a hold: how many held sessions froze it, and what to give back when the last lets go
@@ -143,6 +144,8 @@ private:
 
 	// returns "" when accepted, otherwise why not
 	std::string Execute(const std::string &session_id, Session &session, Client *me, const eqheadless::Command &cmd);
+	std::string GiveToPlayer(const std::string &session_id, Session &session, Client *me, Client *to, int16 slot, uint32 quantity);
+	static constexpr uint32 GIVE_STEP_MS = 700; // between a player trade's steps (each side's packets in its own Process)
 	void SendMovementHistory(Session &session);
 	void SendResult(const std::string &session_id, uint32 command_id, const std::string &error);
 
