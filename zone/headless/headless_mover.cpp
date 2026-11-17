@@ -1503,6 +1503,12 @@ bool HeadlessMover::HandleDoors(uint64 now)
 		if (door->HasDestinationZone()) {
 			continue;
 		}
+		// an open type of 100 and up is an animated object (lamps, globes, spinners, gears, fonts: 1,100 of them), not a door in the way.
+		// The Plane of Tranquility's VSBNI303 by Relm M`Loch, the Hate raid's start line, carries a lockpick of 1 (Vex Thal's of the same
+		// model, 0) and stopped every walk across it "locked": eq2's Serthos couldn't reach Relm for the Hate stone and the raid ended, 17 Nov
+		if (door->GetOpenType() >= 100) {
+			continue;
+		}
 		const auto &dp = door->GetPosition();
 		if (std::fabs(dp.z - m_pos.z) > DOOR_HEIGHT_RANGE ||
 			glm::length(glm::vec3(dp.x - m_pos.x, dp.y - m_pos.y, 0.0f)) > DOOR_LOOKAHEAD) {
