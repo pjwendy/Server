@@ -21,6 +21,14 @@
 #include "common/repositories/bot_spells_entries_repository.h"
 #include "common/repositories/npc_spells_repository.h"
 
+bool HealHeld(Mob* who) {
+	if (!who || !who->IsClient()) {
+		return false;
+	}
+	const std::string until = who->GetEntityVariable(HEAL_HOLD_VAR);
+	return !until.empty() && std::strtoull(until.c_str(), nullptr, 10) > Timer::GetCurrentTime();
+}
+
 bool Bot::AICastSpell(Mob* tar, uint8 chance, uint16 spell_type, uint16 sub_target_type, uint16 sub_type) {
 	if (!tar) {
 		return false;
@@ -182,6 +190,20 @@ bool Bot::AICastSpell(Mob* tar, uint8 chance, uint16 spell_type, uint16 sub_targ
 		case BotSpellTypes::PetHoTHeals:
 			if (!tar->IsOfClientBot() && !(tar->IsPet() && tar->GetOwner() && tar->GetOwner()->IsOfClientBot())) {
 				return false;
+			}
+
+			// a puller under a heal hold (the operator, 17 Nov: "never heal a puller if they are on the aggro list unless the mob that has
+			// been pulled has been tagged by the mt"): a heal on someone hated puts the healer on every hate list that has them, and a
+			// paladin bot's heal on its puller brought Hate's mini bosses onto it, a wipe, eq2 17 Nov
+			if (HealHeld(tar)) {
+				return false;
+			}
+			if (IsGroupBotSpellType(spell_type)) {
+				for (Mob* m : GatherSpellTargets(false, tar)) {
+					if (HealHeld(m) && DistanceSquared(m->GetPosition(), GetPosition()) < 300.0f * 300.0f) {
+						return false;
+					}
+				}
 			}
 
 			return BotCastHeal(tar, bot_class, bot_spell, spell_type);

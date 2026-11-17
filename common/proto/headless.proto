@@ -182,6 +182,10 @@ message BuffRemoveCommand  { uint32 spawn_id = 1; uint32 slot = 2; }
 message RaidInviteCommand  { string name = 1; }
 message RaidRemoveCommand  { string name = 1; }
 message RaidMoveCommand    { string name = 1; uint32 group = 2; }
+// no heal on this character for `seconds` (0 lifts it): a raid puller on a hate list before the main tank has its mob, since a heal on
+// someone hated puts the healer on every hate list that has them (EntityList::AddHealAggro). Bots skip it as a heal target, and their
+// group heals while it's in reach
+message HealHoldCommand    { uint32 seconds = 1; }
 message CombineCommand     { int32 container_slot = 1; } // combine what is in a container: an inventory bag's slot, or 1000 (SLOT_TRADESKILL_EXPERIMENT_COMBINE) for the world container opened; the answer is chat (the skill-ups and the product land in the inventory)
 
 message Command {
@@ -228,6 +232,7 @@ message Command {
     RaidRemoveCommand     raid_remove     = 40;
     RaidMoveCommand       raid_move       = 41;
     BuffRemoveCommand     buff_remove     = 42;
+    HealHoldCommand       heal_hold       = 43;
   }
 }
 

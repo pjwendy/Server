@@ -227,6 +227,11 @@ namespace BotAnimEmpathy {
 	constexpr uint8 BackOff             = 3;
 };
 
+// a heal hold on a character (headless HealHoldCommand: a raid puller on a hate list before the MT has its mob): the entity variable holds
+// until when (Timer::GetCurrentTime ms); HealHeld is true while it runs
+constexpr const char* HEAL_HOLD_VAR = "heal_hold_until";
+bool HealHeld(Mob* who);
+
 class Bot : public NPC {
 	friend class Mob;
 public:

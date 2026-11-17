@@ -1554,6 +1554,16 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			stream->Inject(app);
 			return "";
 		}
+		case eqheadless::Command::kHealHold: {
+			// no heal on us until then (Bot::AICastSpell checks it): a raid puller on a hate list before the MT has its mob
+			const uint32 secs = std::min<uint32>(cmd.heal_hold().seconds(), 600);
+			if (secs == 0) {
+				me->DeleteEntityVariable(HEAL_HOLD_VAR);
+			} else {
+				me->SetEntityVariable(HEAL_HOLD_VAR, std::to_string(Timer::GetCurrentTime() + secs * 1000));
+			}
+			return "";
+		}
 		case eqheadless::Command::kRaidInvite: {
 			// as the client's raid window invite (OP_RaidInvite, which the server routes to Handle_OP_RaidCommand; RaidCommandInvite): a bot goes straight in (Bot::ProcessRaidInvite),
 			// a player is asked (OP_RaidUpdate action 20; a headless one answers it in OnOutgoing)
