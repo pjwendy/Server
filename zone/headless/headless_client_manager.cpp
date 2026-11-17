@@ -1426,6 +1426,22 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 					stream->Inject(app);
 					return "";
 				}
+				case EQ::skills::SkillThrowing:
+				case EQ::skills::SkillArchery: {
+					// the range button: what's in the range slot thrown (or shot) at the target. The client sends it as a combat ability
+					// whose m_atk is the range slot (Client::Handle_OP_CombatAbility: ThrowingAttack or RangedAttack checks the item,
+					// the range and the timers). A raid's puller tags with it (the operator, 17 Nov)
+					if (!me->GetTarget()) {
+						return "no target";
+					}
+					auto app = new EQApplicationPacket(OP_CombatAbility, sizeof(CombatAbility_Struct));
+					auto *ca = reinterpret_cast<CombatAbility_Struct *>(app->pBuffer);
+					ca->m_target = me->GetTarget()->GetID();
+					ca->m_atk    = EQ::invslot::slotRange;
+					ca->m_skill  = skill;
+					stream->Inject(app);
+					return "";
+				}
 				case EQ::skills::SkillBackstab:
 				case EQ::skills::SkillBash:
 				case EQ::skills::SkillKick:
