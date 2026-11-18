@@ -2002,8 +2002,23 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 				// (ResetLooter), so put first it cost everything after it (Grakk, eq3: a Rhino Beetle Horn kept three worn items on its
 				// corpse for 210 tries)
 				const auto &all = e->CastToCorpse()->GetLootItems();
-				auto lore_held = [&](const LootItem *item, const EQ::ItemData *data) {
+				// (an item's lore augment counts as much as the item: the server refuses an item one of whose augments we already have.
+				// Lirael, eq1, 18 Nov: a Bluegreen Rock in her corpse's Crystal Chitin Circlet and another in the gloves she wore, the
+				// Circlet worn so looted first, and the loot ended there every time, 57 things behind it)
+				auto conflicts = [&](const LootItem *item, const EQ::ItemData *data) {
 					if (data && me->CheckLoreConflict(data)) {
+						return true;
+					}
+					for (const uint32 aug : {item->aug_1, item->aug_2, item->aug_3, item->aug_4, item->aug_5, item->aug_6}) {
+						const auto *a = aug ? database.GetItem(aug) : nullptr;
+						if (a && me->CheckLoreConflict(a)) {
+							return true;
+						}
+					}
+					return false;
+				};
+				auto lore_held = [&](const LootItem *item, const EQ::ItemData *data) {
+					if (conflicts(item, data)) {
 						return true;
 					}
 					if (!data || !data->IsClassBag() || item->equip_slot < EQ::invslot::GENERAL_BEGIN || item->equip_slot > EQ::invslot::GENERAL_END) {
@@ -2012,7 +2027,7 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 					for (const auto *in : all) {  // (a bag's things come with it: one lore one we have and the bag is refused)
 						if (in && EQ::InventoryProfile::CalcSlotId(in->equip_slot) == item->equip_slot && in != item) {
 							const auto *d = database.GetItem(in->item_id);
-							if (d && me->CheckLoreConflict(d)) {
+							if (conflicts(in, d)) {
 								return true;
 							}
 						}
