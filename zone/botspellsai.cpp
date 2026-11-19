@@ -891,7 +891,7 @@ bool Bot::AIHealRotation(Mob* tar, bool useFastHeals) {
 			botSpell = GetBestBotSpellForFastHeal(this, tar);
 	}
 	else {
-		botSpell = GetBestBotSpellForPercentageHeal(this, tar);
+		botSpell = GetBestBotSpellForPercentageHeal(this, tar, BotSpellTypes::CompleteHeal);
 
 		if (!IsValidSpell(botSpell.SpellId)) {
 			botSpell = GetBestBotSpellForRegularSingleTargetHeal(this, tar);
