@@ -4,6 +4,7 @@ on:
     branches:
       - master
       - develop
+      - headless   # this fork's branch: the headless module is built on every push (EQEMU_BUILD_HEADLESS is on by default)
   pull_request:
 jobs:
   linux:
