@@ -10,20 +10,68 @@ companions, or a whole guild of them. It is **opt-in for the server operator**. 
 the operator builds the module, turns it on and issues tokens. A server that hasn't done all three
 can't be scripted this way.
 
-Programs talk to the server through a small protobuf protocol (`common/proto/headless.proto`). A
-Python SDK, `eqmq`, wraps it in MacroQuest-style names (`bot.Me.PctHPs`, `bot.Spawn("npc radius 50")`,
-`/target`, `#event`). See [Using it from Python](#using-it-from-python).
+Programs talk to the server through a small protobuf protocol (`common/proto/headless.proto`, every
+message in [headless-protocol.md](headless-protocol.md)). A Python SDK,
+[eqmq](https://github.com/pjwendy/eqmq), wraps it in MacroQuest-style names (`bot.Me.PctHPs`,
+`bot.Spawn("npc radius 50")`, `/target`, `#event`).
 
+- [Quick start](#quick-start)
 - [How it works](#how-it-works)
 - [Building](#building)
 - [Turning it on](#turning-it-on)
 - [Tokens and characters](#tokens-and-characters)
 - [Rules](#rules)
 - [What a headless character can do](#what-a-headless-character-can-do)
+- [What a headless character sees](#what-a-headless-character-sees)
+- [Sessions: logging out, dropping and coming back](#sessions-logging-out-dropping-and-coming-back)
+- [Moving about: navmeshes, jumps, water and boats](#moving-about-navmeshes-jumps-water-and-boats)
+- [Bots](#bots)
+- [Corpses and resurrection](#corpses-and-resurrection)
 - [The protocol](#the-protocol)
 - [Safety and fair play](#safety-and-fair-play)
 - [Troubleshooting](#troubleshooting)
 - [Using it from Python](#using-it-from-python)
+
+Other changes this fork makes to the server, outside the module, are in [fork-changes.md](fork-changes.md).
+
+## Quick start
+
+From nothing to a character walking, on a server you run (akk-stack or a plain build):
+
+1. **Build the `headless` branch** of this fork (the module is on by default):
+   ```sh
+   git clone -b headless https://github.com/pjwendy/Server.git
+   ```
+   In akk-stack, point it at this source and `make build` in the server container. See [Building](#building).
+2. **Turn on the listener** in `eqemu_config.json` (`server.world.headless`, see [Turning it on](#turning-it-on)),
+   on loopback or a private address.
+3. **Turn on the rules**: `HeadlessClients:AllowHeadlessClients` true and `HeadlessClients:MaxTotal` above 0.
+   Restart world.
+4. **Make an account for it** in the usual way (status 0), and **issue a token** for that account:
+   ```sh
+   ./bin/world headless:token-create myaccount --label=first-bot
+   ```
+   It prints `hc_...` once. Keep it.
+5. **Make a character** on that account, in the game or with
+   `./bin/world headless:character-create myaccount Bifar 8 2 kaladima` (a dwarf cleric in Kaladim).
+6. **Drive it** from Python:
+   ```sh
+   pip install git+https://github.com/pjwendy/eqmq
+   ```
+   ```python
+   import asyncio, eqmq
+
+   async def main():
+       bot = await eqmq.connect("127.0.0.1", 9100, token="hc_...", character="Bifar")
+       print(bot.Me.Name, bot.Me.Level, bot.Zone.ShortName)
+       await bot.DoCommand("/say Hello, I'm a scripted character.")
+       await bot.close()
+
+   asyncio.run(main())
+   ```
+
+The character appears in the zone with `AI` after its name. If the connection is refused, the
+[Troubleshooting](#troubleshooting) table says why.
 
 ## How it works
 
@@ -47,13 +95,14 @@ Python SDK, `eqmq`, wraps it in MacroQuest-style names (`bot.Me.PctHPs`, `bot.Sp
   nothing that would have to be kept in step with them.
 - **Movement** is the client's job in EverQuest, so the module does it for the character: it follows
   the zone's navmesh at the character's run speed (buffs, snares and GM speed included), keeps to
-  the floor, opens doors it has keys for, rides lifts, walks through zone lines, and reports
-  positions the way the client does, so the server's own anti-cheat checks still apply.
+  the floor, opens doors it has keys for, rides lifts, jumps, swims, walks through zone lines, and
+  reports positions the way the client does, so the server's own anti-cheat checks still apply.
 - **State goes out** four times a second: the character (HP, mana, endurance, position, target,
-  buffs, gems, coin, weight, experience, run speed, known disciplines), the zone and its exits, every spawn in the zone,
-  the spell book, inventory and bank, and the character's EQEmu bots. The first frame is a full
-  snapshot; after that only what changed. Chat, game messages, deaths, skill-ups, merchant windows,
-  loot and moves arrive as events.
+  buffs, gems, coin, weight, experience, run speed, known disciplines, resists), the zone and its
+  exits, every spawn in the zone, the spell book, inventory and bank, the group or raid, and the
+  character's EQEmu bots with their gear and buffs. The first frame is a full snapshot; after that
+  only what changed. Chat, game messages, deaths, skill-ups, merchant windows, loot and moves arrive
+  as events.
 
 ## Building
 
@@ -96,7 +145,7 @@ INSERT INTO rule_values (ruleset_id, rule_name, rule_value, notes) VALUES
 ON DUPLICATE KEY UPDATE rule_value = VALUES(rule_value);
 ```
 
-Restart world (or `#reload rules`) for rule changes to take effect.
+Restart world (or `#rules reload`) for rule changes to take effect.
 
 ## Tokens and characters
 
@@ -125,6 +174,9 @@ A character can't be online through a real client and a headless session at the 
 
 ## Rules
 
+Set any of these with `INSERT INTO rule_values (ruleset_id, rule_name, rule_value) VALUES (1, 'Category:Name', 'value') ON DUPLICATE KEY UPDATE rule_value = VALUES(rule_value)`
+and `#rules reload` (or a restart).
+
 Category `HeadlessClients`:
 
 | Rule | Default | Meaning |
@@ -137,38 +189,35 @@ Category `HeadlessClients`:
 | `AllowBots` | `true` | They may spawn and command EQEmu bots (`^` commands). Also needs `Bots:Enabled`. |
 | `AllowMercenaries` | `true` | Reserved: there are no mercenary commands yet. |
 | `AllowGroupWithPlayers` | `true` | They may invite real players to their groups. |
-| `AllowTradeWithPlayers` | `false` | Reserved: there are no trade commands yet. |
+| `AllowTradeWithPlayers` | `false` | Reserved: there are no trade commands with players yet. |
 | `AllowTellsFromPlayers` | `true` | Reserved: not enforced yet. |
 | `DisplayTag` | `AI` | The suffix shown on headless characters (in their name plate and `/who`). |
 | `ShowDisplayTag` | `true` | Show `DisplayTag`. When false it's left off, and removed from characters that already carry it. They stay flagged as headless in the database either way. |
 | `CommandRateLimit` | `20` | Commands per second per character. More are refused. |
-| `HoldSeconds` | `300` | How long a character whose program disconnected is held, frozen with its fights, for the program to log in again and take it back. `0`: logged out at once. |
+| `HoldSeconds` | `300` | How long a character whose program disconnected is held, frozen with its fights, for the program to log in again and take it back. `0`: logged out at once. See [Sessions](#sessions-logging-out-dropping-and-coming-back). |
+| `ConsentGuildCorpses` | `true` | A headless character's corpse is consented to its guild, as `/consent guild`. See [Corpses](#corpses-and-resurrection). |
+| `Drowning` | `true` | Headless characters run out of air under water and drown, as the client works it out (the client reports drowning itself, with `OP_EnvDamage`, and the server trusts it). |
+| `JumpHeight` | `4.5` | How high a headless character's jump goes, in units above where it jumps from (the RoF2 client's physics, measured: a 4.8 peak). `0`: they don't jump. |
+| `JumpDistance` | `45.0` | How far across a running jump goes, in units, landing level (the RoF2 client's, measured: 55 at run speed). `0`: they don't jump. |
 
-Category `Bots` (the fork's own rule):
+Category `Bots` (the fork's own rules):
 
 | Rule | Default | Meaning |
 |---|---|---|
 | `StrategicCombat` | `false` | Bots fight as a coordinated group does. Off, the stock bot AI. On, a bot doesn't cast a spell that would break a mob the group has **parked** (mezzed, or rooted): no damage at all on a mezzed mob, no direct spell on a rooted one (a DoT's ticks don't break a root on the server), and no area spell that would hit one, while anything else is on the hate list; the last mob left is fought as any is. A bot's commanded casts (`^cast`) are its owner's call and are not held back. |
+| `UseHeadlessNavmesh` | `true` | Bots, and players' and bots' pets, find their way on the zone's headless navmesh where it has one, so they follow their owner wherever the owner can walk (see [Moving about](#moving-about-navmeshes-jumps-water-and-boats)). NPCs keep the zone's own. False: the zone's own for all. |
+| `UseOwnerReagents` | `false` | A bot's spells need their components, as a player's do, and take them from its owner's inventory (a bot has none of its own). The bot doesn't choose a spell whose components its owner lacks, and an item its spell summons goes to its owner's cursor. Pets follow `Character:PetsUseReagents`. |
 
-Set it with `INSERT INTO rule_values (ruleset_id, rule_name, rule_value) VALUES (1, 'Bots:StrategicCombat', 'true') ON DUPLICATE KEY UPDATE rule_value = 'true'` and `#rules reload` (or a restart).
+Category `Zone` (the fork's own rule, for every character, not only headless ones):
 
-A spawn that is an NPC carries what it does about the character (`aggro_range`, `assist_range`, `aggro`): the radius it notices the character in, the radius in
-which it calls others to help, and bits for hostile on sight (its faction toward the character scowls), may aggro (threatening: a quarter chance), and aggros
-even a mob it cons grey to. They are worked out by the server's own aggro rules (`Mob::CheckWillAggro`) when the spawn is sent; whether the character is
-seen (invisible), line of sight and the chance are left to the character, so a route can keep out of the radii of what is hostile and a pull can count what it
-would wake.
-
-A group member in the character's stream carries its buffs too (`GroupMember.buffs`; the character's own are `buffs`), for a view of what the group has on it.
-`Self.resists` and each `BotGear.resists` are the character's and its bots' resists now (magic, cold, fire, poison, disease: base, gear, buffs and AAs, as the inventory window shows them), for raid readiness. `Self.gear_resists` and `BotGear.gear_resists` are the same without buffs (base, gear and AAs): readiness adds the raid's own buffs to them, so a buff that happens to be on doesn't count twice.
-
-A headless player that is auto-attacking and standing still turns to face its target (more than about 11 degrees off; not while feared, stunned or mezzed), as a player does: before, it faced only where it last walked, and a tank hit from behind can't parry, block, riposte or dodge.
-In a raid, `Self.raid` lists everyone in it, the character too (`RaidMember`: name, spawn id or 0 when in another zone, raid group 0-11 or `0xFFFFFFFF` for none, group and raid leader, bot, class, level); `Self.group` is then empty, as the raid's groups take the place of groups.
-An NPC that is fighting, or has the character on its hate list, carries the spells on it (`Spawn.buffs`: our slows, roots, mezzes and damage over time, with the ticks
-left), sent again when the set changes (a tick alone is not a change), so a fight can be watched and replayed.
-
-A headless character's corpse is consented to its guild (rule `HeadlessClients:ConsentGuildCorpses`, on by default; as `/consent guild`): a guildmate may drag it, and so may the guildmate's bots (`^corpsedrag`), to where they are camped to resurrect it there.
+| Rule | Default | Meaning |
+|---|---|---|
+| `RespawnMultiplier` | `1.0` | Multiplies every spawn point's respawn time (`0.5`: half the wait), with a floor of 10 seconds. |
 
 ## What a headless character can do
+
+Each command is one field of `Command`; its fields are in [headless-protocol.md](headless-protocol.md#command).
+eqmq gives each one a method, and most a MacroQuest slash command too.
 
 | Command | |
 |---|---|
@@ -176,63 +225,183 @@ A headless character's corpse is consented to its guild (rule `HeadlessClients:C
 | `chat` | Say, tell, group, guild, raid, shout, OOC, auction. A say starting with `#` is a GM command (if the account's status allows it). One starting with `^` is an EQEmu bot command (if `AllowBots`). |
 | `sit` | Sit or stand. |
 | `move_to`, `stop` | Walk to a point on the navmesh, or only plan the walk (`plan_only`: the route's length and its points, up to about 120, or no route). A walk by a sitting character is refused until it has stood up (send `sit` first). |
-| `zone_to` | Walk to the zone line for a neighbouring zone and through it; or, where no zone line has a walk, to a **boat** to that zone (see below). |
+| `zone_to` | Walk to the zone line for a neighbouring zone and through it; or, where no zone line has a walk, to a **boat** to that zone (see [Boats](#boats)). |
+| `surface` | Under water: swim straight up to the surface, for air (a `MoveEvent` when there). |
 | `cast`, `stop_cast`, `memorize`, `scribe` | Cast from a gem, interrupt, memorise a spell, scribe a scroll into the book. |
 | `consider` | `/consider` a spawn: its con colour and faction standing. |
 | `loot` | Loot a corpse (everything the character may take; `peek`: take nothing, see what's on it in `left`; `only`: just these item names). |
 | `merchant`, `buy`, `sell` | Open a merchant's window, buy, sell. |
-| `move_item` | Move items between slots, bags and the bank: equip, unequip, or put something on the cursor to hand to one of the character's bots with `^inventorygive`. |
+| `give` | Hand items (a stack's quantity, or all of it) to an NPC beside the character, as the trade window does: the NPC's script takes them (a quest's hand-in of one item or several). |
+| `coin` | Move coin between what the character carries and its bank, beside a banker, as the bank window does. |
+| `move_item` | Move items between slots, bags and the bank: equip, unequip, or put something on the cursor to hand to one of the character's bots (`^inventorygive`, or `^pack give`). |
 | `ability` | A combat ability as the client's buttons send it: kick, bash, backstab, the monk strikes, frenzy, intimidation and taunt on the target; sneak, hide and feign death on yourself. |
 | `pet` | Command your pet, as `/pet`: attack your target, back off, follow, guard, taunt, sit, hold and the rest. |
 | `discipline` | Use a discipline the character knows (they're in its state), as the combat abilities window. |
 | `use_item` | Right-click an item: its click effect, a potion or food, or a tome (which teaches its discipline). |
 | `parcel_send`, `parcel_retrieve` | Parcels, as a parcel merchant's parcel tab (open the window first, within reach). Send an item to a character by name, with a note; not attuned items, nor no-drop ones unless `World:FVNoDropFlag` lets players trade them; one parcel per `Parcel:ParcelDeliveryDelay`. Opening a parcel merchant lists the parcels waiting for the character (`MerchantEvent.parcels`); retrieve takes one into the bags. Needs `Parcel:EnableParcelMerchants`. |
 | `corpse_drag` | `/corpse drag` a corpse (yours, or one you're consented to) by spawn id: it follows you as you move, within the server's drag distance; or drop it (`drop`, all with no id). |
-| `augment` | An augment into a socket of an item, out again, swapped or destroyed, as the client's augment window does (`OP_AugmentItem`: the augment is on the cursor first, put there with `move_item`). `item_slot` is a worn or carried item, not a banked one; `aug_index` the socket 0-5; `action` 0 insert, 1 safe remove (the augment's own distiller, `Item.aug_distiller`, in `solvent_slot` unless that is 0), 2 swap, 3 destroy. The server's rules apply (socket type against `Item.aug_type`, worn slots, lore); the answer is chat and the item's new `Item.augs` in the next inventory frame |
+| `augment` | An augment into a socket of an item, out again, swapped or destroyed, as the client's augment window does (`OP_AugmentItem`: the augment is on the cursor first, put there with `move_item`). `item_slot` is a worn or carried item, not a banked one; `aug_index` the socket 0-5; `action` 0 insert, 1 safe remove (the augment's own distiller, `Item.aug_distiller`, in `solvent_slot` unless that is 0), 2 swap, 3 destroy. The server's rules apply (socket type against `Item.aug_type`, worn slots, lore); the answer is chat and the item's new `Item.augs` in the next inventory frame. |
 | `aa_exp`, `buy_aa` | The share of experience going to AA, as the client's slider (0 turns it off, 100 stops levelling); and one rank of an alternate advancement ability bought with a point (`rank_id` is `aa_ranks.id`, the next rank of the ability: the server checks the level, the price and the prerequisites and answers why when it can't be bought). AA experience only accrues from level 51, as in the game. |
 | `click_door` | Click a door in this zone by its door id (0-255), as the client does: a teleporter or a Plane of Knowledge book zones you where it goes. The server checks the distance, keys and locks. |
 | `click_object`, `close_object`, `combine` | Tradeskills: open a world container (oven, forge, loom, brew barrel, kiln, pottery wheel...) by its object table id, as a click does (the server checks the distance); the items go in with `move_item` to its slots (4000 on); `combine` is the Combine button, for the world container (slot 1000) or an inventory bag's slot. The server does the recipe and the skill roll. |
 | `invite`, `disband` | Invite to the group (the character's own bots, or real players if allowed), leave it. |
-| `buff_remove` | Click a beneficial buff off the character or one of its bots by its slot, as the buff window (`OP_BuffRemoveRequest`, which the server allows for a client's own buffs and its bots'). Every `Buff` carries its `slot` (a dispel takes the first slot it can dispel, a new buff goes in the first free one), and each `BotGear` its bot's `buffs`, so a leader sees its bots' buff windows in a raid too, where `Self.group` is empty. |
-| `raid_invite`, `raid_remove`, `raid_move` | Raids, as the client's raid window (`OP_RaidInvite`, which the server hands to `Handle_OP_RaidCommand`). `raid_invite` a player who is ungrouped or leads a group (the whole group comes in) or one of the character's bots (or a bot whose owner is already in the raid), making a raid with the character and its group if it has none; a bot goes straight in (`Bot::ProcessRaidInvite`), a player is asked. `raid_remove` takes a member out (the raid leader's right; an empty name leaves the raid). `raid_move` puts a member in raid group 0-11, or in none (12 and up). A headless character answers a raid invite by itself, as it answers a rez: accepted from a guildmate or a GM, left unanswered from anyone else. |
+| `buff_remove` | Click a beneficial buff off the character or one of its bots by its slot, as the buff window (`OP_BuffRemoveRequest`, which the server allows for a client's own buffs and its bots'). Every `Buff` carries its `slot`, and each `BotGear` its bot's `buffs`. |
+| `raid_invite`, `raid_remove`, `raid_move` | Raids, as the client's raid window (`OP_RaidInvite`, which the server hands to `Handle_OP_RaidCommand`). `raid_invite` a player who is ungrouped or leads a group (the whole group comes in) or one of the character's bots (or a bot whose owner is already in the raid), making a raid with the character and its group if it has none; a bot goes straight in (`Bot::ProcessRaidInvite`), a player is asked. `raid_remove` takes a member out (the raid leader's right; an empty name leaves the raid). `raid_move` puts a member in raid group 0-11, or in none (12 and up). |
+| `heal_hold` | No heals on this character for some seconds (0 lifts it). For a raid's puller: a heal on someone a mob hates puts the healer on that mob's hate list too, so nobody should heal the puller until the main tank has the mob. Bots skip it as a heal target. |
 
 `CommandResult.ok` means the server accepted the command. What happens next (the spell lands, the
 mob dies, the walk arrives) comes back as state and events, just as a player sees it on screen.
 
-Ending a session (a `Goodbye` frame: the SDK's `close()` sends one) logs the character out at once: it's
-saved and removed, with no linkdead time. A program that goes away without ending it (its connection
-drops, it crashes or it restarts) is different: the
-character is **held** for `HoldSeconds`. The character, its pet, its bots and their pets, and every NPC
-in a fight with them are frozen (stunned and invulnerable, bots' AI paused). When the program logs the
-same character in again, it takes the held session over: `Welcome.resumed` is set, everything is
-unfrozen as it was, and a Snapshot follows. If nobody comes back in time, the character is moved to its
-zone's safe point and logged out.
+A headless character answers some requests by itself, as a player at the keyboard would:
 
-Bots, and players' and bots' pets, find their way on the zone's headless navmesh where it has one
-(`Bots:UseHeadlessNavmesh`, on by default), so they follow their owner wherever the owner can walk,
-whether the owner is a headless character or a real client: over the doors, drops, bridges and jumps
-the headless navmesh has and the zone's own lacks. NPCs keep the zone's own navmesh.
+- **a raid invite:** accepted from a guildmate or a GM, left unanswered from anyone else;
+- **a resurrection:** accepted when the corpse is by the character and the rezzer is one of its own bots, someone in its group, or a guildmate's bot; and from a GM wherever the GM is (see [Corpses](#corpses-and-resurrection)).
 
-Zones reload their navmeshes (the zone's own, the headless one in `maps/nav/headless/`, and its swims,
-jumps, ladders and teleports) by themselves when the files change: a zone looks every 10 seconds and
-reloads once a change has stayed the same for one look. Installing a navmesh needs no zone restart.
+A headless player that is auto-attacking and standing still turns to face its target (more than
+about 11 degrees off; not while feared, stunned or mezzed), as a player does: a tank hit from behind
+can't parry, block, riposte or dodge.
 
-**What a character sees.** Combat text is made for it, as a client makes its own from the combat packets: `X hits Y for N points of damage.` (the verb by the kind of hit)
-and `X tries to hit Y, but misses!`, for what the character, its group, its bots and its pets do and take (spell damage arrives as the server's own messages). A
-spawn carries its gender and the materials of what it holds in its primary and secondary hands, so a program can draw it, the spell it is casting
-(`casting_spell_id`, so a caster can be interrupted) and what is on it (`status`: 1 mezzed, 2 rooted, 4 stunned, 8 feared or fleeing, 16 charmed, so a program
-knows a mob is parked and that a root has broken).
+## What a headless character sees
 
-**Bots** (EQEmu's, with these changes in the fork): a bot stands still to cast (no casting while it walks, and no walking while it casts, bards aside); the bot
-sent to pull says `Pulling X.`, and `Incoming X!` once the mob has come for the group; an idle bot doesn't run its idle spell checks while its owner is moving;
-`^feign` lies a monk (by skill), necromancer or shadowknight bot down feigning death until nothing near is after it; a bot of those classes at low health with its
-target on it feigns by itself (a monk or necromancer under 35%, a shadowknight under 18%), and a bot's pet under a quarter of its health is called off until it
-has mended.
+Everything is in the state frames and events; every field is in [headless-protocol.md](headless-protocol.md#state).
+Some of what the module adds to what a client would get:
+
+- **Combat text**, made for it as a client makes its own from the combat packets: `X hits Y for N points
+  of damage.` (the verb by the kind of hit) and `X tries to hit Y, but misses!`, for what the
+  character, its group, its bots and its pets do and take. Spell damage arrives as the server's own
+  messages.
+- **What a mob would do about it.** An NPC spawn carries `aggro_range`, `assist_range` and `aggro`:
+  the radius it notices the character in, the radius in which it calls others to help, and bits for
+  hostile on sight (its faction toward the character scowls), may aggro (threatening: a quarter
+  chance), and aggros even a mob it cons grey to. They are worked out by the server's own aggro rules
+  (`Mob::CheckWillAggro`) when the spawn is sent; whether the character is seen (invisible), line of
+  sight and the chance are left to the character, so a route can keep out of the radii of what is
+  hostile and a pull can count what it would wake.
+- **What is on a mob.** An NPC that is fighting, or has the character on its hate list, carries the
+  spells on it (`Spawn.buffs`: slows, roots, mezzes and damage over time, with the ticks left), sent
+  again when the set changes, so a fight can be watched and replayed. `Spawn.status` says what holds
+  it (1 mezzed, 2 rooted, 4 stunned, 8 feared or fleeing, 16 charmed), so a program knows a mob is
+  parked and that a root has broken; `casting_spell_id` what it is casting, so it can be interrupted.
+- **What it looks like.** A spawn carries its gender and the materials of what it holds in its
+  primary and secondary hands, so a program can draw it.
+- **The group and the raid.** A group member carries its buffs (`GroupMember.buffs`). In a raid,
+  `Self.raid` lists everyone in it, the character too (`RaidMember`: name, spawn id or 0 when in
+  another zone, raid group 0-11 or `0xFFFFFFFF` for none, group and raid leader, bot, class, level);
+  `Self.group` is then empty, as the raid's groups take the place of groups.
+- **Resists.** `Self.resists` and each `BotGear.resists` are the character's and its bots' resists
+  now (magic, cold, fire, poison, disease: base, gear, buffs and AAs, as the inventory window shows
+  them). `Self.gear_resists` and `BotGear.gear_resists` are the same without buffs, for working out
+  readiness for a fight with the buffs it will have rather than the ones that happen to be on.
+
+## Sessions: logging out, dropping and coming back
+
+Ending a session (a `Goodbye` frame: eqmq's `close()` sends one) logs the character out at once: it's
+saved and removed, with no linkdead time.
+
+A program that goes away without ending it (its connection drops, it crashes or it restarts) is
+different: the character is **held** for `HoldSeconds`. The character, its pet, its bots and their
+pets, and every NPC in a fight with them are frozen (stunned and invulnerable, bots' AI paused). When
+the program logs the same character in again, it takes the held session over: `Welcome.resumed` is
+set, everything is unfrozen as it was, and a Snapshot follows. If nobody comes back in time, the
+character is moved to its zone's safe point and logged out.
+
+So a program can be restarted mid-fight, to deploy a new version, without losing the fight.
+
+## Moving about: navmeshes, jumps, water and boats
+
+### Navmeshes
+
+Headless characters walk on the zone's navmesh, `maps/nav/<zone>.nav`, the same file NPCs use.
+
+A zone may also have a **headless navmesh** of its own, `maps/nav/headless/<zone>.nav`: the zone's
+navmesh with the fixes for how a player really gets about (doors, drops, bridges, jumps) that the
+zone's own lacks. Where one exists, headless characters use it; so do bots and players' and bots'
+pets (`Bots:UseHeadlessNavmesh`), so they follow their owner wherever the owner can walk, whether the
+owner is a headless character or a real client. NPCs keep the zone's own navmesh. Navmesh links
+that only headless characters may take are marked `PathingHeadless`, so an NPC never uses them.
+
+Side files next to a navmesh add what a navmesh can't express:
+
+| File | What it adds |
+|---|---|
+| `<zone>.swims.json` | Swims: ways through water the navmesh doesn't cover, each a line of points (`{"swims": [{"from": [x,y,z], "to": [x,y,z], "points": [[x,y,z], ...]}]}`). |
+| `<zone>.jumps.json` | Jumps: ledges and gaps a running jump crosses, within `JumpHeight` and `JumpDistance` (`{"jumps": [{"from": [x,y,z], "to": [x,y,z]}]}`, one way; a jump both ways is listed both ways). |
+| `<zone>.ladders.json` | Ladders, in the same form as jumps. |
+| `<zone>.teleports.json` | Spots in the zone that move whoever steps on them to another spot in it, in the same form. |
+| `<zone>.zonelines.json` | Where to walk to use a zone line, by its number, where that isn't the zone point's own place (a zone point a little off the navmesh). |
+| `boats.json` | The boats (see below). |
+
+All of them are optional: without them a zone uses its own navmesh. Zones reload their navmeshes and
+side files by themselves when the files change: a zone looks every 10 seconds and reloads once a
+change has stayed the same for one look. Installing a navmesh needs no zone restart.
+
+A route avoids lava (a headless route weighs it at 50, where an NPC's weighs it at 5), keeps round mobs on the way that would
+aggro the character, and searches up to 65,535 navmesh nodes, so long routes across big zones are
+found.
+
+### Jumps, water and air
+
+A headless character jumps as the client does, by the `JumpHeight` and `JumpDistance` rules (the
+RoF2 client's physics). It swims; afloat far from shore, it swims to the nearest point of the navmesh.
+Under water it runs out of air and drowns as a client would (`Drowning`), so a program has to bring
+it up for air (`surface`) or give it a way to breathe under water.
+
+### Boats
+
+Some crossings are no zone line: an invisible NPC by a dock has a quest script (`quest::set_proximity`
+and `quest::movepc` in `EVENT_ENTER`) that moves whoever walks into its box to another zone (Oasis of
+Marr's to Timorous Deep; Timorous's to Firiona Vie, Oasis and Overthere; Iceclad and Northern Ro's;
+Erudin's to Erud's Crossing). Neither `zone_points` nor the water maps know them, so a walk planned
+straight through one would board it without meaning to.
+
+`maps/nav/boats.json` lists them: the zone, the box, the zone it moves you to and where. The mover
+keeps round every box except the one a `zone_to` is for; a `zone_to` to a zone with no zone line
+walks to the middle of the box of the nearest boat to it, and the script does the rest. A walk of
+your own (`move_to`) never enters one when there is a way round.
+
+## Bots
+
+A headless character can own and command EQEmu bots with `^` commands sent as says (if
+`HeadlessClients:AllowBots` and `Bots:Enabled`). The fork changes bots, for headless characters' and
+players' bots alike:
+
+**New bot commands**
+
+| Command | |
+|---|---|
+| `^pack give \| list \| take <slot> \| room` | A bot carries things for its owner in its pack: its ten general slots and the bags in them. Nothing in it is worn, so it changes none of the bot's stats. `give` takes what's on the owner's cursor. |
+| `^bank put <pack slot> \| take <bank slot> \| list \| room` | A bot has a bank of its own, 24 slots and their bags; things go in from its pack and come back to it, beside a banker. |
+| `^feign [actionable]` | Bots lie down feigning death (a monk by skill, a necromancer or shadowknight by spell) and stand when nothing near is after them. |
+| `^corpsedrag [stop \| id <corpse spawn id>] [actionable]` | A bot goes for its owner's targeted corpse (or one the owner is consented to, or one by spawn id when it's too far off to target), drags it back and leaves it at the owner's feet. A rogue goes hidden and sneaking; a monk, necromancer or shadowknight feigns when something comes for it. It gives up only when it has got no nearer for three minutes. |
+
+**How bots behave**
+
+- A bot stands still to cast (no casting while it walks, and no walking while it casts), as a player
+  must; bards sing on the move.
+- A bot sent to pull says `Pulling X.`, and `Incoming X!` once the mob has come for the group.
+- Routine casts (buffs, pet buffs, heals, nukes) aren't announced; mez, charm, cures, rez and
+  escapes still are. When no bot could cast a commanded spell, it says why.
+- An idle bot doesn't start buffing while its owner is on the move.
+- A monk or necromancer bot under 35% health with its target on it feigns by itself, a shadowknight
+  under 18%; a bot's pet under a quarter of its health is called off until it has mended.
+- With `Bots:StrategicCombat`, bots spare what the group has mezzed or rooted.
+- With `Bots:UseOwnerReagents`, their spells take components from the owner, as a player's do.
+
+## Corpses and resurrection
+
+- A headless character's corpse is consented to its guild (`HeadlessClients:ConsentGuildCorpses`, as
+  `/consent guild`): a guildmate may drag it, and so may the guildmate's bots (`^corpsedrag`), to
+  where they are camped, to resurrect it there.
+- A headless character accepts a resurrection from its own bots, its group, or a guildmate's bot when the corpse is by it (summoned or dragged there), and from a **GM** (a
+  rezzer whose account status is 100 or more) from wherever the GM is: a GM can raise a corpse of one
+  of these characters with `#castspell` on it, and the character is put at the corpse as for a
+  cleric's rez.
 
 ## The protocol
 
 One TCP connection per character. Each frame is a 4-byte big-endian length followed by a protobuf
-message. Frames are capped at 64 KB. The schema is `common/proto/headless.proto`.
+message. Frames are capped at 64 KB. The schema is `common/proto/headless.proto`; every message and
+field is in [headless-protocol.md](headless-protocol.md).
 
 1. The program sends `ClientFrame{hello}`: the token, the character's name, `protocol_version`
    (`PROTOCOL_VERSION_CURRENT`) and free-text `sdk_version`. It has 10 seconds to do so.
@@ -241,11 +410,13 @@ message. Frames are capped at 64 KB. The schema is `common/proto/headless.proto`
 3. From then on the program sends `ClientFrame{command}` (each with an `id`). The server sends
    `result` (per command id), `snapshot` (on entering a zone), `delta` (four times a second, only
    what changed) and `event`.
+4. The program ends the session with `ClientFrame{goodbye}`.
 
 The checks run in this order: the rule (a disabled server reveals nothing else), the protocol
 version, the token, the character, the limits, the zone.
 
-Any language with protobuf can be a client. `eqmq` is the reference one.
+Any language with protobuf can be a client: generate the bindings from the `.proto`. eqmq is the
+reference one.
 
 ## Safety and fair play
 
@@ -263,14 +434,15 @@ Any language with protobuf can be a client. `eqmq` is the reference one.
 - **Logs**: the `HeadlessClient` log category records sessions, spawns and every walk (its route,
   length and speed).
 
-Running scripted characters is the operator's decision. If you publish the module or the SDK,
-please only point them at servers whose operators have chosen to allow it.
+Running scripted characters is the operator's decision. If you use the module or the SDK, please
+only point them at servers whose operators have chosen to allow it.
 
 ## Troubleshooting
 
 | Refused | Means |
 |---|---|
 | `DISABLED` | `HeadlessClients:AllowHeadlessClients` is false (or rules weren't reloaded). |
+| `BAD_REQUEST` | A malformed or oversized frame, or the first frame wasn't a `Hello`. |
 | `BAD_TOKEN` | Unknown or revoked token: `headless:token-list`. |
 | `UNKNOWN_CHARACTER` | No such character on the token's account. |
 | `LIMIT` | `MaxTotal` or `MaxPerAccount` reached. |
@@ -284,9 +456,8 @@ please only point them at servers whose operators have chosen to allow it.
 Connection refused outright (no `Refused` frame): the listener isn't on. Check
 `server.world.headless` and the port mapping.
 
-Walks that end `NO_PATH` or `STUCK` usually point at the zone's navmesh (`maps/nav/<zone>.nav`). The
-`HeadlessClient` log shows each route as it was planned. The `MoveEvent`'s `nav` notes say what the walk
-found, and where:
+Walks that end `NO_PATH` or `STUCK` usually point at the zone's navmesh. The `HeadlessClient` log
+shows each route as it was planned. The `MoveEvent`'s `nav` notes say what the walk found, and where:
 
 | `kind` | Meaning |
 |---|---|
@@ -299,16 +470,16 @@ found, and where:
 | `locked` | A door on the way that this character can't open (no key, another guild's, a lock to pick). `to` is the door. |
 | `door_wont_open` | A door on the way didn't open when clicked (it needs a quest, a trigger or a lever). |
 
-`off_mesh` and `straight_walk` are workarounds for gaps the navmesh should cover: each one reported is a
-place to patch it (puppeteer's tools/nav_notes.py), and the workaround goes once none are left. Doorways
-are covered by the navmesh's own links now (tools/door_links.py). A zone line refused with `couldn't
-reach the zone line` names the failure in brackets.
+`off_mesh` and `straight_walk` are workarounds for gaps the navmesh should cover: each one reported
+is a place to patch it. A zone line refused with `couldn't reach the zone line` names the failure in
+brackets.
 
 ## Using it from Python
 
-`eqmq` is an asyncio SDK with MacroQuest's vocabulary: TLOs such as `Me`, `Target`, `Spawn`, `Group`
-and `Zone`, slash commands through `DoCommand`, `#event` patterns, and plugins. It also includes a
-live web map of the character's zone. See its README for the details. A taste:
+[eqmq](https://github.com/pjwendy/eqmq) is an asyncio SDK with MacroQuest's vocabulary: TLOs such as
+`Me`, `Target`, `Spawn`, `Group` and `Zone`, slash commands through `DoCommand`, `#event` patterns,
+and plugins. It also includes a live web map of the character's zone. Its README and docs cover the
+details. A taste:
 
 ```python
 import asyncio
@@ -332,11 +503,3 @@ async def main():
 
 asyncio.run(main())
 ```
-
-## Boats
-
-Some crossings are no zone line: an invisible NPC by a dock has a quest script (`quest::set_proximity` and `quest::movepc` in `EVENT_ENTER`) that moves whoever walks into its box to another zone (Oasis of Marr's `#_#_2` to Timorous Deep; Timorous's to Firiona Vie, Oasis and Overthere; Iceclad and Northern Ro's; Erudin's to Erud's Crossing). Neither `zone_points` nor the water maps know them, and a headless walk planned straight through one boarded it without meaning to (five characters ended in Timorous Deep in a week).
-
-`maps/nav/boats.json` (puppeteer's `tools/build_boats.py` reads the scripts and the spawn points) lists them: the zone, the box, the zone it moves you to and where. The mover keeps round every box (a circle round it) except the one a `zone_to` is for; a `zone_to` to a zone with no zone line walks to the middle of the box of the nearest boat to it, and the script does the rest (no zone change request is made). A walk of your own (`move_to`) never enters one when there is a way round.
-
-A headless character accepts a resurrection by a **GM** (a rezzer whose account status is 100 or more), from wherever the GM is: a GM can raise a corpse of one of these characters with `#castspell` on it, and the character is put at the corpse as for a cleric's rez.

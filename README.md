@@ -1,3 +1,17 @@
+> ## This fork: headless characters
+>
+> This is [EQEmu](https://github.com/EQEmu/Server) with one addition: **headless characters**, EverQuest
+> characters with no game client, driven by a program. Each is an ordinary player inside the zone, so it
+> fights, casts, loots, groups and zones by the server's own rules. It's **off unless the server's operator
+> turns it on** and issues tokens. The module is on the `headless` branch (this one); `master` follows upstream.
+>
+> - **[docs/headless.md](docs/headless.md)**: what it is, a quick start, building, turning it on, tokens, every rule and command
+> - **[docs/headless-protocol.md](docs/headless-protocol.md)**: every message of the protocol
+> - **[docs/fork-changes.md](docs/fork-changes.md)**: what else the fork changes (bug fixes, bots, pathing)
+> - **[eqmq](https://github.com/pjwendy/eqmq)**: the Python SDK that drives headless characters, in MacroQuest's vocabulary
+>
+> The rest of this page is upstream's README.
+
 <h1 align="center">EQEmulator Server Platform</h1>
 
 <p align="center">
