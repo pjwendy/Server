@@ -1121,6 +1121,7 @@ public:
 	// ^feign: lie feigned (a monk by skill, a necromancer or shadowknight by spell) to be forgotten by what is after us, and stand again when nothing near is
 	bool StartFeignHold();
 	bool TryFightFeign();
+	bool TryCatchUp(Client* bot_owner);  // an engaged caster too far from its owner runs back to it before casting again (Bots:CatchUpDistance)
 	void PetBackOffCheck();
 	bool m_pet_backed = false;        // the pet was called off (near death) and is kept off till it has mended
 	uint32 m_fight_check_at = 0;      // when the fight checks (feign, the pet) last ran
@@ -1212,6 +1213,7 @@ private:
 	Timer  m_drag_feign_timer;        // lying feigned at least this long
 	Timer  m_drag_feign_reuse_timer;  // a feign's reuse (the skill's, or the spell's recast)
 	bool   m_feign_hold = false;      // ^feign: lying feigned till it is safe
+	bool   m_catching_up = false;     // running back to its owner (TryCatchUp): no new spell till it is close again
 	Timer  m_drag_scan_timer;         // the proximity scan a player's client runs
 	bool   m_drag_can_sneak = false;  // a rogue with Sneak and Hide: it sneaks (hidden if it can) where a mob would see it, and runs elsewhere
 	Timer  m_drag_sneak_timer;        // a failed sneak, tried again after this

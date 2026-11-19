@@ -2223,6 +2223,12 @@ void Bot::AI_Process()
 	_group_spell_target_list.clear();
 	SetTempSpellType(UINT16_MAX);
 
+// CATCHING UP (an engaged caster too far from its owner runs back to it before it casts again)
+
+	if (TryCatchUp(bot_owner)) {
+		return;
+	}
+
 // HEAL ROTATION CASTING CHECKS
 	HealRotationChecks();
 
@@ -3767,6 +3773,43 @@ bool Bot::CheckIfCasting(float fm_distance) {
 	}
 
 	return false;
+}
+
+bool Bot::TryCatchUp(Client* bot_owner) {
+	// A bot stands still to cast (zone/spells.cpp, waypoints.cpp), so an engaged caster that always had something to cast never moved:
+	// eq1's Lord Nagafen, 19 Nov 14:07-14:08, a cleric bot stayed 170 back at the pull line, healing whoever it could reach, while its
+	// leader stood at the tank, and the raid's Complete Heals (range 100) never came from it. Out of combat a cast is already given up to
+	// follow (CheckIfCasting); this is the same in a fight: past Bots:CatchUpDistance from its owner it starts nothing new and runs back,
+	// till it is within half of that. A spell it is casting is finished first (CheckIfCasting returns before this).
+	const float catch_up = RuleR(Bots, CatchUpDistance);
+	if (catch_up <= 0.0f || !bot_owner || !IsEngaged() || GetClass() == Class::Bard || !IsCasterClass(GetClass()) || IsRooted() ||
+		HOLDING || GUARDING || PULLING_BOT || RETURNING_BOT) {
+		m_catching_up = false;
+		return false;
+	}
+
+	const float d = DistanceNoZ(GetPosition(), bot_owner->GetPosition());
+	if (!m_catching_up && d > catch_up) {
+		m_catching_up = true;
+		LogAIDetail("[{}] catching up with [{}] ({:.0f} away)", GetCleanName(), bot_owner->GetCleanName(), d);
+	}
+	else if (m_catching_up && d <= catch_up * 0.5f) {
+		m_catching_up = false;
+		if (IsMoving()) {
+			StopMoving();
+		}
+	}
+
+	if (!m_catching_up) {
+		return false;
+	}
+
+	if (AI_movement_timer->Check()) {
+		const glm::vec3 goal = bot_owner->GetPosition();
+		RunTo(goal.x, goal.y, goal.z);
+	}
+
+	return true;
 }
 
 bool Bot::CheckIfIncapacitated() {

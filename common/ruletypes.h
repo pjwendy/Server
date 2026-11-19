@@ -899,6 +899,7 @@ RULE_BOOL(Bots, AllowCommandedCharm, true, "If enabled bots can be commanded to 
 RULE_BOOL(Bots, AllowCommandedMez, true, "If enabled bots can be commanded to mez NPCs.")
 RULE_BOOL(Bots, AllowCommandedResurrect, true, "If enabled bots can be commanded to resurrect players.")
 RULE_BOOL(Bots, AllowCommandedSummonCorpse, true, "If enabled bots can be commanded to summon other's corpses.")
+RULE_REAL(Bots, CatchUpDistance, 75.0, "An engaged caster bot (cleric, druid, shaman, necromancer, wizard, magician, enchanter) farther than this from its owner starts no new spell and runs back to it first, casting again once it is within half of it; a spell already being cast is finished. A bot stands still to cast, so one that always had something to cast never caught up: a cleric 170 back from its leader at the tank, out of Complete Heal range. 0: off (upstream: casts wherever it is)")
 RULE_BOOL(Bots, UseOwnerReagents, false, "If enabled a bot's spells need their components, as a player's do, and take them from its owner's inventory (a bot has none of its own). Pets follow Character:PetsUseReagents")
 RULE_BOOL(Bots, AllowCommandedLull, true, "If enabled bots can be commanded to lull targets.")
 RULE_INT(Bots, CampTimer, 25, "Number of seconds after /camp has begun before bots camp out.")

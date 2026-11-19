@@ -3353,7 +3353,11 @@ std::string Zone::NavFilesSignature()
 	struct stat st;
 	for (const auto &f : files) {
 		sig += stat(f.c_str(), &st) == 0
+#ifdef _WIN32
+			? fmt::format("{}:{};", (long long) st.st_mtime, (long long) st.st_size)  // (Windows' stat has no nanoseconds; MSVC, the CI build)
+#else
 			? fmt::format("{}.{}:{};", (long long) st.st_mtim.tv_sec, (long) st.st_mtim.tv_nsec, (long long) st.st_size)
+#endif
 			: "-;";
 	}
 	return sig;

@@ -1736,9 +1736,9 @@ void HeadlessClientManager::OnOutgoing(const std::string &session_id, const EQAp
 				it->second.stream->Inject(answer);
 				return;
 			}
-			const bool near = rez.zone_id == zone->GetZoneID() && rez.instance_id == zone->GetInstanceID() &&
+			const bool at_corpse = rez.zone_id == zone->GetZoneID() && rez.instance_id == zone->GetInstanceID() &&
 				glm::length(glm::vec2(rez.x - me->GetX(), rez.y - me->GetY())) <= REZ_NEAR;
-			rez.action = ((ours && near) || partner) ? ResurrectionActions::Accept : ResurrectionActions::Decline;
+			rez.action = ((ours && at_corpse) || partner) ? ResurrectionActions::Accept : ResurrectionActions::Decline;
 			LogHeadlessClient("[{}] rez from [{}] ([{}]) for [{}]: {}", me->GetCleanName(), rez.rezzer_name,
 				spells[rez.spellid].name, rez.corpse_name, rez.action == ResurrectionActions::Accept ? (partner ? "accepted (a guildmate's bot)" : "accepted")
 				: !ours ? "declined (not ours)" : "declined (the corpse isn't here by us)");

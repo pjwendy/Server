@@ -206,6 +206,7 @@ Category `Bots` (the fork's own rules):
 |---|---|---|
 | `StrategicCombat` | `false` | Bots fight as a coordinated group does. Off, the stock bot AI. On, a bot doesn't cast a spell that would break a mob the group has **parked** (mezzed, or rooted): no damage at all on a mezzed mob, no direct spell on a rooted one (a DoT's ticks don't break a root on the server), and no area spell that would hit one, while anything else is on the hate list; the last mob left is fought as any is. A bot's commanded casts (`^cast`) are its owner's call and are not held back. |
 | `UseHeadlessNavmesh` | `true` | Bots, and players' and bots' pets, find their way on the zone's headless navmesh where it has one, so they follow their owner wherever the owner can walk (see [Moving about](#moving-about-navmeshes-jumps-water-and-boats)). NPCs keep the zone's own. False: the zone's own for all. |
+| `CatchUpDistance` | `75` | An engaged caster bot (cleric, druid, shaman, necromancer, wizard, magician, enchanter) farther than this from its owner starts no new spell and runs back to it first, casting again within half of it; a spell already being cast is finished. Without it a bot that always had something to cast never moved, since a bot stands still to cast. `0`: off. |
 | `UseOwnerReagents` | `false` | A bot's spells need their components, as a player's do, and take them from its owner's inventory (a bot has none of its own). The bot doesn't choose a spell whose components its owner lacks, and an item its spell summons goes to its owner's cursor. Pets follow `Character:PetsUseReagents`. |
 
 Category `Zone` (the fork's own rule, for every character, not only headless ones):
@@ -386,6 +387,7 @@ players' bots alike:
   under 18%; a bot's pet under a quarter of its health is called off until it has mended.
 - With `Bots:StrategicCombat`, bots spare what the group has mezzed or rooted.
 - With `Bots:UseOwnerReagents`, their spells take components from the owner, as a player's do.
+- An engaged caster bot that has fallen more than `Bots:CatchUpDistance` behind its owner runs back to it before it casts again: a healer stays in reach of its group.
 
 ## Corpses and resurrection
 

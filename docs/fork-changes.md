@@ -42,6 +42,7 @@ For every player's bots, not only headless characters'. The commands and behavio
 | [5fdbeb6](https://github.com/pjwendy/Server/commit/5fdbeb6c8), [7e78385](https://github.com/pjwendy/Server/commit/7e7838516), [f7578b9](https://github.com/pjwendy/Server/commit/f7578b909) | A bot stands still to cast, as a player must (bards sing on the move). |
 | [1ea6e83](https://github.com/pjwendy/Server/commit/1ea6e831c) | A puller says what it's pulling, and that it's coming back with it. |
 | [12a917e](https://github.com/pjwendy/Server/commit/12a917efa), [f583c09](https://github.com/pjwendy/Server/commit/f583c095b) | Routine casts aren't announced; a commanded spell no bot could cast says why. |
+| (this commit) | `Bots:CatchUpDistance` (default 75): an engaged caster bot too far from its owner runs back to it before casting again. |
 | [1b5baf5](https://github.com/pjwendy/Server/commit/1b5baf57e) | `Bots:UseHeadlessNavmesh` (default on): bots and pets route on the zone's headless navmesh, where there is one. |
 
 ## Pathing and navmeshes
