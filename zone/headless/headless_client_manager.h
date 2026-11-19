@@ -84,6 +84,7 @@ private:
 		uint32 casting_spell_id = 0;
 		uint32 status = 0;
 		uint64 buff_sig = 0; // which spells are on it (and about when they end)
+		uint32 bot_skip = 0; // our bot's Bot::RecentSkip (reason | spell type << 8)
 	};
 
 	struct Session {

@@ -806,6 +806,8 @@ client -> server the program ends the session on purpose: the character is logge
 | `assist_range` | float | 22 | the radius in which it calls others to help (Mob::GetAssistRange: its assist radius, else its aggro radius) |
 | `aggro` | uint32 | 23 | bits, for an NPC with an aggro range: 1 hostile on sight (its faction toward us scowls: KOS), 2 may aggro (threatening: a quarter chance each look), |
 | `buffs` | repeated [Buff](#buff) | 24 | 4 aggros even a character it cons grey to (always-aggro, undead, or at its level of aggro: the rule Aggro:MinAggroLevel). Invisible, we are not seen. what is on it (our slows, roots, mezzes, damage over time...), for an NPC that is fighting or has us on its hate list: what a fight is doing to it |
+| `bot_skip` | uint32 | 25 | one of our own bots: why its AI last didn't cast what it wanted to, in the last 3 seconds (a heal's refusal outranks any other's): 0 nothing refused, 1 incapacitated (stunned, mezzed, paused), 2 held (^hold, or raid-groupless), 3 catching up with us (Bots:CatchUpDistance), 4 not enough mana, 5 the target out of the spell's range, 6 no line of sight, 7 the spell's recast, 8 we lack its reagents (Bots:UseOwnerReagents), 9 it would pull aggro, 11 silenced or amnesiad. What a raid's post-mortem counts: "this cleric skipped its heals, out of range" |
+| `bot_skip_spell_type` | uint32 | 26 | the bot spell type refused (BotSpellTypes: 0 nuke, 1 regular heal, ...), 65535 when the reason isn't a spell's |
 
 ### Self
 

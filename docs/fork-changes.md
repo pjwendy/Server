@@ -43,6 +43,7 @@ For every player's bots, not only headless characters'. The commands and behavio
 | [1ea6e83](https://github.com/pjwendy/Server/commit/1ea6e831c) | A puller says what it's pulling, and that it's coming back with it. |
 | [12a917e](https://github.com/pjwendy/Server/commit/12a917efa), [f583c09](https://github.com/pjwendy/Server/commit/f583c095b) | Routine casts aren't announced; a commanded spell no bot could cast says why. |
 | [1bf4269](https://github.com/pjwendy/Server/commit/1bf426985) | `Bots:CatchUpDistance` (default 75): an engaged caster bot too far from its owner runs back to it before casting again. |
+| (this commit) | `Bot::NoteSkip`: why a bot's AI last didn't cast (out of range, no mana, ...), sent to its owner's headless session as `Spawn.bot_skip`. No behaviour changes. |
 | [1b5baf5](https://github.com/pjwendy/Server/commit/1b5baf57e) | `Bots:UseHeadlessNavmesh` (default on): bots and pets route on the zone's headless navmesh, where there is one. |
 
 ## Pathing and navmeshes

@@ -1122,6 +1122,16 @@ public:
 	bool StartFeignHold();
 	bool TryFightFeign();
 	bool TryCatchUp(Client* bot_owner);  // an engaged caster too far from its owner runs back to it before casting again (Bots:CatchUpDistance)
+
+	// why it last didn't cast what its AI wanted to (a raid's post-mortem: "this cleric skipped its heals, out of range"); the headless
+	// module sends it with the bot (Spawn.bot_skip) to the bot's owner. A refusal of a heal outranks a later one of anything else for SKIP_MS.
+	enum BotSkip : uint8 {
+		SkipNone = 0, SkipIncapacitated = 1, SkipHeld = 2, SkipCatchingUp = 3, SkipMana = 4, SkipRange = 5, SkipLoS = 6, SkipRecast = 7,
+		SkipReagents = 8, SkipAggro = 9, SkipBusy = 10, SkipSilenced = 11
+	};
+	static constexpr uint32 SKIP_MS = 3000;
+	void  NoteSkip(uint8 reason, uint16 spell_type = UINT16_MAX);
+	uint8 RecentSkip(uint16 *spell_type = nullptr) const;  // SkipNone when nothing was refused in the last SKIP_MS
 	void PetBackOffCheck();
 	bool m_pet_backed = false;        // the pet was called off (near death) and is kept off till it has mended
 	uint32 m_fight_check_at = 0;      // when the fight checks (feign, the pet) last ran
@@ -1214,6 +1224,9 @@ private:
 	Timer  m_drag_feign_reuse_timer;  // a feign's reuse (the skill's, or the spell's recast)
 	bool   m_feign_hold = false;      // ^feign: lying feigned till it is safe
 	bool   m_catching_up = false;     // running back to its owner (TryCatchUp): no new spell till it is close again
+	uint8  m_skip = 0;                // NoteSkip: the last refusal, its spell type and when
+	uint16 m_skip_type = UINT16_MAX;
+	uint32 m_skip_at = 0;
 	Timer  m_drag_scan_timer;         // the proximity scan a player's client runs
 	bool   m_drag_can_sneak = false;  // a rogue with Sneak and Hide: it sneaks (hidden if it can) where a mob would see it, and runs elsewhere
 	Timer  m_drag_sneak_timer;        // a failed sneak, tried again after this

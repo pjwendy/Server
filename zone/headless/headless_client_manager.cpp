@@ -2455,6 +2455,17 @@ void HeadlessClientManager::OnStreamDestroyed(const std::string &session_id, boo
 	safe_delete(pack);
 }
 
+// one of me's own bots: why its AI last didn't cast (Bot::RecentSkip), as reason | spell type << 8; 0 for anything else
+static uint32 BotSkipOf(Mob *mob, Client *me)
+{
+	if (!me || !mob->IsBot() || mob->CastToBot()->GetBotOwner() != me) {
+		return 0;
+	}
+	uint16 spell_type = UINT16_MAX;
+	const uint8 reason = mob->CastToBot()->RecentSkip(&spell_type);
+	return reason ? (reason | (static_cast<uint32>(spell_type) << 8)) : 0;
+}
+
 void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob, Client *me)
 {
 	out->set_id(mob->GetID());
@@ -2482,6 +2493,10 @@ void HeadlessClientManager::FillSpawn(eqheadless::Spawn *out, Mob *mob, Client *
 	out->set_mana_pct(mob->GetMaxMana() > 0 ? static_cast<uint32>(std::lround(mob->GetManaRatio())) : 0);
 	out->set_casting_spell_id(mob->IsCasting() ? mob->CastingSpellID() : 0);
 	out->set_status(SpawnStatusOf(mob));
+	if (const uint32 skip = BotSkipOf(mob, me)) {
+		out->set_bot_skip(skip & 0xFF);
+		out->set_bot_skip_spell_type(skip >> 8);
+	}
 
 	// what it does about us, by the rules of Mob::CheckWillAggro (its faction toward the character, the level rules), without the parts that change at once
 	// (our invisibility, line of sight, the quarter chance of a threatening look): the character works those out
@@ -2853,6 +2868,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		const uint32 casting  = mob->IsCasting() ? mob->CastingSpellID() : 0;
 		const uint32 status   = SpawnStatusOf(mob);
 		const uint64 buff_sig = BuffSigOf(mob, me);
+		const uint32 bot_skip = BotSkipOf(mob, me);
 		auto seen = session.seen.find(id);
 		const bool is_new = seen == session.seen.end();
 		if (!is_new) {
@@ -2861,7 +2877,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 				std::fabs(s.z - mob->GetZ()) < MOVE_EPSILON && s.heading == mob->GetHeading() &&
 				s.hp_pct == hp_pct && s.level == mob->GetLevel() && s.name == mob->GetCleanName() &&
 				s.target_id == (mob->GetTarget() ? mob->GetTarget()->GetID() : 0) && s.mana_pct == mana_pct &&
-				s.casting_spell_id == casting && s.status == status && s.buff_sig == buff_sig) {
+				s.casting_spell_id == casting && s.status == status && s.buff_sig == buff_sig && s.bot_skip == bot_skip) {
 				return;
 			}
 		}
@@ -2869,7 +2885,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 		FillSpawn(snapshot ? frame.mutable_snapshot()->add_spawns() : frame.mutable_delta()->add_spawns_changed(), mob, me);
 		session.seen[id] = SeenSpawn{
 			mob->GetX(), mob->GetY(), mob->GetZ(), mob->GetHeading(), hp_pct, mob->GetLevel(), mob->GetCleanName(),
-			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u, mana_pct, casting, status, buff_sig
+			mob->GetTarget() ? mob->GetTarget()->GetID() : 0u, mana_pct, casting, status, buff_sig, bot_skip
 		};
 		changed = true;
 	};

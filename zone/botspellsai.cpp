@@ -245,6 +245,7 @@ bool Bot::AICastSpell(Mob* tar, uint8 chance, uint16 spell_type, uint16 sub_targ
 		}
 
 		if (BotRequiresLoSToCast(spell_type, s.SpellId) && !HasLoS()) {
+			NoteSkip(SkipLoS, spell_type);
 			continue;
 		}
 
@@ -303,6 +304,7 @@ bool Bot::BotCastMez(Mob* tar, uint8 bot_class, BotSpell& bot_spell, uint16 spel
 		}
 
 		if (BotRequiresLoSToCast(spell_type, s.SpellId) && !HasLoS()) {
+			NoteSkip(SkipLoS, spell_type);
 			continue;
 		}
 
@@ -964,6 +966,7 @@ std::list<BotSpell> Bot::GetBotSpellsForSpellEffect(Bot* caster, uint16 spell_ty
 			}
 
 			if (BotRequiresLoSToCast(spell_type, bot_spell_list[i].spellid) && !caster->HasLoS()) {
+				caster->NoteSkip(Bot::SkipLoS, spell_type);
 				continue;
 			}
 
@@ -1006,6 +1009,7 @@ std::list<BotSpell> Bot::GetBotSpellsForSpellEffectAndTargetType(Bot* caster, ui
 			}
 
 			if (BotRequiresLoSToCast(spell_type, bot_spell_list[i].spellid) && !caster->HasLoS()) {
+				caster->NoteSkip(Bot::SkipLoS, spell_type);
 				continue;
 			}
 
@@ -1051,6 +1055,7 @@ std::list<BotSpell> Bot::GetBotSpellsBySpellType(Bot* caster, uint16 spell_type)
 			}
 
 			if (BotRequiresLoSToCast(spell_type, bot_spell_list[i].spellid) && !caster->HasLoS()) {
+				caster->NoteSkip(Bot::SkipLoS, spell_type);
 				continue;
 			}
 
@@ -1084,6 +1089,7 @@ std::vector<BotSpell_wPriority> Bot::GetPrioritizedBotSpellsBySpellType(Bot* cas
 			}
 
 			if (BotRequiresLoSToCast(spell_type, bot_spell_list[i].spellid) && !caster->HasLoS()) {
+				caster->NoteSkip(Bot::SkipLoS, spell_type);
 				continue;
 			}
 
@@ -1175,6 +1181,7 @@ BotSpell Bot::GetFirstBotSpellBySpellType(Bot* caster, uint16 spell_type) {
 			}
 
 			if (BotRequiresLoSToCast(spell_type, bot_spell_list[i].spellid) && !caster->HasLoS()) {
+				caster->NoteSkip(Bot::SkipLoS, spell_type);
 				continue;
 			}
 
@@ -1972,6 +1979,7 @@ BotSpell Bot::GetDebuffBotSpell(Bot* caster, Mob *tar, uint16 spell_type) {
 			}
 
 			if (BotRequiresLoSToCast(spell_type, bot_spell_list[i].spellid) && !caster->HasLoS()) {
+				caster->NoteSkip(Bot::SkipLoS, spell_type);
 				continue;
 			}
 
@@ -2022,6 +2030,7 @@ BotSpell Bot::GetBestBotSpellForResistDebuff(Bot* caster, Mob *tar, uint16 spell
 			}
 
 			if (BotRequiresLoSToCast(spell_type, bot_spell_list[i].spellid) && !caster->HasLoS()) {
+				caster->NoteSkip(Bot::SkipLoS, spell_type);
 				continue;
 			}
 

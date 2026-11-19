@@ -388,6 +388,7 @@ players' bots alike:
 - With `Bots:StrategicCombat`, bots spare what the group has mezzed or rooted.
 - With `Bots:UseOwnerReagents`, their spells take components from the owner, as a player's do.
 - An engaged caster bot that has fallen more than `Bots:CatchUpDistance` behind its owner runs back to it before it casts again: a healer stays in reach of its group.
+- Why a bot didn't cast: its AI notes each refusal (out of range, no mana, no line of sight, recast, reagents, would pull aggro, incapacitated, held, catching up; a heal's refusal outranks any other's for 3 s), and the headless module sends the last one in the past 3 s with the bot to its owner (`Spawn.bot_skip`, `bot_skip_spell_type`). A raid's post-mortem counts them: "this cleric skipped its heals, out of range".
 
 ## Corpses and resurrection
 

@@ -2181,6 +2181,7 @@ void Bot::AI_Process()
 
 	// Secondary reasons for not processing AI
 	if (CheckIfIncapacitated()) {
+		NoteSkip(SkipIncapacitated);
 		return;
 	}
 
@@ -2204,6 +2205,9 @@ void Bot::AI_Process()
 	}
 
 	if (HOLDING || (raid && r_group == RAID_GROUPLESS)) {
+		if (IsEngaged()) {
+			NoteSkip(SkipHeld);
+		}
 		TryNonCombatMovementChecks(bot_owner, follow_mob);
 
 		return;
@@ -2226,6 +2230,7 @@ void Bot::AI_Process()
 // CATCHING UP (an engaged caster too far from its owner runs back to it before it casts again)
 
 	if (TryCatchUp(bot_owner)) {
+		NoteSkip(SkipCatchingUp);
 		return;
 	}
 
@@ -3810,6 +3815,27 @@ bool Bot::TryCatchUp(Client* bot_owner) {
 	}
 
 	return true;
+}
+
+void Bot::NoteSkip(uint8 reason, uint16 spell_type) {
+	const uint32 now = Timer::GetCurrentTime();
+	const bool held_heal = m_skip != SkipNone && now - m_skip_at < SKIP_MS && m_skip_type != UINT16_MAX && IsHealBotSpellType(m_skip_type);
+	if (held_heal && (spell_type == UINT16_MAX || !IsHealBotSpellType(spell_type))) {
+		return;
+	}
+	m_skip = reason;
+	m_skip_type = spell_type;
+	m_skip_at = now;
+}
+
+uint8 Bot::RecentSkip(uint16 *spell_type) const {
+	if (m_skip == SkipNone || Timer::GetCurrentTime() - m_skip_at >= SKIP_MS) {
+		return SkipNone;
+	}
+	if (spell_type) {
+		*spell_type = m_skip_type;
+	}
+	return m_skip;
 }
 
 bool Bot::CheckIfIncapacitated() {
@@ -10197,6 +10223,7 @@ bool Bot::CastChecks(uint16 spell_id, Mob* tar, uint16 spell_type, bool precheck
 		IsAmnesiad()
 	) {
 		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} on {} due to Incapacitated.'", GetCleanName(), GetSpellName(spell_id), (tar ? tar->GetCleanName() : "nobody"));
+		NoteSkip(IsSilenced() || IsAmnesiad() ? SkipSilenced : SkipIncapacitated, spell_type);
 		return false;
 	}
 
@@ -10222,6 +10249,7 @@ bool Bot::CastChecks(uint16 spell_id, Mob* tar, uint16 spell_type, bool precheck
 
 	if (!CheckSpellRecastTimer(spell_id)) {
 		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} due to !CheckSpellRecastTimer.'", GetCleanName(), GetSpellName(spell_id));
+		NoteSkip(SkipRecast, spell_type);
 		return false;
 	}
 
@@ -10230,6 +10258,7 @@ bool Bot::CastChecks(uint16 spell_id, Mob* tar, uint16 spell_type, bool precheck
 	// goes ahead, to say what is missing.
 	if (!IsCommandedSpell() && !OwnerHasReagentsFor(spell_id)) {
 		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} due to the owner lacking its reagents.'", GetCleanName(), GetSpellName(spell_id));
+		NoteSkip(SkipReagents, spell_type);
 		return false;
 	}
 
@@ -10237,6 +10266,7 @@ bool Bot::CastChecks(uint16 spell_id, Mob* tar, uint16 spell_type, bool precheck
 
 	if (!BotHasEnoughMana(spell_id) && !is_mana_exempt) {
 		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} due to !BotHasEnoughMana.'", GetCleanName(), GetSpellName(spell_id));
+		NoteSkip(SkipMana, spell_type);
 		return false;
 	}
 
@@ -10445,6 +10475,7 @@ bool Bot::CastChecks(uint16 spell_id, Mob* tar, uint16 spell_type, bool precheck
 		!IsValidSpellRange(spell_id, tar)
 	) {
 		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} on {} due to IsValidSpellRange.'", GetCleanName(), GetSpellName(spell_id), tar->GetCleanName());
+		NoteSkip(SkipRange, spell_type);
 		return false;
 	}
 
@@ -10459,6 +10490,7 @@ bool Bot::CastChecks(uint16 spell_id, Mob* tar, uint16 spell_type, bool precheck
 		!tar->IsFleeing()
 	) {
 		LogBotSpellChecksDetail("{} says, 'Cancelling cast of {} on {} due to HasOrMayGetAggro.'", GetCleanName(), GetSpellName(spell_id), tar->GetCleanName());
+		NoteSkip(SkipAggro, spell_type);
 		return false;
 	}
 
