@@ -1202,6 +1202,7 @@ RULE_BOOL(HeadlessClients, AllowTellsFromPlayers, true, "Real players may send t
 RULE_BOOL(HeadlessClients, ShowDisplayTag, true, "Show DisplayTag as headless characters' suffix. When false the tag is left off (and removed from characters that still carry it); they stay flagged in the database either way")
 RULE_STRING(HeadlessClients, DisplayTag, "AI", "Tag shown on headless characters (title/suffix and /who) so players know they are AI-controlled. An empty value falls back to AI")
 RULE_INT(HeadlessClients, CommandRateLimit, 20, "Maximum commands per second accepted from each headless character")
+RULE_BOOL(HeadlessClients, RecoverCorpses, false, "A headless character may have the server recover its corpses (the RecoverCorpses command): moved to a zone and spot it names, then every corpse of its brought to its feet from wherever it lies, buried ones too, and given a 100% resurrection, as a GM would. For a guild whose operator treats every death outside a raid as a GM rez. Off: the command is refused")
 RULE_INT(HeadlessClients, HoldSeconds, 300, "When a headless character's SDK disconnects (its program restarting), the character is held this many seconds instead of logged out: it, its bots and pets, and every NPC fighting them are frozen (stunned and invulnerable) until the SDK logs in again and resumes the same session. When the hold runs out the character is moved to its zone's safe point and logged out. 0: log out at once, as before")
 RULE_CATEGORY_END()
 

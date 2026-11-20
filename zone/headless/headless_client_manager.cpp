@@ -1554,6 +1554,42 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			stream->Inject(app);
 			return "";
 		}
+		case eqheadless::Command::kRecoverCorpses: {
+			// a death outside a raid, recovered as a GM would (the guild's operator, 20 Nov: "all deaths outside of raids are to be
+			// treated as a gm rez. The gm will summon corpse to safe spot and res"); no GM character, no second session
+			if (!RuleB(HeadlessClients, RecoverCorpses)) {
+				return "corpse recovery is off (rule HeadlessClients:RecoverCorpses)";
+			}
+			if (me->IsDead() || me->GetHP() <= 0) {
+				return "dead: once it has respawned";
+			}
+			const auto &r       = cmd.recover_corpses();
+			const bool  at_spot = r.x() != 0.0f || r.y() != 0.0f || r.z() != 0.0f;
+			if (!r.zone().empty() && r.zone() != zone->GetShortName()) {
+				const uint32 zone_id = ZoneID(r.zone());
+				if (!zone_id) {
+					return fmt::format("no zone called {}", r.zone());
+				}
+				const std::string refusal = ZoneRefusal(ShortName(zone_id));
+				if (!refusal.empty()) {
+					return refusal;
+				}
+				// there first; the SDK sends it again once we're in (the corpses come to the new zone's process)
+				LogInfo("[{}] recovering its corpses: moved to [{}] ({:.0f}, {:.0f}, {:.0f}) first", me->GetCleanName(), r.zone(), r.x(), r.y(), r.z());
+				me->MovePC(zone_id, 0, r.x(), r.y(), r.z(), me->GetHeading());
+				return "";
+			}
+			if (database.CountCharacterCorpses(me->CharacterID()) <= 0) {
+				return "no corpses to recover";
+			}
+			if (at_spot) {
+				me->GMMove(r.x(), r.y(), r.z(), me->GetHeading());
+			}
+			LogInfo("[{}] recovering its corpses at [{}] ({:.0f}, {:.0f}, {:.0f}): summoned and raised", me->GetCleanName(),
+				zone->GetShortName(), me->GetX(), me->GetY(), me->GetZ());
+			me->SummonAndRezzAllCorpses();
+			return "";
+		}
 		case eqheadless::Command::kHealHold: {
 			// no heal on us until then (Bot::AICastSpell checks it): a raid puller on a hate list before the MT has its mob
 			const uint32 secs = std::min<uint32>(cmd.heal_hold().seconds(), 600);

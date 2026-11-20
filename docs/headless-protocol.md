@@ -54,6 +54,7 @@ Every frame is a 4-byte big-endian length, then the protobuf message. The progra
 - [RaidRemoveCommand](#raidremovecommand)
 - [RaidMoveCommand](#raidmovecommand)
 - [HealHoldCommand](#healholdcommand)
+- [RecoverCorpsesCommand](#recovercorpsescommand)
 - [CombineCommand](#combinecommand)
 - [Command](#command)
 - [CommandResult](#commandresult)
@@ -513,6 +514,17 @@ no heal on this character for `seconds` (0 lifts it): a raid puller on a hate li
 |---|---|---|---|
 | `seconds` | uint32 | 1 |  |
 
+### RecoverCorpsesCommand
+
+the operator's standing order (20 Nov): a death outside a raid is recovered by the server, as a GM would. With rule HeadlessClients:RecoverCorpses on: in `zone` (empty: where we are) at (x, y, z) (all 0: where we stand), every corpse of ours is brought to our feet from wherever it lies, buried ones too, and raised (a 100% resurrection: Client::SummonAndRezzAllCorpses). In another zone, this moves us there first and does nothing else: send it again once we're in. Off: refused, with why.
+
+| Field | Type | # | Notes |
+|---|---|---|---|
+| `zone` | string | 1 |  |
+| `x` | float | 2 |  |
+| `y` | float | 3 |  |
+| `z` | float | 4 |  |
+
 ### CombineCommand
 
 combine what is in a container: an inventory bag's slot, or 1000 (SLOT_TRADESKILL_EXPERIMENT_COMBINE) for the world container opened; the answer is chat (the skill-ups and the product land in the inventory)
@@ -568,6 +580,7 @@ combine what is in a container: an inventory bag's slot, or 1000 (SLOT_TRADESKIL
 | `raid_move` | [RaidMoveCommand](#raidmovecommand) | 41 | (one of `action`) |
 | `buff_remove` | [BuffRemoveCommand](#buffremovecommand) | 42 | (one of `action`) |
 | `heal_hold` | [HealHoldCommand](#healholdcommand) | 43 | (one of `action`) |
+| `recover_corpses` | [RecoverCorpsesCommand](#recovercorpsescommand) | 44 | (one of `action`) |
 
 ### CommandResult
 

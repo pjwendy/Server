@@ -186,6 +186,11 @@ message RaidMoveCommand    { string name = 1; uint32 group = 2; }
 // someone hated puts the healer on every hate list that has them (EntityList::AddHealAggro). Bots skip it as a heal target, and their
 // group heals while it's in reach
 message HealHoldCommand    { uint32 seconds = 1; }
+// the operator's standing order (20 Nov): a death outside a raid is recovered by the server, as a GM would. With rule
+// HeadlessClients:RecoverCorpses on: in `zone` (empty: where we are) at (x, y, z) (all 0: where we stand), every corpse of ours is
+// brought to our feet from wherever it lies, buried ones too, and raised (a 100% resurrection: Client::SummonAndRezzAllCorpses). In
+// another zone, this moves us there first and does nothing else: send it again once we're in. Off: refused, with why.
+message RecoverCorpsesCommand { string zone = 1; float x = 2; float y = 3; float z = 4; }
 message CombineCommand     { int32 container_slot = 1; } // combine what is in a container: an inventory bag's slot, or 1000 (SLOT_TRADESKILL_EXPERIMENT_COMBINE) for the world container opened; the answer is chat (the skill-ups and the product land in the inventory)
 
 message Command {
@@ -233,6 +238,7 @@ message Command {
     RaidMoveCommand       raid_move       = 41;
     BuffRemoveCommand     buff_remove     = 42;
     HealHoldCommand       heal_hold       = 43;
+    RecoverCorpsesCommand recover_corpses = 44;
   }
 }
 

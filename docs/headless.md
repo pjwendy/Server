@@ -195,6 +195,7 @@ Category `HeadlessClients`:
 | `ShowDisplayTag` | `true` | Show `DisplayTag`. When false it's left off, and removed from characters that already carry it. They stay flagged as headless in the database either way. |
 | `CommandRateLimit` | `20` | Commands per second per character. More are refused. |
 | `HoldSeconds` | `300` | How long a character whose program disconnected is held, frozen with its fights, for the program to log in again and take it back. `0`: logged out at once. See [Sessions](#sessions-logging-out-dropping-and-coming-back). |
+| `RecoverCorpses` | `false` | A headless character may have the server recover its corpses (`recover_corpses`): moved to a zone and spot, then every corpse of its brought to its feet and given a 100% resurrection, as a GM would. See [Corpses](#corpses-and-resurrection). |
 | `ConsentGuildCorpses` | `true` | A headless character's corpse is consented to its guild, as `/consent guild`. See [Corpses](#corpses-and-resurrection). |
 | `Drowning` | `true` | Headless characters run out of air under water and drown, as the client works it out (the client reports drowning itself, with `OP_EnvDamage`, and the server trusts it). |
 | `JumpHeight` | `4.5` | How high a headless character's jump goes, in units above where it jumps from (the RoF2 client's physics, measured: a 4.8 peak). `0`: they don't jump. |
@@ -248,6 +249,7 @@ eqmq gives each one a method, and most a MacroQuest slash command too.
 | `invite`, `disband` | Invite to the group (the character's own bots, or real players if allowed), leave it. |
 | `buff_remove` | Click a beneficial buff off the character or one of its bots by its slot, as the buff window (`OP_BuffRemoveRequest`, which the server allows for a client's own buffs and its bots'). Every `Buff` carries its `slot`, and each `BotGear` its bot's `buffs`. |
 | `raid_invite`, `raid_remove`, `raid_move` | Raids, as the client's raid window (`OP_RaidInvite`, which the server hands to `Handle_OP_RaidCommand`). `raid_invite` a player who is ungrouped or leads a group (the whole group comes in) or one of the character's bots (or a bot whose owner is already in the raid), making a raid with the character and its group if it has none; a bot goes straight in (`Bot::ProcessRaidInvite`), a player is asked. `raid_remove` takes a member out (the raid leader's right; an empty name leaves the raid). `raid_move` puts a member in raid group 0-11, or in none (12 and up). |
+| `recover_corpses` | With `HeadlessClients:RecoverCorpses` on: every corpse of this character, from wherever it lies (buried ones too), brought to its feet and raised with a 100% resurrection (`Client::SummonAndRezzAllCorpses`, the server's own). With a zone and spot: in another zone it only moves the character there (send it again once in); in this zone it moves it to the spot first. Off: refused with why. |
 | `heal_hold` | No heals on this character for some seconds (0 lifts it). For a raid's puller: a heal on someone a mob hates puts the healer on that mob's hate list too, so nobody should heal the puller until the main tank has the mob. Bots skip it as a heal target. |
 
 `CommandResult.ok` means the server accepted the command. What happens next (the spell lands, the
@@ -392,6 +394,9 @@ players' bots alike:
 
 ## Corpses and resurrection
 
+- With `HeadlessClients:RecoverCorpses` on, a character can have the server recover its corpses (`recover_corpses`): the server moves
+  it to the zone and spot it names, then brings every corpse of its there, from any zone and buried or not, and raises them all (100%).
+  It is a GM's recovery without a GM character, for a guild whose operator treats every death outside a raid as a GM rez.
 - A headless character's corpse is consented to its guild (`HeadlessClients:ConsentGuildCorpses`, as
   `/consent guild`): a guildmate may drag it, and so may the guildmate's bots (`^corpsedrag`), to
   where they are camped, to resurrect it there.
