@@ -2093,6 +2093,10 @@ int EntityList::RezzAllCorpsesByCharID(uint32 charid)
 			RezzExp += it->second->GetRezExp();
 			it->second->IsRezzed(true);
 			it->second->CompleteResurrection();
+			// the database's is_rezzed too, as a rez the client accepts marks it (Client::OPRezzAnswer path,
+			// client_process.cpp): Corpse::Save writes the experience (now 0) but not is_rezzed, so a corpse
+			// raised here read as unraised to anything looking at the table
+			database.MarkCorpseAsResurrected(it->second->GetCorpseDBID());
 		}
 		++it;
 	}
