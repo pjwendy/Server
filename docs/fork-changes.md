@@ -12,6 +12,7 @@ defaults to upstream's behaviour unless noted.
 
 | Commit | Fix |
 |---|---|
+| [f5cad90b2](https://github.com/pjwendy/Server/commit/f5cad90b2) | `EntityList::RezzAllCorpsesByCharID` (summon-and-rez all corpses) now marks each corpse resurrected in the database (`MarkCorpseAsResurrected`), as the client's rez does: they read as unraised before. |
 | [3697f71](https://github.com/pjwendy/Server/commit/3697f7187) | A zone crashed when a raid-grouped bot with no stored raid finished a group spell. |
 | [4e30240](https://github.com/pjwendy/Server/commit/4e302400a) | A zone crashed on a character with an empty mail key. |
 | [8a7a5d4](https://github.com/pjwendy/Server/commit/8a7a5d404) | Bots: an instant spell was refused by the buff stack check (a shaman's Cannibalize under Clarity or a regen buff). |
