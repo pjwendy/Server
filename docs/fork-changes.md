@@ -59,6 +59,7 @@ For every player's bots, not only headless characters'. The commands and behavio
 
 | Commit | Change |
 |---|---|
+| [284de39ce](https://github.com/pjwendy/Server/commit/284de39ce) | `HeadlessClients:RecoverCorpses` (default false): the headless `recover_corpses` command, a GM's corpse recovery (moved to a spot, every corpse summoned there and raised 100%) without a GM character. |
 | [da5f211](https://github.com/pjwendy/Server/commit/da5f21179) | `Zone:RespawnMultiplier` (default 1.0): every spawn point's respawn time multiplied, with a 10-second floor. |
 
 ## Build
