@@ -598,6 +598,10 @@ bool Bot::AIDoSpellCast(int32 i, Mob* tar, int32 mana_cost, uint32* oDontDoAgain
 		LogBotSpellChecksDetail("{} says, 'Not casting {}: the owner lacks its reagents.'", GetCleanName(), GetSpellName(AIBot_spells[i].spellid));
 		return false;
 	}
+	if (!IsCommandedSpell() && ReagentTooDearForAI(AIBot_spells[i].spellid)) {
+		LogBotSpellChecksDetail("{} says, 'Not casting {}: its component is too dear for the AI (Bots:AIReagentMaxPrice).'", GetCleanName(), GetSpellName(AIBot_spells[i].spellid));
+		return false;
+	}
 
 	// manacost has special values, -1 is no mana cost, -2 is instant cast (no mana)
 	int32 manaCost = mana_cost;

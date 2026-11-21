@@ -10253,6 +10253,13 @@ bool Bot::CastChecks(uint16 spell_id, Mob* tar, uint16 spell_type, bool precheck
 		return false;
 	}
 
+	// a spell whose component is dear (Bots:AIReagentMaxPrice) is the owner's to command, not the AI's to pick: the clerics put Death Pact (a Pearl, 4.5 pp)
+	// on every pet, and the skip for the missing Pearl was most of what the raids' live page showed (the operator, 21 Nov). Not a skip: a choice
+	if (!IsCommandedSpell() && ReagentTooDearForAI(spell_id)) {
+		LogBotSpellChecksDetail("{} says, 'Not choosing {}: its component is too dear for the AI.'", GetCleanName(), GetSpellName(spell_id));
+		return false;
+	}
+
 	// a spell whose components its owner doesn't carry isn't chosen by the AI: it used to be started every four seconds, to be stopped at the end of the cast
 	// with "needs 1 Bloodstone for Leatherskin" (a druid, all day: the mana, the hand-overs it won't take, a rez it was slow to answer). A commanded cast still
 	// goes ahead, to say what is missing.
@@ -12963,6 +12970,27 @@ bool Bot::HasRequiredLoSForPositioning(Mob* tar) {
 
 // Bots:UseOwnerReagents (spells.cpp, DoCastSpell): a bot has no bags, what its spell consumes comes out of its owner's. True when the rule is off, the spell
 // needs nothing, it's a bard's song, or the owner has every component (a pet spell's, when pets use none).
+bool Bot::ReagentTooDearForAI(uint16 spell_id)
+{
+	const int max_price = RuleI(Bots, AIReagentMaxPrice);
+	if (max_price <= 0 || !IsValidSpell(spell_id) || IsBardSong(spell_id)) {
+		return false;
+	}
+
+	for (int t = 0; t < 4; t++) {
+		const int component = spells[spell_id].component[t];
+		if (component <= 0 || component == spells[spell_id].no_expend_reagent[t]) {
+			continue;  // (none, or a focus: needed, not used up)
+		}
+		const auto *item = database.GetItem(component);
+		if (item && item->Price > static_cast<uint32>(max_price)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool Bot::OwnerHasReagentsFor(uint16 spell_id)
 {
 	if (!RuleB(Bots, UseOwnerReagents) || !IsValidSpell(spell_id) || IsBardSong(spell_id)) {

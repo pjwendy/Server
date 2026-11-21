@@ -483,6 +483,7 @@ public:
 	bool IsCommandedSpell() const { return _commandedSpell; }
 	// Bots:UseOwnerReagents: the owner has what this spell's components need (a bot that doesn't isn't to choose it)
 	bool OwnerHasReagentsFor(uint16 spell_id);
+	bool ReagentTooDearForAI(uint16 spell_id);
 	// Bots:StrategicCombat (the fork): a mezzed or rooted mob the group has parked isn't hit by a spell that would break it while anything else is on the hate list
 	bool SparesParkedTarget(uint16 spell_id, Mob* tar);
 	void SetCommandedSpell(bool value) { _commandedSpell = value;  }
