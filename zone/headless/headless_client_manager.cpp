@@ -564,7 +564,10 @@ std::string HeadlessClientManager::GiveToPlayer(const std::string &session_id, S
 	}
 	// (the same test as the game's own trade window, Trade::FinishedTrade: no drop goes where World:FVNoDropFlag lets it, whatever the
 	// item's own FV flag; IsDroppable refused the 16,454 items marked FV no drop too. An attuned item stays bound.)
-	if (inst->IsAttuned() || (inst->GetItem()->NoDrop == 0 && !me->CanTradeFVNoDropItem())) {
+	const int  fv          = RuleI(World, FVNoDropFlag);   // (Client::CanTradeFVNoDropItem's test: that one is private)
+	const bool nodrop_ok   = fv == FVNoDropFlagRule::Enabled ||
+		(fv == FVNoDropFlagRule::AdminOnly && me->Admin() >= RuleI(Character, MinStatusForNoDropExemptions));
+	if (inst->IsAttuned() || (inst->GetItem()->NoDrop == 0 && !nodrop_ok)) {
 		return fmt::format("{} can't be traded (no drop)", inst->GetItem()->Name);
 	}
 	const uint16 a = me->GetID(), b = to->GetID();
