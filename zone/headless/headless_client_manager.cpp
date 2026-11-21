@@ -562,7 +562,9 @@ std::string HeadlessClientManager::GiveToPlayer(const std::string &session_id, S
 	if (me->trade->state != TradeNone || to->trade->state != TradeNone) {
 		return "a trade is already open";
 	}
-	if (!inst->IsDroppable(false)) {
+	// (the same test as the game's own trade window, Trade::FinishedTrade: no drop goes where World:FVNoDropFlag lets it, whatever the
+	// item's own FV flag; IsDroppable refused the 16,454 items marked FV no drop too. An attuned item stays bound.)
+	if (inst->IsAttuned() || (inst->GetItem()->NoDrop == 0 && !me->CanTradeFVNoDropItem())) {
 		return fmt::format("{} can't be traded (no drop)", inst->GetItem()->Name);
 	}
 	const uint16 a = me->GetID(), b = to->GetID();
