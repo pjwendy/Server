@@ -524,8 +524,10 @@ bool Zone::LoadZoneState(
 			spawn2.id > 0 ? spawn2.y : s.y,
 			spawn2.id > 0 ? spawn2.z : s.z,
 			spawn2.id > 0 ? spawn2.heading : s.heading,
-			s.respawn_time,
-			s.variance,
+			// the spawn point's timer as the database has it now, like its location: the saved copy is only what it was when the zone
+			// was first saved, and a changed respawntime never took effect in a zone that saves its state on shutdown
+			spawn2.id > 0 ? spawn2.respawntime : s.respawn_time,
+			spawn2.id > 0 ? spawn2.variance : s.variance,
 			spawn_time_left,
 			s.grid,
 			(bool) s.path_when_zone_idle,
