@@ -156,6 +156,7 @@ private:
 	struct Jump {
 		glm::vec3 from{0.0f};
 		glm::vec3 to{0.0f};
+		uint32    door = 0;  // (a drawbridge's: the door clicked to lower it before the crossing)
 	};
 	static const std::vector<Jump> &Jumps();
 	// the zone's ladders: a link a player climbs straight up, or drops down (maps/nav/<zone>.ladders.json,
@@ -167,6 +168,14 @@ private:
 	bool OnLadder(size_t i) const;
 	// the route's portal links (the zone navmesh's own ladders and drops, flagged as teleports), climbed as ladders
 	std::vector<Jump> m_climbs;
+	// the zone's drawbridges (maps/nav/<zone>.drawbridges.json, from puppeteer's navpatch: a one-way link over a door that lies
+	// across a gap when open, Nagafen's Lair's DRAWBRIDGE1 over the lava): its door clicked (a player clicks the bridge itself) and
+	// waited for, then crossed at the link's height (the door isn't in the collision map: under it is the lava)
+	static const std::vector<Jump> &Drawbridges();
+	// the step to m_path[i] crosses a drawbridge (its index in Drawbridges(), or -1)
+	int OnDrawbridge(size_t i) const;
+	// at a drawbridge's near end with its door closed: click it and wait (true while waiting)
+	bool HandleDrawbridge(uint64 now);
 	// the zone's teleport pads (maps/nav/<zone>.teleports.json: a zone point into the zone itself, Erudin's
 	// between the upper city and the harbour): a link from beside the pad to where it puts you
 	static const std::vector<Jump> &Teleports();

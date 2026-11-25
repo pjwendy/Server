@@ -182,7 +182,10 @@ IPathfinder::IPath PathfinderNavmesh::FindRoute(const glm::vec3 &start, const gl
 
 	dtQueryFilter filter;
 	filter.setIncludeFlags(flags);
-	filter.setExcludeFlags((flags & PathingHeadless) ? 0 : PathingHeadless); // (a headless link also carries Normal or Water)
+	// (a headless link also carries Normal or Water; and a headless route never goes through lava: our characters take no lava damage
+	// (the client reports it, OP_EnvDamage, and the headless mover reports drowning only), so a lava wade was a cheat, leaders crossing
+	// under Nagafen's raised drawbridge at full health; the operator, 25 Nov: avoid it until lava damage is done, BL-110)
+	filter.setExcludeFlags((flags & PathingHeadless) ? PathingLava : PathingHeadless);
 	filter.setAreaCost(0, 1.0f); //Normal
 	filter.setAreaCost(1, 3.0f); //Water
 	filter.setAreaCost(2, (flags & PathingHeadless) ? HEADLESS_LAVA_COST : 5.0f); //Lava (a headless character never takes it lightly)
@@ -490,7 +493,10 @@ glm::vec3 PathfinderNavmesh::GetRandomLocation(const glm::vec3 &start, int flags
 
 	dtQueryFilter filter;
 	filter.setIncludeFlags(flags);
-	filter.setExcludeFlags((flags & PathingHeadless) ? 0 : PathingHeadless); // (a headless link also carries Normal or Water)
+	// (a headless link also carries Normal or Water; and a headless route never goes through lava: our characters take no lava damage
+	// (the client reports it, OP_EnvDamage, and the headless mover reports drowning only), so a lava wade was a cheat, leaders crossing
+	// under Nagafen's raised drawbridge at full health; the operator, 25 Nov: avoid it until lava damage is done, BL-110)
+	filter.setExcludeFlags((flags & PathingHeadless) ? PathingLava : PathingHeadless);
 	filter.setAreaCost(0, 1.0f); //Normal
 	filter.setAreaCost(1, 3.0f); //Water
 	filter.setAreaCost(2, (flags & PathingHeadless) ? HEADLESS_LAVA_COST : 5.0f); //Lava (a headless character never takes it lightly)

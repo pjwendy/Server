@@ -3348,6 +3348,7 @@ std::string Zone::NavFilesSignature()
 		fmt::format("{}/{}.jumps.json", dir, GetShortName()),
 		fmt::format("{}/{}.ladders.json", dir, GetShortName()),
 		fmt::format("{}/{}.teleports.json", dir, GetShortName()),
+		fmt::format("{}/{}.drawbridges.json", dir, GetShortName()),
 	};
 	std::string sig;
 	struct stat st;

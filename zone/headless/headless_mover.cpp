@@ -60,6 +60,7 @@ namespace {
 	constexpr float  DOOR_LOOKAHEAD    = 15.0f;
 	constexpr float  DOOR_HEIGHT_RANGE = 20.0f;
 	constexpr uint64 DOOR_WAIT_MS      = 3000;
+	constexpr float  DRAWBRIDGE_CLICK  = 25.0f; // a drawbridge is clicked from this near its link's start (a door is clicked from 40 at most)
 	constexpr float  LEVER_REACH       = 40.0f; // a lever for the door ahead this near is pulled instead of the door
 	// a door another headless character clicked this long ago or less is opening: waited for, not clicked again. A click toggles a door (open
 	// when shut, shut when open: Doors::HandleClick), and two leaders walking in step through Permafrost's door 39 clicked it in the same
@@ -426,7 +427,7 @@ const std::vector<HeadlessMover::Jump> &HeadlessMover::Links(const std::string &
 			return glm::vec3(p.at(0).get<float>(), p.at(1).get<float>(), p.at(2).get<float>());
 		};
 		for (const auto &s : j.value(kind, nlohmann::json::array())) {
-			cached.push_back({eq(s.at("from")), eq(s.at("to"))}); // (one way: a link both ways has both)
+			cached.push_back({eq(s.at("from")), eq(s.at("to")), s.value("door", 0u)}); // (one way: a link both ways has both)
 		}
 		LogHeadlessClient("[{}] [{}] {}", name, cached.size(), kind);
 	}
@@ -439,6 +440,68 @@ const std::vector<HeadlessMover::Jump> &HeadlessMover::Links(const std::string &
 const std::vector<HeadlessMover::Jump> &HeadlessMover::Teleports()
 {
 	return Links("teleports");
+}
+
+const std::vector<HeadlessMover::Jump> &HeadlessMover::Drawbridges()
+{
+	return Links("drawbridges");
+}
+
+int HeadlessMover::OnDrawbridge(size_t i) const
+{
+	if (i >= m_path.size()) {
+		return -1;
+	}
+	auto same = [](const glm::vec3 &a, const glm::vec3 &b) { return glm::length(a - b) < SWIM_MATCH; };
+	const auto &bridges = Drawbridges();
+	for (size_t k = 0; k < bridges.size(); ++k) {
+		const auto &b = bridges[k];
+		if (same(m_path[i], b.to) && (i > 0 ? same(m_path[i - 1], b.from) : glm::length(m_pos - b.from) <= glm::length(b.to - b.from) + SWIM_MATCH)) {
+			return static_cast<int>(k);
+		}
+	}
+	return -1;
+}
+
+bool HeadlessMover::HandleDrawbridge(uint64 now)
+{
+	const int k = OnDrawbridge(m_next);
+	if (k < 0) {
+		return false;
+	}
+	const auto &bridge = Drawbridges()[k];
+	if (!bridge.door) {
+		return false;
+	}
+	Doors *door = nullptr;
+	for (auto &[id, d] : entity_list.GetDoorsList()) {
+		if (d && d->GetDoorID() == bridge.door) {
+			door = d;
+			break;
+		}
+	}
+	if (!door || door->IsDoorOpen()) {
+		return false;  // (down: cross; HandleDoors' wait ends when it opens)
+	}
+	// on it already (it rose under us): carry on across, as a player on it would
+	if (glm::length(glm::vec3(m_pos.x - bridge.from.x, m_pos.y - bridge.from.y, 0.0f)) > DRAWBRIDGE_CLICK) {
+		return false;
+	}
+	Client *me = m_stream->GetClient();
+	auto &clicked = g_door_clicked[door->GetEntityID()];
+	if (now - clicked >= DOOR_SHARED_MS) {  // (not one another of us clicked a moment ago: that would raise it again)
+		clicked = now;
+		auto app = new EQApplicationPacket(OP_ClickDoor, sizeof(ClickDoor_Struct));
+		auto *cd = reinterpret_cast<ClickDoor_Struct *>(app->pBuffer);
+		cd->doorid    = door->GetDoorID();
+		cd->player_id = me->GetID();
+		m_stream->Inject(app);
+		LogHeadlessClient("[{}] clicking drawbridge [{}] ({})", me->GetCleanName(), door->GetDoorID(), door->GetDoorName());
+	}
+	m_door_entity  = door->GetEntityID();  // (HandleDoors waits for it to open, and gives up as for any door)
+	m_door_wait_ms = now + DOOR_WAIT_MS;
+	SendUpdate(m_pos, me->GetHeading(), 0);
+	return true;
 }
 
 bool HeadlessMover::OnTeleport(size_t i) const
@@ -1275,7 +1338,7 @@ void HeadlessMover::Tick()
 		return;
 	}
 
-	if (HandleDoors(now)) {
+	if (HandleDoors(now) || HandleDrawbridge(now)) {
 		m_progress_ms = now; // waiting for a door isn't being stuck
 		return;
 	}
@@ -1338,8 +1401,17 @@ void HeadlessMover::Tick()
 	else if (!jumping) {
 		m_jumping = SIZE_MAX;
 	}
+	const bool on_drawbridge = !on_platform && m_next > 0 && OnDrawbridge(m_next) >= 0;
 	if (on_platform) {
 		pos.z = m_path[std::min(m_next, m_path.size() - 1)].z;
+	}
+	else if (on_drawbridge) {
+		// on a drawbridge: its deck, the link's line (the door isn't in the collision map: the floor under it is the lava)
+		const glm::vec3 &a    = m_path[m_next - 1];
+		const glm::vec3 &b    = m_path[m_next];
+		const float      span = std::max(Flat(a, b), 0.01f);
+		const float      t    = std::clamp(1.0f - Flat(pos, b) / span, 0.0f, 1.0f);
+		pos.z = a.z + (b.z - a.z) * t;
 	}
 	else if (jumping) {
 		const glm::vec3 &land = m_path[m_next];
