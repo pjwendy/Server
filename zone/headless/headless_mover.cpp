@@ -1327,6 +1327,14 @@ void HeadlessMover::Tick()
 		return;
 	}
 
+	// a mount is left at the water's edge, as a client's is (client_packet.cpp, OP_ClientUpdate: Character:DismountWater); the headless
+	// client sends no client updates, so the mover does it: a leader rode a horse into Kedge Keep's lake otherwise
+	if (me->GetHorseId() && RuleB(Character, DismountWater) && zone && zone->HasWaterMap() &&
+		zone->watermap->InLiquid(glm::vec3(m_pos))) {
+		me->SetHorseId(0);
+		me->BuffFadeByEffect(SpellEffect::SummonHorse);
+	}
+
 	const uint64 now   = NowMs();
 
 	if (m_lift_phase != LiftPhase::None && HandleLift(now)) {

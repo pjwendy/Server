@@ -505,6 +505,7 @@ message Self {
   Resists         resists    = 43; // our resists now: base, gear, buffs and AAs, as the client's inventory window shows them
   Resists         gear_resists = 44; // the same without our buffs (base, gear, AAs): what a raid's readiness counts, its own buffs added
   bool            in_water     = 45; // in water (the zone's water map at our position: swimming, the head above or under it)
+  bool            mounted      = 46; // on a mount (a horse, a drogmor: Client::GetHorseId; the server moves us at its speed, and a mount meditates as sitting)
 }
 
 message Gem {
