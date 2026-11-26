@@ -443,7 +443,7 @@ message Spawn {
   uint32    primary    = 17; // the model of what it holds in its primary hand (IT<n>; for an NPC its d_melee_texture1), 0 if none
   uint32    secondary  = 18; // ... and in its secondary
   uint32    casting_spell_id = 19; // the spell it is casting, 0 if none (to interrupt a caster)
-  uint32    status     = 20; // what is on it: 1 mezzed, 2 rooted, 4 stunned, 8 feared or fleeing, 16 charmed (to know a mob is parked, and that a root has broken)
+  uint32    status     = 20; // what is on it: 1 mezzed, 2 rooted, 4 stunned, 8 feared or fleeing, 16 charmed (to know a mob is parked, and that a root has broken); 32 in water (the zone's water map at its position: swimming)
   // what an NPC does about us (the character this stream is for), by the server's own aggro rules (Mob::CheckWillAggro): to route round it and to pull without waking it
   float     aggro_range  = 21; // the radius it notices us in (a sphere round it); 0 for what never aggros (a pet, a merchant's guard that doesn't)
   float     assist_range = 22; // the radius in which it calls others to help (Mob::GetAssistRange: its assist radius, else its aggro radius)
@@ -504,6 +504,7 @@ message Self {
   repeated RaidMember raid    = 42; // the raid we are in, everyone in it (ourselves too); empty when not in one
   Resists         resists    = 43; // our resists now: base, gear, buffs and AAs, as the client's inventory window shows them
   Resists         gear_resists = 44; // the same without our buffs (base, gear, AAs): what a raid's readiness counts, its own buffs added
+  bool            in_water     = 45; // in water (the zone's water map at our position: swimming, the head above or under it)
 }
 
 message Gem {

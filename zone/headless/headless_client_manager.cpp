@@ -104,13 +104,19 @@ namespace {
 	}
 
 	// what is on a mob that a program planning a fight wants to know: mezzed 1, rooted 2, stunned 4, feared or fleeing 8, charmed 16
+	// in water: the zone's water map at the mob's position (a swimmer: the replays draw it swimming, not walking on the bottom)
+	bool InWater(const Mob *mob)
+	{
+		return zone && zone->HasWaterMap() && zone->watermap->InWater(glm::vec3(mob->GetPosition()));
+	}
+
 	uint32 SpawnStatusOf(Mob *mob)
 	{
 		if (mob->IsCorpse()) {
 			return 0;
 		}
 		return (mob->IsMezzed() ? 1u : 0u) | (mob->IsRooted() ? 2u : 0u) | (mob->IsStunned() ? 4u : 0u) | (mob->IsFeared() ? 8u : 0u) |
-			   (mob->IsCharmed() ? 16u : 0u);
+			   (mob->IsCharmed() ? 16u : 0u) | (InWater(mob) ? 32u : 0u);
 	}
 
 	// the spells on an NPC that is fighting (or has the character on its hate list): what a fight is doing to it
@@ -2691,6 +2697,7 @@ void HeadlessClientManager::Publish(const std::string &session_id, bool snapshot
 	}
 	self->set_run_speed(HeadlessMover::RunSpeed(me));
 	self->set_max_air(HeadlessMover::MaxAir(me));
+	self->set_in_water(InWater(me));
 	self->set_air(session.mover ? session.mover->Air() : HeadlessMover::MaxAir(me));
 	if (zone) {
 		TimeOfDay_Struct tod{};
