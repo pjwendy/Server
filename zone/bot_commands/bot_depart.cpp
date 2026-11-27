@@ -162,7 +162,11 @@ void bot_command_depart(Client* c, const Seperator* sep)
 			continue;
 		}
 
+		// commanded before the spells are picked, not after: the AI's choice leaves out a spell whose component is dear (Bots:AIReagentMaxPrice,
+		// Bot::CastChecks), so Alter Plane: Sky (a 35 pp Cloudy Stone) was never among them and no ^depart to airplane was cast
+		bot_iter->SetCommandedSpell(true);
 		std::vector<BotSpell_wPriority> bot_spell_list_itr = bot_iter->GetPrioritizedBotSpellsBySpellType(bot_iter, BotSpellTypes::Teleport, tar);
+		bot_iter->SetCommandedSpell(false);
 
 		for (std::vector<BotSpell_wPriority>::iterator itr = bot_spell_list_itr.begin(); itr != bot_spell_list_itr.end(); ++itr) {
 			if (!IsValidSpell(itr->SpellId)) {
