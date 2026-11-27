@@ -377,6 +377,7 @@ RULE_INT(Zone, MinOfflineTimeToReplenishments, 21600, "Minimum time a player mus
 RULE_BOOL(Zone, UseZoneController, true, "Enables the ability to use persistent quest based zone controllers (zone_controller.pl/lua)")
 RULE_BOOL(Zone, EnableZoneControllerGlobals, false, "Enables the ability to use quest globals with the zone controller NPC")
 RULE_INT(Zone, GlobalLootMultiplier, 1, "Sets Global Loot drop multiplier for database based drops, useful for double, triple loot etc")
+RULE_REAL(Zone, CoinDropMultiplier, 1.0, "Headless: multiplies the coin an NPC's loot table rolls for it (the operator, 27 Nov: \"multiply the amount of pp that drops\")")
 RULE_REAL(Zone, RespawnMultiplier, 1.0, "Multiplies every spawn point's respawn time (0.5: half the wait). A floor of 10 seconds")
 RULE_BOOL(Zone, KillProcessOnDynamicShutdown, true, "When process has booted a zone and has hit its zone shut down timer, it will hard kill the process to free memory back to the OS")
 RULE_INT(Zone, SpawnEventMin, 3, "When strict is set in spawn_events, specifies the max EQ minutes into the trigger hour a spawn_event will fire. Going below 3 may cause the spawn_event to not fire.")

@@ -100,6 +100,12 @@ void NPC::AddLootTable(uint32 loottable_id, bool is_global)
 		}
 	}
 
+	// Headless: Zone:CoinDropMultiplier scales the roll (the operator, 27 Nov), capped well inside uint32
+	const float coin_multiplier = RuleR(Zone, CoinDropMultiplier);
+	if (cash != 0 && coin_multiplier != 1.0f && coin_multiplier > 0.0f) {
+		cash = static_cast<uint32>(std::min(static_cast<double>(cash) * coin_multiplier, 2000000000.0));
+	}
+
 	if (cash != 0) {
 		m_loot_platinum = cash / 1000;
 		cash -= m_loot_platinum * 1000;
