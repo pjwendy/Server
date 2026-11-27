@@ -203,6 +203,20 @@ void Client::SendParcel(Parcel_Struct &parcel_in)
 	}
 }
 
+// Headless (the operator, 27 Nov: "get leaders who have a fast mount hand cash over to the poorer ones"): the coin a money parcel carries is
+// staged from the purse first (the client's OP_MoveCoin to the parcel window, client_process.cpp); DoParcelCancel puts it back
+bool Client::StageParcelPlatinum(uint32 platinum)
+{
+	if (platinum == 0 || m_pp.platinum < platinum) {
+		return false;
+	}
+	m_pp.platinum     -= platinum;
+	m_parcel_platinum += platinum;
+	SaveCurrency();
+	SendMoneyUpdate();
+	return true;
+}
+
 void Client::DoParcelCancel()
 {
 	if (

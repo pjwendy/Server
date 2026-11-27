@@ -1184,6 +1184,25 @@ std::string HeadlessClientManager::Execute(const std::string &session_id, Sessio
 			if (DistanceSquared(me->GetPosition(), npc->GetPosition()) > USE_NPC_RANGE2) {
 				return "too far from the parcel merchant";
 			}
+			if (ps.slot() < 0) {
+				// coin (slot -1, quantity in platinum): staged from the purse, then sent as the client sends a money parcel
+				if (ps.to().empty() || ps.to().size() >= sizeof(Parcel_Struct::send_to)) {
+					return "send it to whom?";
+				}
+				if (!me->StageParcelPlatinum(ps.quantity())) {
+					return fmt::format("not {} platinum carried", ps.quantity());
+				}
+				auto app = new EQApplicationPacket(OP_ShopSendParcel, sizeof(Parcel_Struct));
+				auto *p  = reinterpret_cast<Parcel_Struct *>(app->pBuffer);
+				p->npc_id     = npc->GetID();
+				p->item_slot  = INVALID_INDEX;
+				p->quantity   = ps.quantity() * 1000;
+				p->money_flag = PARCEL_SEND_MONEY;
+				strn0cpy(p->send_to, ps.to().c_str(), sizeof(p->send_to));
+				strn0cpy(p->note, ps.note().c_str(), sizeof(p->note));
+				stream->Inject(app);
+				return "";
+			}
 			const EQ::ItemInstance *inst = me->GetInv().GetItem(ps.slot());
 			if (!inst || !inst->GetItem()) {
 				return fmt::format("nothing in slot {}", ps.slot());

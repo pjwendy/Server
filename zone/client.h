@@ -376,6 +376,7 @@ public:
 	void SendZonePoints();
 	void SendBulkParcels();
 	void DoParcelCancel();
+	bool StageParcelPlatinum(uint32 platinum);  // Headless: platinum from the purse into the parcel window, as the client's coin move does
 	void DoParcelSend(const Parcel_Struct *parcel_in);
 	void DoParcelRetrieve(const ParcelRetrieve_Struct &parcel_in);
 	void SendParcel(Parcel_Struct &parcel);
