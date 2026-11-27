@@ -349,6 +349,7 @@ public:
 	bool IsStanding();
 	int GetWalkspeed() { return (int)((float)_GetWalkSpeed() * 1.785714285f); } // 1.25 / 0.7 = 1.7857142857142857142857142857143
 	int GetRunspeed() { return (int)((float)_GetRunSpeed() * 1.785714285f); }
+	int FollowRunspeed();  // the movement manager's running speed: the owner's when it's faster and we're following it out of a fight
 	void WalkTo(float x, float y, float z) override;
 	void RunTo(float x, float y, float z) override;
 

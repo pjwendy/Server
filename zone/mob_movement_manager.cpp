@@ -20,6 +20,7 @@
 #include "common/data_verification.h"
 #include "common/eq_packet_structs.h"
 #include "common/misc_functions.h"
+#include "zone/bot.h"
 #include "zone/client.h"
 #include "zone/mob.h"
 #include "zone/position.h"
@@ -160,7 +161,7 @@ public:
 				current_speed = mob->GetFearSpeed();
 			}
 			else {
-				current_speed = mob->GetRunspeed();
+				current_speed = mob->IsBot() ? mob->CastToBot()->FollowRunspeed() : mob->GetRunspeed();  // (a bot keeps up with its leader: Bot::FollowRunspeed)
 			}
 		}
 		else {
@@ -314,7 +315,7 @@ public:
 				current_speed = mob->GetFearSpeed();
 			}
 			else {
-				current_speed = mob->GetRunspeed();
+				current_speed = mob->IsBot() ? mob->CastToBot()->FollowRunspeed() : mob->GetRunspeed();  // (a bot keeps up with its leader: Bot::FollowRunspeed)
 			}
 		}
 		else {
@@ -435,7 +436,7 @@ public:
 				current_speed = mob->GetFearSpeed();
 			}
 			else {
-				current_speed = mob->GetRunspeed();
+				current_speed = mob->IsBot() ? mob->CastToBot()->FollowRunspeed() : mob->GetRunspeed();  // (a bot keeps up with its leader: Bot::FollowRunspeed)
 			}
 		}
 		else {

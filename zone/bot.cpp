@@ -3673,6 +3673,22 @@ bool Bot::ReturningFlagChecks(Client* bot_owner, Mob* leash_owner, float fm_dist
 	return true;
 }
 
+// Headless (the operator, 27 Nov: "change the bot code so that they travel as fast as the leader"): a bot following its owner out of a fight runs
+// at the owner's speed when that's faster (Spirit of Wolf, a song, a mount on the leader and not on the bot): its group fell behind on every
+// walk, 531 waits for it on eq2 in a day. In a fight, on guard, feared or rooted, its own.
+int Bot::FollowRunspeed()
+{
+	const int own = Mob::GetRunspeed();
+	if (GetGuardFlag() || IsEngaged() || IsFeared() || IsRooted()) {
+		return own;
+	}
+	Mob* owner = GetBotOwner();
+	if (!owner || !owner->IsClient()) {
+		return own;
+	}
+	return std::max(own, owner->GetRunspeed());
+}
+
 bool Bot::PullingFlagChecks(Client* bot_owner) {
 	if (!GetTarget()) {
 		WipeHateList();
